@@ -17,6 +17,7 @@ public static class GenericProcedureExecutionHandlers
     public const string EncounterCheckCadence = "procedure.encounter.cadence";
     public const string DeterministicResolutionHelpers = "procedure.resolution-helpers";
     public const string DeclarativeContract = "procedure.declarative-contract";
+    public const string ExplorationFlowPolicy = "procedure.exploration.flow";
 
     private static IReadOnlyDictionary<string, IReadOnlySet<int>> SupportedVersions { get; } =
         new Dictionary<string, IReadOnlySet<int>>(StringComparer.Ordinal)
@@ -27,7 +28,8 @@ public static class GenericProcedureExecutionHandlers
             [NavigationCheckPolicy] = new HashSet<int> { 1 },
             [EncounterCheckCadence] = new HashSet<int> { 1 },
             [DeterministicResolutionHelpers] = new HashSet<int> { 1 },
-            [DeclarativeContract] = new HashSet<int> { 1 }
+            [DeclarativeContract] = new HashSet<int> { 1 },
+            [ExplorationFlowPolicy] = new HashSet<int> { 1 }
         };
 
     private static readonly IReadOnlySet<string> NativeExecutableHandlers = new HashSet<string>(StringComparer.Ordinal)
@@ -37,7 +39,8 @@ public static class GenericProcedureExecutionHandlers
         SpatialTurnCostPolicy,
         NavigationCheckPolicy,
         EncounterCheckCadence,
-        DeterministicResolutionHelpers
+        DeterministicResolutionHelpers,
+        ExplorationFlowPolicy
     };
 
     public static bool SupportsNativeExecution(MechanicDefinition mechanic) =>
@@ -106,7 +109,8 @@ public sealed class GenericProcedureRuntime
         ProcedureSpatialTurnRuntime? turnPolicy,
         ProcedureNavigationRuntime navigation,
         ProcedureEncounterRuntime encounters,
-        ProcedureResolutionHelperProfile? resolutionHelpers)
+        ProcedureResolutionHelperProfile? resolutionHelpers,
+        ExplorationFlowPolicy? explorationFlow)
     {
         Name = name;
         Time = time;
@@ -115,6 +119,7 @@ public sealed class GenericProcedureRuntime
         Navigation = navigation;
         Encounters = encounters;
         ResolutionHelpers = resolutionHelpers;
+        ExplorationFlow = explorationFlow;
         Validate();
     }
 
@@ -125,6 +130,7 @@ public sealed class GenericProcedureRuntime
     public ProcedureNavigationRuntime Navigation { get; }
     public ProcedureEncounterRuntime Encounters { get; }
     public ProcedureResolutionHelperProfile? ResolutionHelpers { get; }
+    public ExplorationFlowPolicy? ExplorationFlow { get; }
 
     public static GenericProcedureRuntime Bind(CampaignProcedure procedure)
     {
@@ -149,6 +155,7 @@ public sealed class GenericProcedureRuntime
         var navigation = Required(procedure, GenericProcedureExecutionHandlers.NavigationCheckPolicy);
         var encounters = Required(procedure, GenericProcedureExecutionHandlers.EncounterCheckCadence);
         var helpers = Optional(procedure, GenericProcedureExecutionHandlers.DeterministicResolutionHelpers);
+        var flow = Optional(procedure, GenericProcedureExecutionHandlers.ExplorationFlowPolicy);
 
         return new GenericProcedureRuntime(
             procedure.Name,
@@ -166,7 +173,22 @@ public sealed class GenericProcedureRuntime
                 Boolean(navigation, "usesNavigationChecks"),
                 Boolean(navigation, "usesPersistentVeer")),
             new ProcedureEncounterRuntime(EnumValue<EncounterCheckCadence>(encounters, "cadence")),
-            helpers is null ? null : ReadHelpers(helpers));
+            helpers is null ? null : ReadHelpers(helpers),
+            flow is null ? null : new ExplorationFlowPolicy(
+                flow.Parameters["stageKeys"].Split(';', StringSplitOptions.TrimEntries).ToArray(),
+                EnumValue<ExplorationDiscoveryTrigger>(flow, "discoveryTrigger"),
+                EnumValue<ExplorationEncounterTrigger>(flow, "encounterTrigger"),
+                flow.Parameters.GetValueOrDefault("firstVisitAction"),
+                flow.Parameters.GetValueOrDefault("repeatVisitAction"),
+                flow.Parameters.GetValueOrDefault("restSiteAction"),
+                flow.Parameters.GetValueOrDefault("actionSelectionStageKey"),
+                flow.Parameters.GetValueOrDefault("actionResolutionStageKey"),
+                flow.Parameters.GetValueOrDefault("watchCompletionStageKey"),
+                flow.Parameters.ContainsKey("requireResolvedLocationOnDiscovery")
+                    && Boolean(flow, "requireResolvedLocationOnDiscovery"),
+                flow.Parameters.ContainsKey("requireRegionOnDiscovery")
+                    && Boolean(flow, "requireRegionOnDiscovery"),
+                flow.Parameters.GetValueOrDefault("locationResultTableKey")));
     }
 
     private void Validate()
@@ -181,6 +203,7 @@ public sealed class GenericProcedureRuntime
         }
 
         ResolutionHelpers?.Validate();
+        ExplorationFlow?.Validate();
         TurnPolicy?.CreateBudgetPolicy().Validate();
         if (!Enum.IsDefined(Movement.Adjacency))
             throw new InvalidOperationException("Unknown geometric movement adjacency mode.");

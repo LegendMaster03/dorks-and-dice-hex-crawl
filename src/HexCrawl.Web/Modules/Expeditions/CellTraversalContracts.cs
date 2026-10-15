@@ -54,7 +54,8 @@ public sealed record CellTraversalContextContract(
         expedition.Validate(world);
         var cursor = expedition.Traversal;
         var geometry = world.Resolve(cursor.CurrentCell.Address);
-        var exits = world.Boundaries(cursor.CurrentCell.Address);
+        var exits = world.Boundaries(cursor.CurrentCell.Address)
+            .Where(edge => world.IsPlayable(edge.To.Address)).ToArray();
         // Verify both endpoints of every advertised edge before projecting
         // it into an API choice. Never derive adjacency from polygon corners.
         foreach (var boundary in exits)
@@ -83,6 +84,7 @@ public sealed record CellTraversalContextContract(
                 ? DistanceContract.From(calibration) : null,
             SupportsVertexOnlyAdjacency = world.HasVertexOnlyContacts(),
             VertexOnlyContacts = world.VertexOnlyContacts(cursor.CurrentCell.Address)
+                .Where(contact => world.IsPlayable(contact.To.Address)).ToArray()
         };
     }
 }

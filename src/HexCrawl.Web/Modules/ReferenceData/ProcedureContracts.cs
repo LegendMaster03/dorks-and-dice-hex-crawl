@@ -51,6 +51,28 @@ public sealed record ProcedureResolutionHelperProfileContract(
             profile.Encounter is null ? null : EncounterResolutionHelperProfileContract.From(profile.Encounter));
 }
 
+public sealed record ExplorationFlowContract(
+    IReadOnlyList<string> StageKeys,
+    ExplorationDiscoveryTrigger DiscoveryTrigger,
+    ExplorationEncounterTrigger EncounterTrigger,
+    string? FirstVisitAction,
+    string? RepeatVisitAction,
+    string? RestSiteAction,
+    string? ActionSelectionStageKey,
+    string? ActionResolutionStageKey,
+    string? WatchCompletionStageKey,
+    bool RequireResolvedLocationOnDiscovery,
+    bool RequireRegionOnDiscovery,
+    string? LocationResultTableKey)
+{
+    public static ExplorationFlowContract From(ExplorationFlowPolicy policy) => new(
+        policy.StageKeys, policy.DiscoveryTrigger, policy.EncounterTrigger,
+        policy.FirstVisitAction, policy.RepeatVisitAction, policy.RestSiteAction,
+        policy.ActionSelectionStageKey, policy.ActionResolutionStageKey,
+        policy.WatchCompletionStageKey, policy.RequireResolvedLocationOnDiscovery,
+        policy.RequireRegionOnDiscovery, policy.LocationResultTableKey);
+}
+
 public sealed record ProcedureRuntimeContract(
     double IntervalHours,
     TravelResolutionMode TravelResolution,
@@ -61,6 +83,7 @@ public sealed record ProcedureRuntimeContract(
     ProcedureResolutionHelperProfileContract? ResolutionHelpers)
 {
     public CellAdjacencyMode Adjacency { get; init; } = CellAdjacencyMode.EdgeOnly;
+    public ExplorationFlowContract? ExplorationFlow { get; init; }
 
     public static ProcedureRuntimeContract From(GenericProcedureRuntime runtime) => new(
         runtime.Time.IntervalDuration.TotalHours,
@@ -70,7 +93,11 @@ public sealed record ProcedureRuntimeContract(
         runtime.Navigation.UsesNavigationChecks,
         runtime.Navigation.UsesPersistentVeer,
         runtime.ResolutionHelpers is null ? null : ProcedureResolutionHelperProfileContract.From(runtime.ResolutionHelpers))
-    { Adjacency = runtime.Movement.Adjacency };
+    {
+        Adjacency = runtime.Movement.Adjacency,
+        ExplorationFlow = runtime.ExplorationFlow is null
+            ? null : ExplorationFlowContract.From(runtime.ExplorationFlow)
+    };
 }
 
 public sealed record FocusedIntervalPolicyContract(
@@ -121,6 +148,9 @@ public sealed record CampaignProcedureContract(
     FocusedIntervalPolicyContract FocusedIntervalPolicy,
     IReadOnlyList<ProcedureModuleContract> Modules)
 {
+    /// <summary>Can run authoritative cell travel, irrespective of preset identity.</summary>
+    public bool SupportsSpatialExecution { get; init; }
+
     public static CampaignProcedureContract From(CampaignProcedure procedure)
     {
         procedure.Validate();
@@ -145,7 +175,10 @@ public sealed record CampaignProcedureContract(
             runtime is not null,
             runtime is null ? null : ProcedureRuntimeContract.From(runtime),
             FocusedIntervalPolicyContract.From(FocusedIntervalPolicyResolver.Resolve(procedure)),
-            procedure.Modules.Select(ProcedureModuleContract.From).ToArray());
+            procedure.Modules.Select(ProcedureModuleContract.From).ToArray())
+        {
+            SupportsSpatialExecution = runtime?.TurnPolicy is not null
+        };
     }
 }
 

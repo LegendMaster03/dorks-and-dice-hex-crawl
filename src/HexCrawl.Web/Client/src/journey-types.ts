@@ -1,3 +1,4 @@
+import type { WorldCellId } from "./types";
 import type {
     ConsequenceProvenance,
     ConsequenceProvenanceRequest,
@@ -246,6 +247,78 @@ export type JourneyEventPolicy = {
     unsupportedReason: string | null;
 };
 
+export type ExplorationTableResult = {
+    tableKey: string;
+    resultText: string;
+    roll: string | null;
+    sourceReference: string | null;
+};
+
+export type ExplorationTableRollRequest = {
+    scope: "Location" | "Region";
+    tableKey: string;
+    dieSides: number;
+    sourceReference: string;
+    rows: Array<{ from: number; through: number; resultText: string }>;
+};
+
+export type ExplorationCellContext = {
+    cell: WorldCellId;
+    visited: boolean;
+    restSite: boolean;
+    locationName: string | null;
+    dmNote: string | null;
+    availableActions: string[];
+    encounterOpportunities: Array<{
+        actionKey: string | null;
+        requirement: "None" | "Required" | "OptionalOrRiskBased";
+    }>;
+    discoveryTrigger: "Manual" | "OnFirstVisit" | "OnExplore";
+    encounterTrigger: "Manual" | "EveryTravel" | "OnExploreOrOptionalTravel";
+    regionKey: string | null;
+    regionName: string | null;
+    regionDmNote: string | null;
+    locationTableResults: ExplorationTableResult[];
+    regionTableResults: ExplorationTableResult[];
+};
+
+export type RecordExplorationCellRequest = {
+    expectedVersion: number;
+    operationId: string;
+    actionKey: string | null;
+    markVisited: boolean;
+    markRestSite: boolean;
+    locationName: string | null;
+    dmNote: string | null;
+    encounterOccurs: boolean | null;
+    processId: string | null;
+    consequences: ExpeditionConsequenceInput[];
+    regionKey: string | null;
+    regionName: string | null;
+    regionDmNote: string | null;
+    locationTableResults: ExplorationTableResult[] | null;
+    regionTableResults: ExplorationTableResult[] | null;
+    tableRolls: ExplorationTableRollRequest[];
+    provenance: StartJourneyProcessRequest["provenance"];
+};
+
+export type ExplorationCellLedgerRecord = {
+    cell: WorldCellId;
+    visited: boolean;
+    restSite: boolean;
+    regionKey: string | null;
+    locationName: string | null;
+    dmNote: string | null;
+    tableResults: ExplorationTableResult[];
+};
+
+export type ExplorationRegionLedgerRecord = {
+    key: string;
+    name: string | null;
+    dmNote: string | null;
+    tableResults: ExplorationTableResult[];
+};
+
 export type ExpeditionJourneyState = {
     expeditionVersion: number;
     processPolicy: JourneyProcessPolicy;
@@ -255,6 +328,9 @@ export type ExpeditionJourneyState = {
     eventOccurrences: JourneyEventOccurrence[];
     resolutions: JourneyResolutionRecord[];
     history: JourneyHistoryRecord[];
+    explorationCell: ExplorationCellContext | null;
+    explorationCells: ExplorationCellLedgerRecord[];
+    explorationRegions: ExplorationRegionLedgerRecord[];
 };
 
 export type TimeDelayUnit = "Minutes" | "Hours" | "Days";

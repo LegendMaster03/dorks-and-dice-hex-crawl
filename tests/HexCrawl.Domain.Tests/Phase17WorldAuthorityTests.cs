@@ -1,4 +1,5 @@
 using HexCrawl.Domain.Spatial;
+using HexCrawl.Domain.Runtime;
 using HexCrawl.Domain.World;
 
 namespace HexCrawl.Domain.Tests;
@@ -85,6 +86,117 @@ public sealed class Phase17WorldAuthorityTests
                 Assert.Contains(edge.From, edgeLookup.Candidates);
                 Assert.Contains(edge.To, edgeLookup.Candidates);
             }
+    }
+
+    [Theory]
+    [InlineData("<1:1,1,1:3,6>")]
+    [InlineData("<1:1,1,1:4,4>")]
+    [InlineData("<1:1,1,1:6,3>")]
+    public void OptionalPlayableBoundsWorkForEveryTiling(string symbol)
+    {
+        var built = DelaneyDressHarmonicMetricRealization.Construct(symbol, 1, "unit");
+        Assert.Equal("realized", built.Status);
+        var baseTiling = new PeriodicWorldTiling(Guid.NewGuid(),
+            built.Topology!, built.Realization!, new WorldPoint(0, 0));
+        var address = new PeriodicCellAddress(baseTiling.Topology.MotifCells[0].Id, new(0, 0));
+        var inside = baseTiling.Resolve(address).Center;
+        Assert.True(baseTiling.IsPlayable(address));
+
+        var bounded = baseTiling with
+        {
+            PlayableBounds = new PeriodicMapBounds(5, 5)
+        };
+        bounded.Validate();
+        Assert.True(bounded.IsPlayable(address));
+        Assert.True(bounded.IsPlayable(new PeriodicCellAddress(address.MotifCellId,
+            new LatticeDisplacement(4, 4))));
+        Assert.False(bounded.IsPlayable(new PeriodicCellAddress(address.MotifCellId,
+            new LatticeDisplacement(-1, 0))));
+        Assert.False(bounded.IsPlayable(new PeriodicCellAddress(address.MotifCellId,
+            new LatticeDisplacement(100, 100))));
+        Assert.Throws<InvalidOperationException>(() =>
+            (bounded with { PlayableBounds = new PeriodicMapBounds(0, 1) }).Validate());
+    }
+
+    [Theory]
+    [InlineData(5)]
+    [InlineData(9)]
+    public void SquareMapSizeUsesExactPeriodicCellCounts(int size)
+    {
+        var realized = DelaneyDressHarmonicMetricRealization.Construct("<1:1,1,1:4,4>", 1, "unit");
+        Assert.Equal("realized", realized.Status);
+        var tiling = new PeriodicWorldTiling(Guid.NewGuid(),
+            realized.Topology!, realized.Realization!, new WorldPoint(0, 0))
+        {
+            PlayableBounds = new PeriodicMapBounds(size, size)
+        };
+        tiling.Validate();
+        Assert.Single(tiling.Topology.MotifCells);
+        var cellName = tiling.Topology.MotifCells[0].Id;
+        var count = 0;
+        for (var u = -1; u <= size; u++)
+            for (var v = -1; v <= size; v++)
+            {
+                var address = new PeriodicCellAddress(cellName, new LatticeDisplacement(u, v));
+                if (tiling.IsPlayable(address)) count++;
+            }
+        Assert.Equal(size * size, count);
+        Assert.NotNull(tiling.PlayableEnvelope());
+    }
+
+    [Fact]
+    public void OptionalBoundsIntersectAndNonoverlapFailsClosed()
+    {
+        var left = new PeriodicMapBounds(9, 9);
+        var right = new PeriodicMapBounds(5, 5, 2, 3);
+        Assert.Equal(new PeriodicMapBounds(5, 5, 2, 3),
+            PeriodicMapBounds.Intersection(left, right));
+        Assert.Equal(left, PeriodicMapBounds.Intersection(null, left));
+        Assert.Null(PeriodicMapBounds.Intersection(null, null));
+        Assert.Throws<InvalidOperationException>(() =>
+            PeriodicMapBounds.Intersection(left, new PeriodicMapBounds(2, 2, 12, 12)));
+    }
+
+    [Theory]
+    [InlineData("<1:1,1,1:3,6>")]
+    [InlineData("<1:1,1,1:4,4>")]
+    [InlineData("<1:1,1,1:6,3>")]
+    [InlineData("<10:2 5 4 6 7 8 10,1 4 6 5 9 10,3 5 7 8 9 10:3 3 4,5 5>")]
+    public void GenericMovementNeighborEligibilityRespectsBoundsOnEveryTiling(string symbol)
+    {
+        var result = DelaneyDressHarmonicMetricRealization.Construct(symbol, 1, "unit");
+        Assert.Equal("realized", result.Status);
+        var unbounded = new PeriodicWorldTiling(Guid.NewGuid(),
+            result.Topology!, result.Realization!, new WorldPoint(0, 0));
+        var address = new PeriodicCellAddress(
+            unbounded.Topology.MotifCells[0].Id, new LatticeDisplacement(0, 0));
+        var original = unbounded.MovementNeighbors(address, CellAdjacencyMode.EdgeAndVertex);
+        Assert.NotEmpty(original);
+
+        var bounded = unbounded with { PlayableBounds = new PeriodicMapBounds(1, 1) };
+        bounded.Validate();
+        foreach (var mode in Enum.GetValues<CellAdjacencyMode>())
+            Assert.All(bounded.MovementNeighbors(address, mode),
+                neighbor => Assert.True(bounded.IsPlayable(neighbor.Address)));
+
+        var forbidden = original.First(neighbor => !bounded.IsPlayable(neighbor.Address));
+        Assert.DoesNotContain(forbidden,
+            bounded.MovementNeighbors(address, CellAdjacencyMode.EdgeAndVertex));
+        Assert.Throws<InvalidOperationException>(() =>
+            SpatialCourseSelection.ParallelToNeighborCenters(
+                bounded, new WorldCellId(bounded.Id, address), forbidden,
+                CellAdjacencyMode.EdgeAndVertex));
+        var exit = bounded.Boundaries(address)
+            .FirstOrDefault(boundary => !bounded.IsPlayable(boundary.To.Address));
+        Assert.NotNull(exit);
+        var cursor = new PeriodicCellTraversal
+        {
+            CurrentCell = new WorldCellId(bounded.Id, address),
+            Position = bounded.Resolve(address).Center
+        };
+        Assert.Throws<InvalidOperationException>(() =>
+            SpatialCourseSelection.TowardAtomicInterface(
+                bounded, cursor, exit.InterfaceIndex));
     }
 
     [Fact]

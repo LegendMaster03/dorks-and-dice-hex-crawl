@@ -50,8 +50,8 @@ export async function enhanceExpeditionSetup(
 
     const procedure = select(form, "procedure");
     const geometricPresets = presets.filter(value =>
-        ["alexandrian-advanced", "simple-fixed-distance", "simple-hex-step"].includes(value.presetKey)
-        && value.procedure.isExecutable
+        value.procedure.isExecutable
+        && value.procedure.supportsSpatialExecution === true
         && value.procedure.tilingDsSymbol === tiling.topology.quotientDsSymbol);
     populateProcedureStartChoices(procedure, savedProcedures, geometricPresets);
     if (geometricPresets.length > 0)

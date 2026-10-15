@@ -1,5 +1,6 @@
 using System.Globalization;
 using HexCrawl.Domain.Procedure;
+using HexCrawl.Domain.Spatial;
 
 namespace HexCrawl.Application;
 
@@ -15,7 +16,8 @@ internal static class CrawlProcedurePresetFactory
         IReadOnlyList<ProcedureModuleRecipe> modules,
         string? attribution = null,
         string? disclaimer = null,
-        string category = "Familiar procedures") =>
+        string category = "Familiar procedures",
+        PeriodicMapBounds? playableBounds = null) =>
         new(
             presetKey,
             displayName,
@@ -23,7 +25,8 @@ internal static class CrawlProcedurePresetFactory
             2,
             new GenericProcedurePresetRecipe(procedureKey, procedureName, modules.ToArray())
             {
-                TilingDsSymbol = tilingDsSymbol
+                TilingDsSymbol = tilingDsSymbol,
+                PlayableBounds = playableBounds
             },
             attribution,
             disclaimer,
@@ -64,6 +67,40 @@ internal static class CrawlProcedurePresetFactory
             1,
             HelperValues(resolutionHelpers))
     ];
+
+    internal static ProcedureModuleRecipe NativeExplorationFlow(
+        IReadOnlyList<string> orderedStages,
+        ExplorationDiscoveryTrigger discoveryTrigger,
+        ExplorationEncounterTrigger encounterTrigger,
+        string? firstVisitAction = null,
+        string? repeatVisitAction = null,
+        string? restSiteAction = null,
+        string? actionSelectionStageKey = null,
+        string? actionResolutionStageKey = null,
+        string? watchCompletionStageKey = null,
+        bool requireResolvedLocationOnDiscovery = false,
+        bool requireRegionOnDiscovery = false,
+        string? locationResultTableKey = null)
+    {
+        var parameters = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["stageKeys"] = string.Join(";", orderedStages),
+            ["discoveryTrigger"] = discoveryTrigger.ToString(),
+            ["encounterTrigger"] = encounterTrigger.ToString()
+        };
+        if (firstVisitAction is not null) parameters["firstVisitAction"] = firstVisitAction;
+        if (repeatVisitAction is not null) parameters["repeatVisitAction"] = repeatVisitAction;
+        if (restSiteAction is not null) parameters["restSiteAction"] = restSiteAction;
+        if (actionSelectionStageKey is not null) parameters["actionSelectionStageKey"] = actionSelectionStageKey;
+        if (actionResolutionStageKey is not null) parameters["actionResolutionStageKey"] = actionResolutionStageKey;
+        if (watchCompletionStageKey is not null) parameters["watchCompletionStageKey"] = watchCompletionStageKey;
+        if (requireResolvedLocationOnDiscovery) parameters["requireResolvedLocationOnDiscovery"] = "true";
+        if (requireRegionOnDiscovery) parameters["requireRegionOnDiscovery"] = "true";
+        if (locationResultTableKey is not null) parameters["locationResultTableKey"] = locationResultTableKey;
+        return new ProcedureModuleRecipe(
+            GenericProcedureCatalog.ExplorationFlowModule,
+            GenericProcedureCatalog.ExplorationFlowMechanic, 1, parameters);
+    }
 
     internal static ProcedureModuleRecipe NativeTime(TimeSpan interval) =>
         Structural(

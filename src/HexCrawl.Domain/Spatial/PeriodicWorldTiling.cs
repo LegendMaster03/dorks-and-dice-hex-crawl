@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json.Serialization;
 
 namespace HexCrawl.Domain.Spatial;
 
@@ -15,6 +16,42 @@ public readonly record struct WorldBounds(double MinX, double MinY, double MaxX,
             || !double.IsFinite(MaxX) || !double.IsFinite(MaxY)
             || MinX > MaxX || MinY > MaxY)
             throw new ArgumentException("World bounds must be finite and ordered.");
+    }
+}
+
+/// <summary>
+/// Optional finite map window in periodic lattice coordinates. One unit is one
+/// motif translation, which may contain multiple cells in a mixed tiling.
+/// This does not change polygon geometry or cell identities.
+/// </summary>
+public readonly record struct PeriodicMapBounds(int Width, int Height, long MinU = 0, long MinV = 0)
+{
+    public void Validate()
+    {
+        if (Width <= 0 || Height <= 0
+            || MinU > long.MaxValue - Width || MinV > long.MaxValue - Height)
+            throw new InvalidOperationException(
+                "Map bounds require positive finite period counts and representable offsets.");
+    }
+
+    public bool Contains(PeriodicCellAddress address) =>
+        address.Translation.U >= MinU && address.Translation.U < MinU + Width
+        && address.Translation.V >= MinV && address.Translation.V < MinV + Height;
+
+    public static PeriodicMapBounds? Intersection(PeriodicMapBounds? first, PeriodicMapBounds? second)
+    {
+        if (first is not { } left) return second;
+        if (second is not { } right) return first;
+        left.Validate();
+        right.Validate();
+        var minU = Math.Max(left.MinU, right.MinU);
+        var minV = Math.Max(left.MinV, right.MinV);
+        var maxU = Math.Min(left.MinU + left.Width, right.MinU + right.Width);
+        var maxV = Math.Min(left.MinV + left.Height, right.MinV + right.Height);
+        if (maxU <= minU || maxV <= minV)
+            throw new InvalidOperationException("World map bounds and ruleset map bounds do not overlap.");
+        return new PeriodicMapBounds(checked((int)(maxU - minU)),
+            checked((int)(maxV - minV)), minU, minV);
     }
 }
 
@@ -55,6 +92,42 @@ public sealed record PeriodicWorldTiling(
     int Revision = 1,
     DistanceMeasure? PhysicalDistancePerWorldUnit = null)
 {
+    /// <summary>
+    /// An absent value leaves the tiling unbounded. Period counts apply to
+    /// the existing periodic basis, not world-space distance.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public PeriodicMapBounds? PlayableBounds { get; init; }
+
+    public bool IsPlayable(WorldCellGeometry cell) => IsPlayable(cell.Id.Address);
+
+    public bool IsPlayable(PeriodicCellAddress address) =>
+        PlayableBounds is not { } bounds || bounds.Contains(address);
+
+    /// <summary>Finite world-space envelope for viewport search optimization only.</summary>
+    public WorldBounds? PlayableEnvelope()
+    {
+        if (PlayableBounds is not { } extent) return null;
+        extent.Validate();
+        var corners = new[]
+        {
+            new LatticeDisplacement(extent.MinU, extent.MinV),
+            new LatticeDisplacement(extent.MinU + extent.Width - 1, extent.MinV),
+            new LatticeDisplacement(extent.MinU, extent.MinV + extent.Height - 1),
+            new LatticeDisplacement(extent.MinU + extent.Width - 1,
+                extent.MinV + extent.Height - 1)
+        };
+        var coordinates = Realization.Polygons.Values
+            .SelectMany(polygon => polygon)
+            .SelectMany(vertex => corners.Select(corner => Transform(vertex, corner)))
+            .ToArray();
+        if (coordinates.Length == 0)
+            throw new InvalidOperationException("A playable map requires real periodic polygon geometry.");
+        return new WorldBounds(
+            coordinates.Min(p => p.X), coordinates.Min(p => p.Y),
+            coordinates.Max(p => p.X), coordinates.Max(p => p.Y));
+    }
+
     /// <summary>Explicit physical travel-budget reference for deliberate turns.</summary>
     public DistanceMeasure? PhysicalTurnCostReference { get; init; }
 
@@ -63,6 +136,8 @@ public sealed record PeriodicWorldTiling(
         if (Id == Guid.Empty || Revision <= 0
             || !double.IsFinite(Origin.X) || !double.IsFinite(Origin.Y))
             throw new InvalidOperationException("A periodic world requires a stable identity, revision and finite origin.");
+        if (PlayableBounds is { } playable)
+            playable.Validate();
         ArgumentNullException.ThrowIfNull(Topology);
         ArgumentNullException.ThrowIfNull(Realization);
         Topology.ValidateAdjacency();
@@ -229,10 +304,15 @@ public sealed record PeriodicWorldTiling(
     {
         if (!Enum.IsDefined(adjacency))
             throw new ArgumentOutOfRangeException(nameof(adjacency));
-        var edges = Neighbors(address);
+        if (!IsPlayable(address))
+            throw new InvalidOperationException(
+                "Movement cannot originate outside the playable map bounds.");
+        var edges = Neighbors(address).Where(cell => IsPlayable(cell.Address));
         if (adjacency == CellAdjacencyMode.EdgeOnly)
-            return edges;
-        return edges.Concat(VertexOnlyContacts(address).Select(contact => contact.To))
+            return edges.ToArray();
+        return edges.Concat(VertexOnlyContacts(address)
+                .Select(contact => contact.To)
+                .Where(cell => IsPlayable(cell.Address)))
             .Distinct().ToArray();
     }
 

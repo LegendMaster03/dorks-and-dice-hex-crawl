@@ -56,6 +56,7 @@ public sealed class WorldModule : IHexCrawlModule
         HexCrawl.Domain.Spatial.WorldPoint Origin,
         double RotationDegrees = 0,
         HexCrawl.Domain.Spatial.DistanceMeasure? PhysicalDistancePerWorldUnit = null,
+        HexCrawl.Domain.Spatial.PeriodicMapBounds? PlayableBounds = null,
         double? PeriodULengthWorldUnits = null,
         double? PeriodVLengthWorldUnits = null,
         double? PeriodAngleDegrees = null,
@@ -160,7 +161,10 @@ public sealed class WorldModule : IHexCrawlModule
         }
         var worldTiling = new HexCrawl.Domain.Spatial.PeriodicWorldTiling(
             Guid.NewGuid(), topology, metric, request.Origin,
-            PhysicalDistancePerWorldUnit: request.PhysicalDistancePerWorldUnit);
+            PhysicalDistancePerWorldUnit: request.PhysicalDistancePerWorldUnit)
+        {
+            PlayableBounds = request.PlayableBounds
+        };
         worldTiling.Validate();
         var stored = await service.CreatePeriodicOverworldAsync(
             UserId(context), request.Name, worldTiling, cancellationToken);
@@ -306,8 +310,22 @@ public sealed class WorldModule : IHexCrawlModule
         var bounds = new HexCrawl.Domain.Spatial.WorldBounds(minX, minY, maxX, maxY);
         bounds.Validate();
         var world = await service.GetOverworldAsync(overworldId, UserId(context), cancellationToken);
+        // Clamp the search *before* candidate enumeration. A large viewport
+        // cannot make an otherwise small bounded map exceed the enumeration cap.
+        if (world.World.SpatialTiling.PlayableEnvelope() is { } envelope)
+        {
+            if (bounds.MaxX < envelope.MinX || bounds.MinX > envelope.MaxX
+                || bounds.MaxY < envelope.MinY || bounds.MinY > envelope.MaxY)
+                return Results.Ok(Array.Empty<HexCrawl.Domain.Spatial.WorldCellGeometry>());
+            bounds = new HexCrawl.Domain.Spatial.WorldBounds(
+                Math.Max(bounds.MinX, envelope.MinX),
+                Math.Max(bounds.MinY, envelope.MinY),
+                Math.Min(bounds.MaxX, envelope.MaxX),
+                Math.Min(bounds.MaxY, envelope.MaxY));
+        }
         // Hard cap on candidate enumeration, not merely on response length.
-        return Results.Ok(world.World.SpatialTiling.Intersecting(bounds, limit: 2500));
+        return Results.Ok(world.World.SpatialTiling.Intersecting(bounds, limit: 2500)
+            .Where(world.World.SpatialTiling.IsPlayable).ToArray());
     }
 
     private static async Task<IResult> GetContainingCellsAsync(
@@ -321,8 +339,17 @@ public sealed class WorldModule : IHexCrawlModule
         if (!double.IsFinite(x) || !double.IsFinite(y))
             throw new ArgumentOutOfRangeException(nameof(x), "Point coordinates must be finite.");
         var world = await service.GetOverworldAsync(overworldId, UserId(context), cancellationToken);
-        return Results.Ok(world.World.SpatialTiling.Containing(
-            new HexCrawl.Domain.Spatial.WorldPoint(x, y), limit: 2500));
+        var lookup = world.World.SpatialTiling.Containing(
+            new HexCrawl.Domain.Spatial.WorldPoint(x, y), limit: 2500);
+        var admitted = lookup.Candidates
+            .Where(cell => world.World.SpatialTiling.IsPlayable(cell.Address)).ToArray();
+        return Results.Ok(new HexCrawl.Domain.Spatial.WorldCellLookup(
+            admitted.Length switch
+            {
+                0 => HexCrawl.Domain.Spatial.WorldCellLookupStatus.NotFound,
+                1 => HexCrawl.Domain.Spatial.WorldCellLookupStatus.Unique,
+                _ => HexCrawl.Domain.Spatial.WorldCellLookupStatus.Ambiguous
+            }, admitted));
     }
 
     private static async Task<IResult> ResolveCellAsync(
@@ -337,7 +364,10 @@ public sealed class WorldModule : IHexCrawlModule
         var world = await service.GetOverworldAsync(overworldId, UserId(context), cancellationToken);
         var address = new HexCrawl.Domain.Spatial.PeriodicCellAddress(
             motifCellId, new HexCrawl.Domain.Spatial.LatticeDisplacement(u, v));
-        return Results.Ok(world.World.SpatialTiling.Resolve(address));
+        var geometry = world.World.SpatialTiling.Resolve(address);
+        if (!world.World.SpatialTiling.IsPlayable(geometry))
+            return Results.NotFound();
+        return Results.Ok(geometry);
     }
 
     private sealed record RenameOverworldRequest(string Name, long ExpectedVersion);

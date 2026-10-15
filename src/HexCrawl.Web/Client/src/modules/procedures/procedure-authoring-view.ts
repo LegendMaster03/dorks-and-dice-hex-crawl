@@ -60,6 +60,7 @@ export async function renderProcedureAuthoringWorkspace(
     let tilings: TilingCatalogEntry[] = [];
     let tilingFilter = "all";
     let tilingOverride: string | null = null;
+    let boundsOverride: { width?: number; height?: number; minU?: number; minV?: number } | null = null;
     let baselineTiling: string | null = null;
     let savedProcedures: SavedProcedureSummary[] = [];
     let revisions: ProcedureRevisionSummary[] = [];
@@ -98,6 +99,7 @@ export async function renderProcedureAuthoringWorkspace(
         revision: sourceProcedureId ? viewedRevision : null,
         name: nameOverride,
         tilingDsSymbol: tilingOverride,
+        ...(boundsOverride === null ? {} : { playableBounds: boundsOverride }),
         moduleSelections: [...moduleSelections.entries()].map(([moduleKey, included]) => ({ moduleKey, included })),
         overrides: [...pending.values()]
     });
@@ -108,6 +110,7 @@ export async function renderProcedureAuthoringWorkspace(
         moduleSelections.clear();
         nameOverride = null;
         tilingOverride = null;
+        boundsOverride = null;
         jsonText = "";
         jsonBaseline = "";
         jsonLoadFailed = false;
@@ -261,6 +264,7 @@ export async function renderProcedureAuthoringWorkspace(
                     expectedRevision: latestRevision ?? draft.revision,
                     name: nameOverride,
                     tilingDsSymbol: tilingOverride,
+                    ...(boundsOverride === null ? {} : { playableBounds: boundsOverride }),
                     moduleSelections: moduleSelectionInputs(moduleSelections),
                     overrides: [...pending.values()]
                 })
@@ -268,6 +272,7 @@ export async function renderProcedureAuthoringWorkspace(
                     presetKey: sourcePresetKey,
                     name: nameOverride,
                     tilingDsSymbol: tilingOverride,
+                    ...(boundsOverride === null ? {} : { playableBounds: boundsOverride }),
                     moduleSelections: moduleSelectionInputs(moduleSelections),
                     overrides: [...pending.values()]
                 });
@@ -729,6 +734,60 @@ export async function renderProcedureAuthoringWorkspace(
                 choices.append(option);
             }
             tilingField.append(choices);
+            const mapBounds = draft!.playableBounds;
+            tilingField.append(textElement("p", mapBounds
+                ? `Map limit: ${mapBounds.width} × ${mapBounds.height} periodic units. Origin: (${mapBounds.minU}, ${mapBounds.minV}).`
+                : "Map limit: Unbounded."));
+            const boundsForm = document.createElement("div");
+            boundsForm.className = "hc-inline";
+            const createSizeField = (label: string, name: string, value: number | undefined) => {
+                const field = document.createElement("label");
+                field.className = "hc-compact-field";
+                field.append(textElement("span", label));
+                const control = document.createElement("input");
+                control.type = "number";
+                control.min = "1";
+                control.step = "1";
+                control.placeholder = "Unbounded";
+                control.value = value === undefined ? "" : String(value);
+                control.dataset.mapBoundsDimension = name;
+                control.disabled = historical() || savePending || tilingPending;
+                field.append(control);
+                return field;
+            };
+            boundsForm.append(
+                createSizeField("Width (periods)", "width", mapBounds?.width),
+                createSizeField("Height (periods)", "height", mapBounds?.height));
+            const applyBounds = button("Apply map limit", "secondary");
+            applyBounds.disabled = historical() || savePending || tilingPending;
+            applyBounds.addEventListener("click", () => {
+                const widthText = boundsForm.querySelector<HTMLInputElement>(
+                    '[data-map-bounds-dimension="width"]')!.value.trim();
+                const heightText = boundsForm.querySelector<HTMLInputElement>(
+                    '[data-map-bounds-dimension="height"]')!.value.trim();
+                if (Boolean(widthText) !== Boolean(heightText)) {
+                    const error = root.querySelector<HTMLElement>("[data-error]");
+                    if (error) showUiError(error,
+                        new Error("Specify both map dimensions, or leave both blank for an unbounded map."));
+                    return;
+                }
+                const width = Number(widthText);
+                const height = Number(heightText);
+                if (widthText && (!Number.isSafeInteger(width) || !Number.isSafeInteger(height)
+                    || width <= 0 || height <= 0)) {
+                    const error = root.querySelector<HTMLElement>("[data-error]");
+                    if (error) showUiError(error,
+                        new Error("Map dimensions must be positive whole numbers."));
+                    return;
+                }
+                boundsOverride = widthText
+                    ? { width, height, minU: mapBounds?.minU ?? 0, minV: mapBounds?.minV ?? 0 }
+                    : {};
+                void refreshDraft();
+            });
+            tilingField.append(boundsForm, applyBounds,
+                textElement("small",
+                    "Leave both dimensions empty for an unbounded map. Periods may contain multiple tiles."));
             const movement = draft!.modules.find(module => module.moduleKey === "movement.resolution");
             if (movement && supportsVertexAdjacency(tilings, draft!.tilingDsSymbol)) {
                 const adjacency = document.createElement("label");
@@ -798,6 +857,7 @@ export async function renderProcedureAuthoringWorkspace(
         || moduleSelections.size > 0
         || nameOverride !== null
         || tilingOverride !== null
+        || boundsOverride !== null
         || (sourceProcedureId === null && (sourcePresetKey !== null || (draft?.modules.length ?? 0) > 0));
 
     const renderCompact = (): HTMLElement => {

@@ -149,6 +149,7 @@ export type PeriodicWorldTiling = {
     origin: WorldPoint;
     topology: { motifCells: { id: string }[]; quotientDsSymbol: string };
     physicalDistancePerWorldUnit: DistanceValue | null;
+    playableBounds?: { width: number; height: number; minU: number; minV: number } | null;
 };
 
 export type Overworld = {
@@ -193,11 +194,27 @@ export type ProcedureResolutionHelpers = {
     } | null;
 };
 
+export type ExplorationFlow = {
+    stageKeys: string[];
+    discoveryTrigger: "Manual" | "OnFirstVisit" | "OnExplore";
+    encounterTrigger: "Manual" | "EveryTravel" | "OnExploreOrOptionalTravel";
+    firstVisitAction: string | null;
+    repeatVisitAction: string | null;
+    restSiteAction: string | null;
+    actionSelectionStageKey: string | null;
+    actionResolutionStageKey: string | null;
+    watchCompletionStageKey: string | null;
+    requireResolvedLocationOnDiscovery: boolean;
+    requireRegionOnDiscovery: boolean;
+    locationResultTableKey: string | null;
+};
+
 export type ProcedureRuntime = {
     intervalHours: number;
     travelResolution: TravelResolutionMode;
     actualDistanceResolution: ActualDistanceResolutionMode;
     adjacency?: "EdgeOnly" | "EdgeAndVertex";
+    explorationFlow?: ExplorationFlow | null;
     encounterCadence: EncounterCadence;
     usesNavigationChecks: boolean;
     usesPersistentVeer: boolean;
@@ -236,6 +253,7 @@ export type CampaignProcedure = {
     schemaVersion: string;
     tilingDsSymbol: string;
     isExecutable: boolean;
+    supportsSpatialExecution?: boolean;
     runtime: ProcedureRuntime | null;
     focusedIntervalPolicy: FocusedIntervalPolicy;
     modules: ProcedureModule[];

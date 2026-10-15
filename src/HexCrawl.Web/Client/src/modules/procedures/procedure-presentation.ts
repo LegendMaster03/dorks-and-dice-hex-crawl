@@ -46,6 +46,7 @@ const rules: CompactRuleDescriptor[] = [
     { moduleKey: "survival.exposure", group: "Survival & resources", label: "Environmental exposure", description: "Defines which environmental conditions require exposure resolution and who is affected.", order: 135 },
     { moduleKey: "effects.expedition", group: "Survival & resources", label: "Persistent effects", description: "Defines accumulating expedition conditions and how they recover.", order: 140 },
     { moduleKey: "journey.process", group: "Journey & events", label: "Multi-stage journey", description: "Defines journey stages, progress, roles, transitions, and completion.", order: 200 },
+    { moduleKey: "exploration.flow", group: "Journey & events", label: "Exploration flow", description: "Configures ordered stages, first-visit and return actions, and encounter timing.", order: 205 },
     { moduleKey: "journey.events", group: "Journey & events", label: "Journey events", description: "Defines when journey events occur and how they affect the expedition.", order: 210 },
     { moduleKey: "procedure.helpers", group: "Automation", label: "Automatic resolution", description: "Uses Hex Crawl to generate supported travel, navigation, and encounter results when configured.", order: 300 }
 ];
@@ -121,6 +122,17 @@ const labels: Record<string, string> = {
     progressKind: "Progress type",
     progressUnit: "Progress unit",
     stageKeys: "Journey stages",
+    discoveryTrigger: "Discover locations",
+    encounterTrigger: "Encounter opportunities",
+    firstVisitAction: "New location action",
+    repeatVisitAction: "Previously visited action",
+    restSiteAction: "Rest-site action",
+    actionSelectionStageKey: "Action selection stage",
+    actionResolutionStageKey: "Action resolution stage",
+    watchCompletionStageKey: "Completed watch stage",
+    requireResolvedLocationOnDiscovery: "Require a resolved new location",
+    requireRegionOnDiscovery: "Require a region assignment",
+    locationResultTableKey: "Location result table key",
     progressFloor: "Minimum progress",
     progressCeiling: "Maximum progress",
     allowNegativeProgress: "Allow lost progress",
@@ -223,6 +235,8 @@ const choiceSets: Record<string, Array<{ value: string; label: string }>> = {
     "journey.events.targetingModel": choices("explicit-target", "travel-role"),
     "journey.events.terrainInfluence": choices("manual", "difficulty", "difficulty-and-road"),
     "journey.events.consequenceModel": choices("event", "event-and-fatigue"),
+    "exploration.flow.discoveryTrigger": choices("Manual", "OnFirstVisit", "OnExplore"),
+    "exploration.flow.encounterTrigger": choices("Manual", "EveryTravel", "OnExploreOrOptionalTravel"),
     "journey.process.stageModel": choices("manual-stages", "route-then-events-then-arrival"),
     "journey.process.progressModel": choices("progress-points", "guide-marching-progress"),
     "journey.process.completionModel": choices("explicit-completion", "reach-destination", "final-stage-completion"),
@@ -251,7 +265,7 @@ const keyListKeys = new Set([
     "activityKeys", "roleKeys", "resourceKinds", "effectKinds", "triggerSources", "dimensions", "stageKeys"
 ]);
 const mappingKeys = new Set(["terrainAdjustments"]);
-const textKeys = new Set(["evaluationInterval"]);
+const textKeys = new Set(["evaluationInterval", "firstVisitAction", "repeatVisitAction", "restSiteAction"]);
 
 type PresentationSectionLayout = {
     key: string;
@@ -321,6 +335,11 @@ const presentationSectionLayouts: Record<string, PresentationSectionLayout[]> = 
         { key: "effect", label: "Effect", parameters: ["effectKinds", "scope"] },
         { key: "application", label: "Application", parameters: ["accumulationModel"] },
         { key: "recovery", label: "Recovery", parameters: ["recoveryModel"] }
+    ],
+    "exploration.flow": [
+        { key: "stages", label: "Ordered stages", parameters: ["stageKeys"] },
+        { key: "actions", label: "Location actions", parameters: ["firstVisitAction", "repeatVisitAction", "restSiteAction"] },
+        { key: "triggers", label: "Discovery and encounters", parameters: ["discoveryTrigger", "encounterTrigger"] }
     ],
     "journey.process": [
         { key: "stages", label: "Stages", parameters: ["stageModel", "stageKeys"] },

@@ -1059,3 +1059,38 @@ test("vertex adjacency augments the existing tiling card and compass, without pa
     assert.doesNotMatch(expedition, /data-vertex-contacts/);
     assert.doesNotMatch(expedition, /vertexContainer/);
 });
+
+test("expedition preset selection uses spatial capabilities, not system keys", () => {
+    const setup = fs.readFileSync(path.join(sourceDir,
+        "modules/expeditions/expedition-setup.ts"), "utf8");
+    const home = fs.readFileSync(path.join(sourceDir,
+        "modules/home/tool-home-view.ts"), "utf8");
+    const assistant = fs.readFileSync(path.join(sourceDir,
+        "modules/assistants/assistant-entry-view.ts"), "utf8");
+
+    assert.match(setup, /supportsSpatialExecution === true/);
+    assert.match(home, /supportsSpatialExecution === true/);
+    assert.doesNotMatch(setup, /\["alexandrian-advanced", "simple-fixed-distance"/);
+    assert.doesNotMatch(home, /\["alexandrian-advanced", "simple-fixed-distance"/);
+    assert.doesNotMatch(assistant, /const preferred = assistant === "travel" \?/);
+    assert.match(assistant, /runtime\.usesNavigationChecks/);
+    assert.match(assistant, /runtime\.encounterCadence/);
+});
+
+test("bounded world compass omits exits with destinations outside playable bounds", () => {
+    const contractPath = path.join(repositoryRoot,
+        "src/HexCrawl.Web/Modules/Expeditions/CellTraversalContracts.cs");
+    // The standalone frontend container does not include server source.
+    const contracts = fs.existsSync(contractPath) ? fs.readFileSync(contractPath, "utf8") : null;
+    const navigation = fs.readFileSync(path.join(sourceDir,
+        "modules/expeditions/periodic-expedition-workbench.ts"), "utf8");
+    const topology = fs.readFileSync(path.join(sourceDir,
+        "modules/expeditions/current-cell-topology.ts"), "utf8");
+
+    if (contracts !== null) {
+        assert.match(contracts, /world\.Boundaries\(cursor\.CurrentCell\.Address\)\s*\.Where\(edge => world\.IsPlayable\(edge\.To\.Address\)\)/);
+        assert.match(contracts, /world\.VertexOnlyContacts\(cursor\.CurrentCell\.Address\)\s*\.Where\(contact => world\.IsPlayable\(contact\.To\.Address\)\)/);
+    }
+    assert.match(topology, /context\.interfaces\.map\(/);
+    assert.match(navigation, /vertexChoices: allowedVertices\.map/);
+});

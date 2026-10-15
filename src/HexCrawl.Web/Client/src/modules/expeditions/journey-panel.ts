@@ -3,6 +3,7 @@ import { JourneyApi } from "../../journey-api";
 import type {
     ExpeditionConsequenceInput,
     ExpeditionJourneyState,
+    ExplorationTableRollRequest,
     JourneyApproachDefinition,
     JourneyEventOccurrence,
     JourneyEventTargetKind,
@@ -63,6 +64,7 @@ export class ExpeditionJourneyPanel {
             this.policySummary(state),
             this.rolesView(),
             this.startView(state),
+            this.explorationCellView(state),
             this.processesView(state),
             this.eventsView(state),
             this.historyView(state));
@@ -73,7 +75,9 @@ export class ExpeditionJourneyPanel {
         const process = state.processPolicy;
         const events = state.eventPolicy;
         section.append(this.muted(process.support === "None"
-            ? "This procedure does not use a journey process."
+            ? (this.getRuntime().procedure.runtime?.explorationFlow
+                ? "This procedure uses a staged exploration flow, resolved through the shared journey process engine."
+                : "This procedure does not use a journey process.")
             : process.support === "Unsupported"
                 ? process.unsupportedReason ?? "The stored journey rules are not supported by this runtime."
                 : `Journey stages track ${process.progressKind === "Numeric" ? "progress" : "table state"}${process.progressUnit ? ` in ${process.progressUnit}` : ""}. ${process.roleDriven ? "Assigned roles can be used for resolutions." : "No journey role is required by the procedure."}`));
@@ -115,8 +119,28 @@ export class ExpeditionJourneyPanel {
 
     private startView(state: ExpeditionJourneyState): HTMLElement {
         const section = this.section("Start a process / challenge");
+        const exploration = this.getRuntime().procedure.runtime?.explorationFlow;
+        if (exploration) {
+            const active = state.activeProcesses.some(process =>
+                process.execution.executionHandler === "procedure.exploration.flow");
+            const start = this.button("Start exploration flow");
+            start.disabled = active;
+            start.addEventListener("click", () => {
+                void this.mutate(start, async () => {
+                    const result = await this.api.startExplorationFlow(this.expeditionId, {
+                        expectedVersion: this.requireState().expeditionVersion,
+                        processId: crypto.randomUUID(),
+                        provenance: dmJourneyProvenance("exploration-flow-start")
+                    });
+                    this.apply(result.state);
+                });
+            });
+            section.append(this.muted(
+                `Exploration stages: ${exploration.stageKeys.map(humanize).join(" → ")}. Stages advance only after explicit resolution.`),
+                start);
+        }
         if (state.processPolicy.support !== "Supported") {
-            section.append(this.muted("Starting a process requires a supported exact-pinned journey.process policy."));
+            if (!exploration) section.append(this.muted("Starting a process requires a supported exact-pinned journey.process policy."));
             return section;
         }
 
@@ -184,6 +208,217 @@ export class ExpeditionJourneyPanel {
         return section;
     }
 
+    private explorationCellView(state: ExpeditionJourneyState): HTMLElement {
+        const section = this.section("Current cell and GM observations");
+        const cell = state.explorationCell;
+        if (!cell) {
+            section.append(this.muted("This expedition does not have an authoritative spatial cell."));
+            return section;
+        }
+        const address = cell.cell.address;
+        const runtime = this.getRuntime().procedure.runtime?.explorationFlow;
+        const selectionStage = runtime?.actionSelectionStageKey ?? null;
+        const resolutionStage = runtime?.actionResolutionStageKey ?? null;
+        if (!cell.visited && (runtime?.requireResolvedLocationOnDiscovery ||
+            runtime?.requireRegionOnDiscovery))
+            section.append(this.muted(
+                "This new-location action requires " +
+                [
+                    runtime.requireRegionOnDiscovery ? "a region key" : null,
+                    runtime.requireResolvedLocationOnDiscovery
+                        ? `a location name or resolved ${runtime.locationResultTableKey ?? "location"} table result`
+                        : null
+                ].filter(Boolean).join(" and ") +
+                ". Supply your resolved result; the application does not infer a roll."));
+        const resolvingProcess = state.activeProcesses.find(process =>
+            process.execution.executionHandler === "procedure.exploration.flow" &&
+            process.currentStageKey === resolutionStage);
+        const selectedAction = resolvingProcess
+            ? state.resolutions.find(value => value.processId === resolvingProcess.id
+                && value.stageKey === selectionStage)?.outcomeKey ?? null
+            : null;
+        section.append(this.muted(
+            `Cell ${address.translation.u}, ${address.translation.v} (${address.motifCellId}). ` +
+            `${cell.visited ? "Previously visited." : "Visit not yet recorded."} ` +
+            `${cell.restSite ? "Rest site." : "Not designated as a rest site."}`));
+        section.append(this.muted(
+            `Discovery trigger: ${humanize(cell.discoveryTrigger)}. Encounter trigger: ${humanize(cell.encounterTrigger)}. ` +
+            "GM location details remain private; explicitly supplied tables can be rolled by the shared procedure resolver."));
+        if (cell.regionKey) section.append(this.muted(
+            `Region: ${cell.regionName ?? cell.regionKey} (${cell.regionKey}). ${cell.regionDmNote ?? ""}`));
+        const describeTableResults = (subject: string, results: typeof cell.locationTableResults): void => {
+            for (const entry of results) section.append(this.muted(
+                `${subject} / ${entry.tableKey}: ${entry.resultText}` +
+                (entry.roll ? ` · Roll: ${entry.roll}` : "") +
+                (entry.sourceReference ? ` · Source: ${entry.sourceReference}` : "")));
+        };
+        describeTableResults("Location result", cell.locationTableResults);
+        describeTableResults("Region result", cell.regionTableResults);
+        const ledger = document.createElement("details");
+        const ledgerSummary = document.createElement("summary");
+        ledgerSummary.textContent = `GM exploration ledger (${state.explorationCells.length} cells, ${state.explorationRegions.length} regions)`;
+        ledger.append(ledgerSummary,
+            this.muted("These expedition-local records are never published to the player map automatically."));
+        for (const region of state.explorationRegions) {
+            const members = state.explorationCells.filter(value => value.regionKey === region.key);
+            ledger.append(this.muted(
+                `Region ${region.key}: ${region.name ?? "unnamed"} · ${members.length} recorded cells` +
+                (region.dmNote ? ` · ${region.dmNote}` : "")));
+            for (const entry of region.tableResults)
+                ledger.append(this.muted(`  ${entry.tableKey}: ${entry.resultText}` +
+                    (entry.sourceReference ? ` · ${entry.sourceReference}` : "")));
+        }
+        for (const entry of state.explorationCells) {
+            const position = entry.cell.address.translation;
+            ledger.append(this.muted(
+                `Cell ${position.u}, ${position.v}: ${entry.locationName ?? "unnamed"}` +
+                (entry.regionKey ? ` · region ${entry.regionKey}` : "") +
+                (entry.visited ? " · visited" : " · not visited")));
+        }
+        section.append(ledger);
+        for (const opportunity of cell.encounterOpportunities) {
+            if (opportunity.requirement === "None") continue;
+            section.append(this.muted(
+                `${opportunity.actionKey ? humanize(opportunity.actionKey) : "Travel"}: ` +
+                (opportunity.requirement === "Required"
+                    ? "Encounter resolution required."
+                    : "Encounter is optional or depends on a separately resolved risk check.") +
+                " This panel does not roll or resolve the encounter."));
+        }
+
+        const form = document.createElement("form");
+        form.className = "hc-form hc-form-grid";
+        const action = this.select("Exploration action", ["", ...cell.availableActions.map(key =>
+            `${key}|${humanize(key)}`)]);
+        if (cell.availableActions.length > 0) action.control.value = cell.availableActions[0];
+        if (selectedAction !== null) {
+            action.control.value = selectedAction;
+            action.control.disabled = true;
+        }
+        const visited = this.checkbox("Record this exploration action / visit", !cell.visited || !!resolvingProcess);
+        const rest = this.checkbox("Designate as rest site", false);
+        const name = this.input("Resolved location name (GM only)", "text", cell.locationName ?? "");
+        const note = this.input("Location notes (GM only)", "text", cell.dmNote ?? "");
+        const regionGroup = document.createElement("details");
+        const regionTitle = document.createElement("summary");
+        regionTitle.textContent = "Region membership and manually resolved table results";
+        const regionKey = this.input("Region key (GM grouping)", "text", cell.regionKey ?? "");
+        const regionName = this.input("Update region name (optional)", "text");
+        const regionNote = this.input("Update region notes (optional)", "text");
+        const currentLocationResults = cell.locationTableResults;
+        const tableFields = (subject: string): {
+            group: HTMLElement;
+            build: (existing: typeof currentLocationResults) => typeof currentLocationResults | null;
+        } => {
+            const group = document.createElement("fieldset");
+            const legend = document.createElement("legend");
+            legend.textContent = subject + " table outcome (optional)";
+            const key = this.input("Table key", "text");
+            const result = this.input("Resolved result text", "text");
+            const roll = this.input("Roll / drawn entry", "text");
+            const source = this.input("Source reference", "text");
+            group.append(legend, key.wrapper, result.wrapper, roll.wrapper, source.wrapper);
+            return {
+                group,
+                build: existing => {
+                    const tableKey = key.control.value.trim();
+                    const resultText = result.control.value.trim();
+                    if (!tableKey && !resultText) return null;
+                    if (!tableKey || !resultText)
+                        throw new Error(subject + " table key and resolved result text are both required.");
+                    const entry = {
+                        tableKey, resultText, roll: nullable(roll.control.value),
+                        sourceReference: nullable(source.control.value)
+                    };
+                    return [...existing.filter(value => value.tableKey.toLowerCase() !== tableKey.toLowerCase()), entry];
+                }
+            };
+        };
+        const locationTable = tableFields("Location");
+        const regionTable = tableFields("Region");
+        const rollGuide = this.muted(
+            "Supply complete GM-authored table definitions as JSON. Every die face must match exactly one row. " +
+            "The shared procedure resolver rolls and saves the selected result and source.");
+        const rollLabel = document.createElement("label");
+        rollLabel.textContent = "Roll supplied tables (JSON, optional)";
+        const rollInput = document.createElement("textarea");
+        rollInput.rows = 5;
+        rollInput.placeholder = JSON.stringify([{
+            scope: "Location", tableKey: runtime?.locationResultTableKey ?? "location",
+            dieSides: 6, sourceReference: "GM table source",
+            rows: [{ from: 1, through: 3, resultText: "First supplied result" },
+                { from: 4, through: 6, resultText: "Second supplied result" }]
+        }], null, 2);
+        rollLabel.append(rollInput);
+        regionGroup.append(regionTitle, regionKey.wrapper, regionName.wrapper, regionNote.wrapper,
+            locationTable.group, regionTable.group, rollGuide, rollLabel);
+        const encounter = this.select("Optional / risk-based encounter result",
+            ["|Unresolved", "true|Encounter occurs", "false|No encounter"]);
+        const syncEncounter = (): void => {
+            const requirement = cell.encounterOpportunities.find(value =>
+                value.actionKey === nullable(action.control.value))?.requirement ?? "None";
+            encounter.wrapper.hidden = requirement !== "OptionalOrRiskBased";
+            if (requirement !== "OptionalOrRiskBased") encounter.control.value = "";
+        };
+        const syncVisited = (): void => {
+            action.wrapper.hidden = !visited.control.checked;
+            syncEncounter();
+            if (!visited.control.checked) encounter.wrapper.hidden = true;
+        };
+        action.control.addEventListener("change", syncEncounter);
+        visited.control.addEventListener("change", syncVisited);
+        syncVisited();
+        const costs = this.consequenceFields();
+        const advancedResult = document.createElement("details");
+        const advancedSummary = document.createElement("summary");
+        advancedSummary.textContent = "Optional time, resource, or recovery result";
+        advancedResult.append(advancedSummary, costs.container);
+        const submit = this.button("Record exploration details");
+        form.append(action.wrapper, visited.wrapper, rest.wrapper, name.wrapper, note.wrapper,
+            regionGroup, encounter.wrapper, advancedResult, submit);
+        form.addEventListener("submit", domEvent => {
+            domEvent.preventDefault();
+            void this.mutate(submit, async () => {
+                const operationId = crypto.randomUUID();
+                const locationTableResults = locationTable.build(cell.locationTableResults);
+                const regionTableResults = regionTable.build(cell.regionTableResults);
+                const tableRolls: import("../../journey-types").ExplorationTableRollRequest[] =
+                    rollInput.value.trim()
+                        ? JSON.parse(rollInput.value) as import("../../journey-types").ExplorationTableRollRequest[]
+                        : [];
+                if (!Array.isArray(tableRolls))
+                    throw new Error("Supplied table rolls must be a JSON array.");
+                const resolvedRegionKey = nullable(regionKey.control.value);
+                if ((regionTableResults || nullable(regionName.control.value) ||
+                    nullable(regionNote.control.value)) && !resolvedRegionKey)
+                    throw new Error("Choose a region key before recording region data.");
+                const result = await this.api.recordExplorationCell(this.expeditionId, {
+                    expectedVersion: this.requireState().expeditionVersion,
+                    operationId,
+                    actionKey: visited.control.checked ? nullable(action.control.value) : null,
+                    markVisited: visited.control.checked,
+                    markRestSite: rest.control.checked,
+                    locationName: nullable(name.control.value),
+                    dmNote: nullable(note.control.value),
+                    encounterOccurs: !visited.control.checked || encounter.control.value === ""
+                        ? null : encounter.control.value === "true",
+                    processId: visited.control.checked ? resolvingProcess?.id ?? null : null,
+                    consequences: visited.control.checked ? costs.build("exploration-action", operationId, operationId) : [],
+                    regionKey: resolvedRegionKey,
+                    regionName: nullable(regionName.control.value),
+                    regionDmNote: nullable(regionNote.control.value),
+                    locationTableResults,
+                    regionTableResults,
+                    tableRolls,
+                    provenance: dmJourneyProvenance("exploration-cell-record")
+                });
+                this.apply(result.state);
+            });
+        });
+        section.append(form);
+        return section;
+    }
+
     private processesView(state: ExpeditionJourneyState): HTMLElement {
         const section = this.section("Active processes");
         if (state.activeProcesses.length === 0) section.append(this.muted("No active journey processes or challenges."));
@@ -212,7 +447,60 @@ export class ExpeditionJourneyPanel {
         card.append(this.muted(`Stage: ${current.displayName}. ${describeProgress(process, stageState)} Successes ${stageState.successes}; failures ${stageState.failures}; complications ${stageState.complications}.`));
         if (current.approaches.length > 0) card.append(this.muted(`Approaches: ${current.approaches.map(value => value.displayName).join(" · ")}`));
         if (process.pendingActions.length > 0) card.append(this.muted(`Pending: ${process.pendingActions.map(value => `${humanize(value.kind)}${value.detail ? ` — ${value.detail}` : ""}`).join(" | ")}`));
-        card.append(this.processStageSummary(process), this.resolveProcessForm(process), this.processCloseControls(process));
+        card.append(this.processStageSummary(process));
+        if (process.execution.executionHandler === "procedure.exploration.flow") {
+            const flow = this.getRuntime().procedure.runtime?.explorationFlow;
+            const isChoosingAction = !!flow?.actionSelectionStageKey &&
+                process.currentStageKey === flow.actionSelectionStageKey;
+            const isResolvingAction = !!flow?.actionResolutionStageKey &&
+                process.currentStageKey === flow.actionResolutionStageKey;
+            const choices = isChoosingAction ? this.requireState().explorationCell?.availableActions ?? [] : [];
+            const choice = isChoosingAction
+                ? this.select("Choose exploration action", choices.map(value => `${value}|${humanize(value)}`))
+                : null;
+            if (choice) card.append(choice.wrapper);
+            const completed = this.button(isChoosingAction ? "Select action and continue" : "Mark current stage resolved");
+            if (isResolvingAction) {
+                card.append(this.muted(
+                    "Resolve the selected action in Current exploration location. Encounter results must be resolved before this stage advances."));
+            } else {
+                completed.disabled = isChoosingAction && choices.length === 0;
+            completed.addEventListener("click", () => {
+                void this.mutate(completed, async () => {
+                    const result = await this.api.resolveProcess(
+                        this.expeditionId, process.id, {
+                            expectedVersion: this.requireState().expeditionVersion,
+                            captureCurrentEnvironment: false,
+                            resolution: {
+                                resolutionId: crypto.randomUUID(),
+                                processId: process.id,
+                                stageKey: process.currentStageKey,
+                                successDelta: 0,
+                                failureDelta: 0,
+                                complicationDelta: 0,
+                                completeStage: true,
+                                outcomeKey: choice?.control.value ?? null,
+                                pendingActionId: process.pendingActions.find(value =>
+                                    value.kind === "WatchResolution")?.id ?? null,
+                                completeProcess: false,
+                                failProcess: false,
+                                consequences: [],
+                                provenance: dmJourneyProvenance("exploration-stage-resolved")
+                            }
+                        });
+                    this.apply(result.state);
+                });
+            });
+            const manual = document.createElement("details");
+            const manualSummary = document.createElement("summary");
+            manualSummary.textContent = "Advanced stage resolution and consequences";
+            manual.append(manualSummary, this.resolveProcessForm(process));
+            card.append(this.muted("Mark the stage only after resolving its action, encounter, or journal step at the table."), completed, manual);
+            }
+        } else {
+            card.append(this.resolveProcessForm(process));
+        }
+        card.append(this.processCloseControls(process));
         const technical = document.createElement("details");
         const technicalSummary = document.createElement("summary");
         technicalSummary.textContent = "Advanced technical details";

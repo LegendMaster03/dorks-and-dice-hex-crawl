@@ -133,6 +133,15 @@ public sealed class ExpeditionStartService(
                     ? "Equivalence between this world and the selected ruleset has not been proven. Review the ruleset before starting."
                     : "The selected ruleset is incompatible with this world's topology.");
 
+        tiling = tiling with
+        {
+            PlayableBounds = PeriodicMapBounds.Intersection(
+                tiling.PlayableBounds, procedure.PlayableBounds)
+        };
+        if (!tiling.IsPlayable(startCell))
+            throw new InvalidOperationException(
+                "The starting cell is outside the effective playable map bounds.");
+
         var state = new CellExpeditionState
         {
             Id = Guid.NewGuid(),
@@ -224,7 +233,8 @@ public sealed class ExpeditionStartService(
             sessionId, realized.Topology, realized.Realization, new WorldPoint(0, 0),
             PhysicalDistancePerWorldUnit: options.PhysicalDistancePerWorldUnit)
         {
-            PhysicalTurnCostReference = options.PhysicalDistancePerWorldUnit
+            PhysicalTurnCostReference = options.PhysicalDistancePerWorldUnit,
+            PlayableBounds = procedure.PlayableBounds
         };
         tiling.Validate();
 

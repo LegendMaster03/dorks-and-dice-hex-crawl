@@ -18,7 +18,9 @@ public static class JourneyAggregateProcedureValidator
 
         var processPolicy = JourneyProcedurePolicyResolver.ResolveProcess(procedure);
         var allProcesses = journey.ActiveProcesses.Concat(journey.ClosedProcesses).ToArray();
-        if (allProcesses.Length > 0)
+        if (allProcesses.Any(process =>
+                process.Execution.ExecutionHandler !=
+                    GenericProcedureExecutionHandlers.ExplorationFlowPolicy))
         {
             if (processPolicy.Support != JourneyPolicySupport.Supported)
             {
@@ -27,7 +29,9 @@ public static class JourneyAggregateProcedureValidator
             }
 
             var execution = processPolicy.ToExecutionSnapshot();
-            foreach (var process in allProcesses)
+            foreach (var process in allProcesses.Where(process =>
+                         process.Execution.ExecutionHandler !=
+                             GenericProcedureExecutionHandlers.ExplorationFlowPolicy))
             {
                 if (process.Execution != execution)
                 {
@@ -58,6 +62,11 @@ public static class JourneyAggregateProcedureValidator
                 }
             }
         }
+
+        foreach (var process in allProcesses.Where(process =>
+                     process.Execution.ExecutionHandler ==
+                         GenericProcedureExecutionHandlers.ExplorationFlowPolicy))
+            ExplorationFlowProcessSnapshot.Validate(procedure, process);
 
         var activityPolicy = ParticipantActivityPolicyResolver.Resolve(procedure);
         HashSet<string> declaredRoles = activityPolicy.Support == ParticipantActivityPolicySupport.Supported

@@ -6,6 +6,7 @@ import type {
     CreateJourneyEventOpportunityRequest,
     ExpeditionJourneyState,
     JourneyOperation,
+    RecordExplorationCellRequest,
     ResolveJourneyEventRequest,
     ResolveJourneyProcessRequest,
     StartJourneyProcessRequest
@@ -24,6 +25,20 @@ export class JourneyApi {
 
     public startProcess(expeditionId: string, request: StartJourneyProcessRequest): Promise<JourneyOperation> {
         return this.sendJson("POST", `/api/expeditions/${encodeURIComponent(expeditionId)}/journeys/processes`, request, "Start journey process");
+    }
+
+    public startExplorationFlow(expeditionId: string,
+        request: { expectedVersion: number; processId: string; provenance: StartJourneyProcessRequest["provenance"] }
+    ): Promise<JourneyOperation> {
+        return this.sendJson("POST",
+            `/api/expeditions/${encodeURIComponent(expeditionId)}/journeys/exploration-flow`,
+            request, "Start exploration flow");
+    }
+
+    public recordExplorationCell(expeditionId: string, request: RecordExplorationCellRequest): Promise<JourneyOperation> {
+        return this.sendJson("POST",
+            `/api/expeditions/${encodeURIComponent(expeditionId)}/journeys/exploration-cell`,
+            request, "Record exploration cell");
     }
 
     public resolveProcess(expeditionId: string, processId: string, request: ResolveJourneyProcessRequest): Promise<JourneyOperation> {

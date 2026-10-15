@@ -334,8 +334,8 @@ export async function renderToolHome(
     const refreshAvailableProcedures = (): void => {
         const previous = procedure.value;
         const geometric = presets.filter(value =>
-            ["alexandrian-advanced", "simple-fixed-distance", "simple-hex-step"].includes(value.presetKey)
-            && value.procedure.isExecutable);
+            value.procedure.isExecutable
+            && value.procedure.supportsSpatialExecution === true);
         const available = context.value === NON_SPATIAL_CONTEXT
             ? presets
             : selectedWorld

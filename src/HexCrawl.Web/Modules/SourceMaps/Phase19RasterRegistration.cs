@@ -286,7 +286,11 @@ public static class Phase19RasterRegistration
             return null;
         var tiling = new PeriodicWorldTiling(
             Guid.NewGuid(), result.Topology, result.Realization,
-            existing.Origin, existing.Revision + 1);
+            existing.Origin, existing.Revision + 1)
+        {
+            PlayableBounds = existing.PlayableBounds,
+            PhysicalTurnCostReference = existing.PhysicalTurnCostReference
+        };
         try { tiling.Validate(); }
         catch (Exception error) when (
             error is ArgumentException or InvalidOperationException)

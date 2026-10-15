@@ -26,6 +26,8 @@ public sealed record PeriodicCellTraversal
             throw new NotSupportedException("Unsupported cell traversal snapshot format.");
         if (CurrentCell.TilingId != world.Id)
             throw new InvalidOperationException("Traversal references a different world tiling.");
+        if (!world.IsPlayable(CurrentCell.Address))
+            throw new InvalidOperationException("Traversal cannot occupy a cell outside the playable map bounds.");
         if (!double.IsFinite(Position.X) || !double.IsFinite(Position.Y))
             throw new InvalidOperationException("Traversal position must be finite.");
         if (!FeatureIntersection.PointInPolygon(Position, world.Resolve(CurrentCell.Address).Polygon))
@@ -47,6 +49,13 @@ public sealed record PeriodicCellTraversal
 
         if (SelectedExitInterfaceIndex.HasValue && SelectedExitVertexNeighbor.HasValue)
             throw new InvalidOperationException("A course can select an edge or a vertex neighbor, not both.");
+        if (SelectedExitInterfaceIndex is int exitIndex
+            && world.Boundaries(CurrentCell.Address).FirstOrDefault(edge => edge.InterfaceIndex == exitIndex) is { } selectedEdge
+            && !world.IsPlayable(selectedEdge.To.Address))
+            throw new InvalidOperationException("The selected edge leads outside the playable map bounds.");
+        if (SelectedExitVertexNeighbor is { } vertexNeighbor
+            && !world.IsPlayable(vertexNeighbor.Address))
+            throw new InvalidOperationException("The selected vertex leads outside the playable map bounds.");
         if (SelectedExitVertexNeighbor is { } selectedVertex
             && !world.VertexOnlyContacts(CurrentCell.Address).Any(contact => contact.To == selectedVertex))
             throw new InvalidOperationException("Selected vertex destination does not touch the current cell at a point.");

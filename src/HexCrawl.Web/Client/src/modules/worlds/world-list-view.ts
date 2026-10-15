@@ -1,4 +1,5 @@
 import type { HexCrawlApi } from "../../api";
+import { ProcedureComposerApi } from "../../procedure-composer-api";
 import { clearUiError, showUiError } from "../../ui-error";
 import { canonicalDistanceUnit } from "./world-form";
 import type { DistanceUnitKind } from "./world-form";
@@ -25,6 +26,7 @@ export async function renderWorldList(
                     <h2>New world / map</h2>
 
                     <form data-create-world class="hc-form">
+                        <label>Map tiling <select name="tilingDsSymbol"><option value="<1:1,1,1:6,3>">Hexagonal tiling</option></select></label>
                         <label>Name <input name="name" required value="New overworld" autocomplete="off"></label>
                         <fieldset class="hc-field-group hc-map-scale-field">
                             <legend>Physical map scale</legend>
@@ -35,8 +37,16 @@ export async function renderWorldList(
                                 <option value="Kilometer">Kilometers</option>
                             </select></label>
                         </fieldset>
+                        <fieldset class="hc-field-group">
+                            <legend>Optional map bounds</legend>
+                            <label>Width (periods) <input name="mapWidth" type="number" min="1" step="1" placeholder="Unbounded"></label>
+                            <label>Height (periods) <input name="mapHeight" type="number" min="1" step="1" placeholder="Unbounded"></label>
+                            <label>Minimum U (optional) <input name="minU" type="number" step="1" placeholder="Centered"></label>
+                            <label>Minimum V (optional) <input name="minV" type="number" step="1" placeholder="Centered"></label>
+                            <p class="hc-hint">Leave width and height blank for an unbounded world. Finite maps are centered on the periodic origin by default, so a 5×5 map spans −2 to +2 and a 9×9 map spans −4 to +4. Enter minimum U/V to offset the map. A period may contain multiple cells.</p>
+                        </fieldset>
                         <p class="hc-hint">Leave both calibration fields blank for cell-step worlds. Distance-based travel rules require physical calibration.</p>
-                        <p class="hc-hint">New maps currently use the established hexagonal tiling preset through the periodic-cell engine. Additional tiling controls will be available after review.</p>
+                        <p class="hc-hint">The same optional world bounds apply to any selected tiling.</p>
                         <button type="submit" class="hc-primary-action" data-create-button>Create world</button>
                     </form>
                 </section>
@@ -53,6 +63,23 @@ export async function renderWorldList(
     let disposed = false;
     let busy = false;
     let worldCount = 0;
+    try {
+        const catalog = await (await ProcedureComposerApi.create(root)).listTilings();
+        if (!disposed) {
+            const picker = select(form, "tilingDsSymbol");
+            picker.replaceChildren();
+            for (const tiling of catalog.filter(item =>
+                item.showInRulesetSelector && item.realization !== null)) {
+                const option = document.createElement("option");
+                option.value = tiling.dsSymbol;
+                option.textContent = tiling.displayName;
+                picker.append(option);
+            }
+            picker.value = "<1:1,1,1:6,3>";
+        }
+    } catch (catalogError) {
+        if (!disposed) showUiError(error, catalogError);
+    }
 
     const syncWorldCount = (): void => {
         count.textContent = worldCount === 1 ? "1 world" : `${worldCount} worlds`;
@@ -155,12 +182,37 @@ export async function renderWorldList(
                     throw new Error("Provide both physical map scale distance and unit, or leave both empty.");
                 const distance = scaleText ? numeric(input(form, "physicalScale")) : null;
                 if (distance !== null && distance <= 0) throw new Error("Physical map scale must be positive.");
+                const widthText = input(form, "mapWidth").value.trim();
+                const heightText = input(form, "mapHeight").value.trim();
+                if (Boolean(widthText) !== Boolean(heightText))
+                    throw new Error("Provide both map dimensions, or leave both blank for an unbounded world.");
+                const width = widthText ? numeric(input(form, "mapWidth")) : null;
+                const height = heightText ? numeric(input(form, "mapHeight")) : null;
+                if ((width !== null && (!Number.isSafeInteger(width) || width <= 0))
+                    || (height !== null && (!Number.isSafeInteger(height) || height <= 0)))
+                    throw new Error("Map dimensions must be positive whole numbers of periodic tiling units.");
+                const minUText = input(form, "minU").value.trim();
+                const minVText = input(form, "minV").value.trim();
+                if (width === null && (minUText || minVText))
+                    throw new Error("Map offset requires a finite width and height.");
+                const minU = width === null ? null
+                    : minUText ? Number(minUText) : -Math.floor(width / 2);
+                const minV = height === null ? null
+                    : minVText ? Number(minVText) : -Math.floor(height / 2);
+                if ((minU !== null && (!Number.isSafeInteger(minU)
+                    || !Number.isSafeInteger(minU + width!)))
+                    || (minV !== null && (!Number.isSafeInteger(minV)
+                    || !Number.isSafeInteger(minV + height!))))
+                    throw new Error("Map offsets and their complete finite ranges must be safe whole numbers.");
                 const world = await api.createPeriodicOverworld({
                     name: input(form, "name").value.trim(),
-                    tilingDsSymbol: "<1:1,1,1:6,3>",
+                    tilingDsSymbol: select(form, "tilingDsSymbol").value,
                     worldUnitsPerAbstractPeriod: 1,
                     origin: { x: 0, y: 0 },
                     rotationDegrees: 0,
+                    ...(width === null || height === null ? {} : {
+                        playableBounds: { width, height, minU: minU!, minV: minV! }
+                    }),
                     ...(distance === null ? {} : {
                         physicalDistancePerWorldUnit: {
                             value: distance,

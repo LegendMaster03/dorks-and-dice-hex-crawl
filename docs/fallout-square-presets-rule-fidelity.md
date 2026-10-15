@@ -1,0 +1,52 @@
+# Square-based Fallout preset fidelity and execution status
+
+This document tracks **preset configuration**, not exceptions in shared runtime code. All executable behavior is selected through versioned generic procedure mechanics.
+
+## Evidence verified from the publisher
+
+- **Fallout: Wasteland Wanderer**: Modiphius describes a recurring **Travel → Encounter → Action → Journaling** round. Its solo tables use d20 rolls to generate travel, events, decisions, and the narrative. Source: [Modiphius announcement, February 9, 2026](https://modiphius.net/blogs/press-releases/solo-fallout-rpg-wasteland-wanderer-now-available-for-pre-order). The publicly accessible announcement does **not** establish the exact per-step travel duration, supply costs, complete random tables, or the chosen 5×5 extent.
+- **Fallout: Wasteland Warfare 2e**: Modiphius describes a **9×9** square campaign grid with a starting settlement at its center. Regions contain multiple squares, each with a Location. **Explore** enters normally unexplored space, checks for region changes, generates a location, then generates an Encounter with Opposition. **Travel** normally crosses previously visited locations and involves the choice to seek an encounter or avoid notice, potentially requiring a risk check. **Rest** applies at suitable settlements and supports healing, trade, equipment improvements, and recruitment. Source: [Developer blog, April 16, 2026](https://modiphius.net/blogs/news/dev-blog-4-how-do-i-explore-the-wasteland).
+- The second-edition campaign also allows custom campaign faction and opposition tables. Region generation produces rules and descriptive details. Source: [Developer blog, September 25, 2026](https://modiphius.net/en-us/blogs/news/dev-blog-15-how-does-the-campaign-work-in-fallout-wasteland-warfare).
+
+## Current generic implementation
+
+Both presets use the same periodic geometry, movement, optional bounds, pinned exploration-flow policy, persisted journey-process engine, and expedition-local exploration-cell ledger. The 5×5 and 9×9 bounds are preset data. No shared executable code selects behavior by game key or publisher.
+
+- Start an exploration process, progress through its pinned stages, and resume the same process after reload/restart. An optional pinned watch-completion stage produces a persistent resolution opportunity after a completed authoritative watch, using the shared journey-process integration. Further travel pauses until the DM resolves that opportunity. Generic action-driven flows pin a selection stage and its adjacent resolution stage. Choosing an eligible action is a persisted stage resolution; recording the action advances the resolution stage automatically when no encounter is due. When an encounter is due, the existing journey-event engine holds the stage until the event is explicitly resolved, then advances atomically. Non-action stages remain explicitly resolved at the table.
+- Record visits, explicitly adjudicated location names, and GM notes for the current authoritative cell. Associate multiple cells with a GM-defined region key and retain named region records independently of tile shape. Both location and region records support DM-supplied table key, result text, roll reference, and source attribution. Results can be reviewed in the GM exploration ledger after a restart. No bundled Fallout tables are rolled and no result is fabricated. The ledger is expedition-local; it is not a second authoritative world geometry model. Replayed operation IDs cannot mutate the recorded result.
+- Derive eligible exploration actions from the pinned flow and recorded visit/rest-site state. Generic discovery requirements can demand a resolved location name or configured table outcome and a confirmed region assignment. Warfare enables both before Explore can complete. Wanderer does not acquire unverified requirements.
+- Explain mandatory versus discretionary/risk-dependent encounter requirements **without** fabricating a roll, encounter, opponent, or location table. A procedure with a supported pinned generic journey-event policy can persist the unresolved encounter occurrence; Warfare configures this capability. A discretionary encounter requires an explicit DM result before recording the action. While such a journey-event encounter remains unresolved, the pinned event policy prevents further travel. Wanderer's existing per-watch runtime encounter remains the encounter authority for its configured travel cadence.
+- Preserve player-facing map knowledge separately. DM-entered site details are **not** automatically revealed to players.
+- Existing generic journey-stage and exploration-action resolutions support explicit consequences, including time, resources, and encounter circumstances, where the DM supplies a resolved result. An action applies its supplied consequences atomically with its location record and any resulting event; replaying the operation identifier can not apply them again. These are manual amounts, not guessed published costs.
+
+## Deliberately manual or not yet integrated
+
+- Published random location/region/encounter/opposition tables and automatic table-driven location generation are not bundled or reproduced. Manually entered results preserve their source but are not automatically rolled. Named source entries and actual tables require authorized data or supported user-supplied content.
+- Exploration-cell records are DM confirmations, **not** automatic records of every runtime cell entry. A recorded visit and map visibility are distinct.
+- Wanderer's travel stage is linked to completed authoritative watches. This creates a watch-resolution opportunity, not an invented published roll or automatic completion of its encounter/action/journal stages.
+- Warfare exploration actions create durable unresolved encounter opportunities via the existing generic journey-event engine; selecting and resolving opposition remains manual. Action choice and action completion are recorded in the same persisted journey process rather than in a parallel exploration workflow. These opportunities do **not** automatically start a Block Initiative combat session. Wanderer's per-watch runtime encounter support remains separate and no duplicate event is synthesized on site recording.
+- Rest-site eligibility is recorded manually; resting recovery, costs, and supply consumption are not inferred.
+- Warfare uses the generic manual-target journey-event mechanic. It has no participant-activity, terrain, or movement-budget dependencies, since an explicitly adjudicated encounter needs none of those inputs. The existing role/terrain-dependent event mechanics retain their stricter producer requirements.
+- The presets' four-hour interval is a **placeholder**, not a verified duration for either published game. No unverified recovery or resource quantities are executed.
+- The Wasteland Wanderer 5×5 bounds and its first-visit discovery trigger are carried over from project input/configuration, not independently verified from the publicly accessible publisher summary.
+
+A full published-rules equivalence claim requires checking the relevant rulebooks, including any licensed tables and exceptions, and integration tests that cover the exact procedure. Do not label current manual fallbacks as automatic published rules.
+
+## User-supplied automatic table rolls
+
+The location form accepts explicit GM-authored range tables, with scope `Location` or `Region`, a unique table key per scope, `dieSides`, required `sourceReference`, and rows with inclusive `from`/`through` bounds and `resultText`. All die faces must be covered exactly once. For a new first-visit location that requires a resolved location result, a configured roll of the matching table key satisfies the requirement. Each roll uses the application's existing cryptographic procedure-random source and records the actual die and result text with the GM-supplied source in the expedition-local ledger. The submission is saved atomically with the exploration action, region, encounters, and any explicit resource/time consequences. Replays check the exact table request fingerprint and do not roll again. No official Fallout tables are bundled, imported, or inferred.
+
+## Shared procedure resolution
+
+GM-supplied random tables use the same `ProcedureResolutionResolver` as the hex-oriented movement, navigation, and encounter mechanics. The reusable domain contract `ProcedureRangeTable` owns range validation independent of tiling, ruleset, or subject. The expedition action applies the generic outcome to an authorized location or region, retaining source attribution, idempotent replay, and restart persistence.
+
+The provisional expedition-local saved-table catalog was removed because reusable authored procedure data does not belong in the journey-state ledger. Future cross-expedition table authoring should extend the existing versioned campaign-procedure workflow rather than introducing a parallel exploration-only repository. Complete one-off table definitions may still be supplied by the DM when resolving a location action.
+
+## Shared spatial observations versus world and player authority
+
+GM notes, expedition-observed visits, and table outcomes can be recorded on **any spatial expedition**, including existing hex-oriented procedures with no exploration-flow mechanic. A missing flow is interpreted as manual action policy, not as a reason to create another movement, encounter, or dice engine. Integration tests exercise the existing simple hex-step preset alongside square presets. Other hex presets retain their existing travel and calibration requirements; table evaluation itself is tested independently of preset geometry. Encounter checks for hex-oriented procedures remain exclusively with the already-selected shared runtime mechanics.
+
+These expedition-local notes do not author or replace `OverworldDefinition.Locations`, `OverworldDefinition.Features`, or its real spatial regions. World-bound locations/features remain the canonical map objects. Nor do GM observations automatically update `PlayerKnowledgeState`; revealing information is a separate explicit knowledge operation. The journal stores a *record of play*, not a second world geometry or map projection.
+
+The table evaluator, procedure rolls, spatial traversal, travel/watch cadence, event engine, consequence executor, and encounter handling are shared across tilings and rulesets. Only configured exploration-flow stage/action restrictions differ by preset.
+

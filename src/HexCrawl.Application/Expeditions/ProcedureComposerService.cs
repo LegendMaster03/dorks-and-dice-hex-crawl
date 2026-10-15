@@ -35,15 +35,17 @@ public sealed class ProcedureComposerService(CampaignProcedureService procedures
         IReadOnlyList<CampaignProcedureOverride> overrides,
         CancellationToken cancellationToken = default,
         string? name = null,
-        string? tilingDsSymbol = null)
+        string? tilingDsSymbol = null,
+        PeriodicMapBounds? playableBounds = null,
+        bool hasPlayableBoundsOverride = false)
     {
         var owner = RequireOwner(ownerUserId);
         ArgumentNullException.ThrowIfNull(moduleSelections);
         ArgumentNullException.ThrowIfNull(overrides);
         var source = await ResolveSourceAsync(owner, presetKey, procedureId, revision, cancellationToken);
-        var draft = ApplyTiling(ApplyName(
+        var draft = ApplyBounds(ApplyTiling(ApplyName(
             CampaignProcedureMaterializer.CreateDraft(source.Procedure, moduleSelections, overrides),
-            name), tilingDsSymbol);
+            name), tilingDsSymbol), playableBounds, hasPlayableBoundsOverride);
         var dependencies = draft.EvaluateDependencies();
         return new ProcedureComposerDraft(
             draft,
@@ -70,15 +72,17 @@ public sealed class ProcedureComposerService(CampaignProcedureService procedures
         Guid? campaignId = null,
         CancellationToken cancellationToken = default,
         string? name = null,
-        string? tilingDsSymbol = null)
+        string? tilingDsSymbol = null,
+        PeriodicMapBounds? playableBounds = null,
+        bool hasPlayableBoundsOverride = false)
     {
         var owner = RequireOwner(ownerUserId);
         ArgumentNullException.ThrowIfNull(moduleSelections);
         ArgumentNullException.ThrowIfNull(overrides);
         var source = ResolveCreationSource(presetKey);
-        var procedure = ApplyTiling(ApplyName(
+        var procedure = ApplyBounds(ApplyTiling(ApplyName(
             CampaignProcedureMaterializer.CreateInitialRevision(source.Procedure, moduleSelections, overrides),
-            name), tilingDsSymbol);
+            name), tilingDsSymbol), playableBounds, hasPlayableBoundsOverride);
         procedure.Validate();
         return await procedures.CreateAsync(
             owner,
@@ -104,7 +108,9 @@ public sealed class ProcedureComposerService(CampaignProcedureService procedures
         IReadOnlyList<CampaignProcedureOverride> overrides,
         CancellationToken cancellationToken = default,
         string? name = null,
-        string? tilingDsSymbol = null)
+        string? tilingDsSymbol = null,
+        PeriodicMapBounds? playableBounds = null,
+        bool hasPlayableBoundsOverride = false)
     {
         var owner = RequireOwner(ownerUserId);
         if (procedureId == Guid.Empty)
@@ -117,7 +123,8 @@ public sealed class ProcedureComposerService(CampaignProcedureService procedures
         }
         ArgumentNullException.ThrowIfNull(moduleSelections);
         ArgumentNullException.ThrowIfNull(overrides);
-        if (moduleSelections.Count == 0 && overrides.Count == 0 && name is null && tilingDsSymbol is null)
+        if (moduleSelections.Count == 0 && overrides.Count == 0 && name is null
+            && tilingDsSymbol is null && !hasPlayableBoundsOverride)
         {
             throw new InvalidOperationException("Saving a new procedure revision requires at least one explicit change.");
         }
@@ -129,9 +136,9 @@ public sealed class ProcedureComposerService(CampaignProcedureService procedures
                 $"Campaign procedure revision {expectedRevision} is stale; the current revision is {current.Revision}.");
         }
 
-        var draft = ApplyTiling(ApplyName(
+        var draft = ApplyBounds(ApplyTiling(ApplyName(
             CampaignProcedureMaterializer.CreateDraft(current.Procedure, moduleSelections, overrides),
-            name), tilingDsSymbol);
+            name), tilingDsSymbol), playableBounds, hasPlayableBoundsOverride);
         draft.Validate();
 
         // Override records are audit/history metadata. A newly submitted override that resolves to
@@ -176,6 +183,14 @@ public sealed class ProcedureComposerService(CampaignProcedureService procedures
     {
         var owner = RequireOwner(ownerUserId);
         return await procedures.ListRevisionsAsync(owner, procedureId, cancellationToken);
+    }
+
+    private static CampaignProcedure ApplyBounds(
+        CampaignProcedure source, PeriodicMapBounds? bounds, bool specified)
+    {
+        if (!specified) return source;
+        if (bounds is { } value) value.Validate();
+        return source with { PlayableBounds = bounds };
     }
 
     private async Task<Source> ResolveSourceAsync(

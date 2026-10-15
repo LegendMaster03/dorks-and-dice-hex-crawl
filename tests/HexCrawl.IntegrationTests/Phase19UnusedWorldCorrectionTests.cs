@@ -22,12 +22,23 @@ public sealed class Phase19UnusedWorldCorrectionTests
             var newTiling = BuildTiling("<1:1,1,1:3,6>", revision: 2);
             var alignment = MapRegistrationTransform.Affine(.01, 0, 0, .01, 10, 20);
             var sourceMaps = new SourceMapApplicationService(store);
+            await Assert.ThrowsAsync<ArgumentException>(() =>
+                sourceMaps.ReplaceUnusedPeriodicWorldAsync(
+                    original.World.Id, sourceId, "alice",
+                    newTiling with { PlayableBounds = null }, alignment, 1));
+            var beforeCorrection = await store.GetOverworldAsync(original.World.Id, "alice");
+            Assert.NotNull(beforeCorrection);
+            Assert.Equal(1L, beforeCorrection!.Version);
+            Assert.Equal(new PeriodicMapBounds(5, 5, -2, -2),
+                beforeCorrection.World.SpatialTiling.PlayableBounds);
             var corrected = await sourceMaps.ReplaceUnusedPeriodicWorldAsync(
                 original.World.Id, sourceId, "alice", newTiling, alignment, 1);
             Assert.Equal(2L, corrected.Version);
             Assert.Equal(original.World.Id, corrected.World.Id);
             Assert.NotEqual(oldId, corrected.World.SpatialTiling.Id);
             Assert.Equal(newTiling.Id, corrected.World.SpatialTiling.Id);
+            Assert.Equal(new PeriodicMapBounds(5, 5, -2, -2),
+                corrected.World.SpatialTiling.PlayableBounds);
             var map = Assert.Single(corrected.World.SourceMaps);
             Assert.Equal(sourceId, map.Id);
             Assert.Equal("existing-image-binary", map.AssetKey);
@@ -40,6 +51,8 @@ public sealed class Phase19UnusedWorldCorrectionTests
             var persisted = await restarted.GetOverworldAsync(original.World.Id, "alice");
             Assert.NotNull(persisted);
             Assert.Equal(newTiling.Id, persisted!.World.SpatialTiling.Id);
+            Assert.Equal(new PeriodicMapBounds(5, 5, -2, -2),
+                persisted.World.SpatialTiling.PlayableBounds);
             Assert.Equal(alignment, Assert.Single(persisted.World.SourceMaps).Alignment);
             await Assert.ThrowsAsync<HexCrawlConcurrencyException>(() =>
                 sourceMaps.ReplaceUnusedPeriodicWorldAsync(
@@ -124,7 +137,10 @@ public sealed class Phase19UnusedWorldCorrectionTests
             symbol, 2, "world-unit");
         Assert.Equal("realized", built.Status);
         var tiling = new PeriodicWorldTiling(Guid.NewGuid(), built.Topology!,
-            built.Realization!, new WorldPoint(0, 0), revision);
+            built.Realization!, new WorldPoint(0, 0), revision)
+        {
+            PlayableBounds = new PeriodicMapBounds(5, 5, -2, -2)
+        };
         tiling.Validate();
         return tiling;
     }

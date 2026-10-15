@@ -199,6 +199,7 @@ public static class JourneyProcedurePolicyResolver
         var selected = Selected(procedure, GenericProcedureCatalog.JourneyEventsModule);
         if (selected is null) return JourneyEventPolicy.None;
         var supportedMechanic = string.Equals(selected.Mechanic.Key, GenericProcedureCatalog.JourneyEventPolicyMechanic, StringComparison.Ordinal)
+            || string.Equals(selected.Mechanic.Key, GenericProcedureCatalog.ManualJourneyEventPolicyMechanic, StringComparison.Ordinal)
             || string.Equals(selected.Mechanic.Key, GenericProcedureCatalog.ProgressTriggeredJourneyEventPolicyMechanic, StringComparison.Ordinal);
         if (!supportedMechanic)
         {
@@ -224,6 +225,13 @@ public static class JourneyProcedurePolicyResolver
         if (triggerSources.Count == 0)
         {
             return UnsupportedEvent(selected, "The exact pinned journey.events policy declares no trigger sources.");
+        }
+        if (string.Equals(selected.Mechanic.Key,
+                GenericProcedureCatalog.ManualJourneyEventPolicyMechanic, StringComparison.Ordinal)
+            && (targetingModel != "explicit-target" || terrainInfluence != "manual"))
+        {
+            return UnsupportedEvent(selected,
+                "A manual-target journey event does not consume participant-role or terrain inputs.");
         }
         if (string.Equals(selected.Mechanic.Key, GenericProcedureCatalog.ProgressTriggeredJourneyEventPolicyMechanic, StringComparison.Ordinal)
             && !triggerSources.Contains(JourneyEventTriggerKind.ProcessProgress))

@@ -69,6 +69,16 @@ public sealed record ProcedureResolutionRoll(
     int Modifier,
     int Total);
 
+/// <summary>
+/// A generic resolved range-table entry with the existing procedure roll audit.
+/// The same result contract is available to every procedure consumer.
+/// </summary>
+public sealed record ProcedureRangeTableOutcome(
+    string TableKey,
+    string ResultText,
+    string SourceReference,
+    ProcedureResolutionRoll Roll);
+
 public enum GeneratedProcedureResolutionStatus
 {
     Available,

@@ -3,6 +3,7 @@ using HexCrawl.Application;
 using HexCrawl.Application.Persistence;
 using HexCrawl.Domain.Procedure;
 using HexCrawl.Domain.Runtime;
+using HexCrawl.Domain.Spatial;
 
 namespace HexCrawl.Web.Modules.Procedures;
 
@@ -13,7 +14,8 @@ public sealed record ProcedureComposerDraftRequest(
     string? Name,
     IReadOnlyList<ProcedureComposerModuleSelectionRequest>? ModuleSelections,
     IReadOnlyList<ProcedureComposerOverrideRequest>? Overrides,
-    string? TilingDsSymbol = null);
+    string? TilingDsSymbol = null,
+    ProcedureMapBoundsInput? PlayableBounds = null);
 
 public sealed record ProcedureComposerCreateRequest(
     string? PresetKey,
@@ -21,14 +23,31 @@ public sealed record ProcedureComposerCreateRequest(
     string? Name,
     IReadOnlyList<ProcedureComposerModuleSelectionRequest>? ModuleSelections,
     IReadOnlyList<ProcedureComposerOverrideRequest>? Overrides,
-    string? TilingDsSymbol = null);
+    string? TilingDsSymbol = null,
+    ProcedureMapBoundsInput? PlayableBounds = null);
 
 public sealed record ProcedureComposerRevisionRequest(
     int ExpectedRevision,
     string? Name,
     IReadOnlyList<ProcedureComposerModuleSelectionRequest>? ModuleSelections,
     IReadOnlyList<ProcedureComposerOverrideRequest>? Overrides,
-    string? TilingDsSymbol = null);
+    string? TilingDsSymbol = null,
+    ProcedureMapBoundsInput? PlayableBounds = null);
+
+public sealed record ProcedureMapBoundsInput(int? Width = null, int? Height = null,
+    long? MinU = null, long? MinV = null)
+{
+    public PeriodicMapBounds? ToDomain()
+    {
+        if (Width is null && Height is null && MinU is null && MinV is null)
+            return null;
+        if (Width is not { } width || Height is not { } height)
+            throw new ArgumentException("Specify both map dimensions, or neither for an unbounded ruleset.");
+        var bounds = new PeriodicMapBounds(width, height, MinU ?? 0, MinV ?? 0);
+        bounds.Validate();
+        return bounds;
+    }
+}
 
 public sealed record ProcedureComposerModuleSelectionRequest(string ModuleKey, bool Included)
 {
@@ -468,6 +487,8 @@ public sealed record ProcedureComposerContract(
     IReadOnlyList<ProcedureDependencyFixContract> DependencyFixes,
     IReadOnlyList<ProcedureOverrideContract> Overrides)
 {
+    public PeriodicMapBounds? PlayableBounds { get; init; }
+
     public static ProcedureComposerContract From(ProcedureComposerDraft draft)
     {
         var executable = false;
@@ -499,7 +520,10 @@ public sealed record ProcedureComposerContract(
             (draft.DependencyFixes ?? [])
                 .Select(ProcedureDependencyFixContract.From)
                 .ToArray(),
-            draft.Procedure.Overrides.Select(ProcedureOverrideContract.From).ToArray());
+            draft.Procedure.Overrides.Select(ProcedureOverrideContract.From).ToArray())
+        {
+            PlayableBounds = draft.Procedure.PlayableBounds
+        };
     }
 }
 

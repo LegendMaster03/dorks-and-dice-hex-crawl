@@ -102,6 +102,7 @@ export type ProcedureComposer = {
     name: string;
     schemaVersion: string;
     tilingDsSymbol: string;
+    playableBounds?: { width: number; height: number; minU: number; minV: number } | null;
     isExecutable: boolean;
     modificationCount: number;
     modifiedModuleCount: number;
@@ -147,6 +148,7 @@ export type ProcedureComposerDraftInput = {
     moduleSelections?: ProcedureComposerModuleSelectionInput[];
     overrides?: ProcedureComposerOverrideInput[];
     tilingDsSymbol?: string | null;
+    playableBounds?: { width?: number; height?: number; minU?: number; minV?: number };
 };
 
 export type ProcedureComposerCreateInput = {
@@ -156,6 +158,7 @@ export type ProcedureComposerCreateInput = {
     moduleSelections?: ProcedureComposerModuleSelectionInput[];
     overrides?: ProcedureComposerOverrideInput[];
     tilingDsSymbol?: string | null;
+    playableBounds?: { width?: number; height?: number; minU?: number; minV?: number };
 };
 
 export type ProcedureComposerRevisionInput = {
@@ -164,6 +167,7 @@ export type ProcedureComposerRevisionInput = {
     moduleSelections?: ProcedureComposerModuleSelectionInput[];
     overrides: ProcedureComposerOverrideInput[];
     tilingDsSymbol?: string | null;
+    playableBounds?: { width?: number; height?: number; minU?: number; minV?: number };
 };
 
 export type ProcedureRevisionSummary = {

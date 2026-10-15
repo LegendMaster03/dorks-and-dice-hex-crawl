@@ -104,7 +104,9 @@ public sealed class ProcedureComposerModule : IHexCrawlModule
             Overrides(request.Overrides),
             cancellationToken,
             request.Name,
-            request.TilingDsSymbol);
+            request.TilingDsSymbol,
+            request.PlayableBounds?.ToDomain(),
+            request.PlayableBounds is not null);
         return Results.Ok(ProcedureComposerContract.From(draft));
     }
 
@@ -124,7 +126,9 @@ public sealed class ProcedureComposerModule : IHexCrawlModule
             Overrides(request.Overrides),
             cancellationToken,
             request.Name,
-            request.TilingDsSymbol);
+            request.TilingDsSymbol,
+            request.PlayableBounds?.ToDomain(),
+            request.PlayableBounds is not null);
         var canonicalJson = canonical.Serialize(draft.Procedure);
 
         return Results.Ok(new ProcedureCanonicalJsonContract(
@@ -171,7 +175,9 @@ public sealed class ProcedureComposerModule : IHexCrawlModule
             request.CampaignId,
             cancellationToken,
             request.Name,
-            request.TilingDsSymbol);
+            request.TilingDsSymbol,
+            request.PlayableBounds?.ToDomain(),
+            request.PlayableBounds is not null);
         var draft = await service.CreateDraftAsync(
             owner,
             null,
@@ -298,7 +304,9 @@ public sealed class ProcedureComposerModule : IHexCrawlModule
             Overrides(request.Overrides),
             cancellationToken,
             request.Name,
-            request.TilingDsSymbol);
+            request.TilingDsSymbol,
+            request.PlayableBounds?.ToDomain(),
+            request.PlayableBounds is not null);
         var draft = await service.CreateDraftAsync(
             owner,
             null,

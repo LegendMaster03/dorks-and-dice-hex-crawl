@@ -803,11 +803,51 @@ public sealed record ExpeditionJourneyState
     public IReadOnlyList<JourneyHistoryRecord> History { get; init; } = [];
     public IReadOnlyList<Guid> ConsumedResolutionIds { get; init; } = [];
     public IReadOnlyList<string> ObservedRuntimeOccurrenceIds { get; init; } = [];
+    public IReadOnlyList<ExplorationCellRecord> ExplorationCells { get; init; } = [];
+    public IReadOnlyList<ExplorationRegionRecord> ExplorationRegions { get; init; } = [];
+    public IReadOnlyList<Guid> ConsumedExplorationOperationIds { get; init; } = [];
+    public IReadOnlyList<ExplorationStageActionRecord> ExplorationStageActions { get; init; } = [];
+    public IReadOnlyList<ExplorationOperationRecord> ExplorationOperations { get; init; } = [];
 
     public static ExpeditionJourneyState Empty { get; } = new();
 
     public void Validate(CrawlPartySheet party, IReadOnlySet<Guid>? knownConsequenceIds = null)
     {
+        if (ConsumedExplorationOperationIds.Any(id => id == Guid.Empty)
+            || ConsumedExplorationOperationIds.Distinct().Count() != ConsumedExplorationOperationIds.Count)
+            throw new InvalidOperationException("Exploration operation ids must be nonempty and unique.");
+        if (ExplorationOperations.Select(value => value.OperationId).Distinct().Count() != ExplorationOperations.Count)
+            throw new InvalidOperationException("Exploration operation submission ids must be unique.");
+        foreach (var operation in ExplorationOperations)
+        {
+            operation.Validate();
+            if (!ConsumedExplorationOperationIds.Contains(operation.OperationId))
+                throw new InvalidOperationException("A retained exploration operation must have been applied.");
+        }
+        var regionKeys = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var region in ExplorationRegions)
+        {
+            region.Validate();
+            if (!regionKeys.Add(region.Key) || !ConsumedExplorationOperationIds.Contains(region.LastOperationId))
+                throw new InvalidOperationException("Exploration regions must be unique and reference an applied operation.");
+        }
+        var cellIds = new HashSet<HexCrawl.Domain.Spatial.WorldCellId>();
+        foreach (var cell in ExplorationCells)
+        {
+            cell.Validate();
+            if (!cellIds.Add(cell.Cell) || !ConsumedExplorationOperationIds.Contains(cell.LastOperationId)
+                || cell.RegionKey is not null && !regionKeys.Contains(cell.RegionKey))
+                throw new InvalidOperationException("Exploration cells must be unique and reference an applied operation and valid region.");
+        }
+        foreach (var action in ExplorationStageActions)
+        {
+            action.Validate();
+            if (!ConsumedExplorationOperationIds.Contains(action.OperationId))
+                throw new InvalidOperationException("Linked exploration actions must reference applied operations.");
+        }
+        if (ExplorationStageActions.GroupBy(value => value.ProcessId).Any(group => group.Count() != 1)
+            || ExplorationStageActions.Select(value => value.OperationId).Distinct().Count() != ExplorationStageActions.Count)
+            throw new InvalidOperationException("Each exploration process can resolve only one location action.");
         var processes = new Dictionary<Guid, JourneyProcessInstance>();
         foreach (var process in ActiveProcesses)
         {
@@ -834,6 +874,17 @@ public sealed record ExpeditionJourneyState
             }
         }
         var processIds = processes.Keys.ToHashSet();
+        foreach (var action in ExplorationStageActions)
+        {
+            if (!processIds.Contains(action.ProcessId)
+                || !processes[action.ProcessId].Definition.Stages.Any(
+                    stage => stage.StageKey == action.StageKey)
+                || action.EncounterOccurrenceId.HasValue
+                    && !EventOccurrences.Any(value =>
+                        value.Id == action.EncounterOccurrenceId
+                        && value.Trigger == JourneyEventTriggerKind.External))
+                throw new InvalidOperationException("Exploration action references a missing process, stage, or encounter.");
+        }
 
         var events = new Dictionary<Guid, JourneyEventOccurrence>();
         foreach (var occurrence in EventOccurrences)

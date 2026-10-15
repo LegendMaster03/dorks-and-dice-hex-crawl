@@ -8,6 +8,43 @@ namespace HexCrawl.IntegrationTests;
 public sealed class Phase19WorldGeometryEndpointsTests
 {
     [Fact]
+    public async Task OptionalSquareMapExtentClampsViewportAndRejectsOutsideCells()
+    {
+        var database = TestWebHost.NewDatabasePath();
+        try
+        {
+            using var host = TestWebHost.Create(database, "alice");
+            using var client = host.CreateClient();
+            using var created = await client.PostAsJsonAsync("/api/overworlds/periodic", new
+            {
+                name = "Five period square map",
+                tilingDsSymbol = "<1:1,1,1:4,4>",
+                worldUnitsPerAbstractPeriod = 1.0,
+                origin = new { x = 0.0, y = 0.0 },
+                playableBounds = new { width = 5, height = 5 }
+            });
+            created.EnsureSuccessStatusCode();
+            var world = await created.Content.ReadFromJsonAsync<JsonElement>();
+            var id = world.GetProperty("id").GetGuid();
+            Assert.Equal(5, world.GetProperty("tiling")
+                .GetProperty("playableBounds").GetProperty("width").GetInt32());
+            var motif = world.GetProperty("tiling").GetProperty("topology")
+                .GetProperty("motifCells").EnumerateArray().First().GetProperty("id").GetString()!;
+
+            using var huge = await client.GetAsync(
+                $"/api/overworlds/{id:D}/cells/viewport?minX=-100000&minY=-100000&maxX=100000&maxY=100000");
+            huge.EnsureSuccessStatusCode();
+            var cells = await huge.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal(25, cells.GetArrayLength());
+
+            using var outside = await client.GetAsync(
+                $"/api/overworlds/{id:D}/cells/resolve?motifCellId={Uri.EscapeDataString(motif)}&u=5&v=0");
+            Assert.Equal(HttpStatusCode.NotFound, outside.StatusCode);
+        }
+        finally { TestWebHost.DeleteDatabase(database); }
+    }
+
+    [Fact]
     public async Task PeriodicWorldWithoutImageCanBeCreatedEnumeratedAndSelected()
     {
         var database = TestWebHost.NewDatabasePath();

@@ -40,14 +40,30 @@ public static class JourneyRuntimeIntegration
         var watchEventsApply = eventPolicy.Support == JourneyPolicySupport.Supported
             && eventPolicy.Supports(JourneyEventTriggerKind.WatchCompleted)
             && eventPolicy.LinkMode is JourneyEventLinkMode.Standalone or JourneyEventLinkMode.Both;
+        // Pure journey processes do not need a spatial procedure runtime.
+        // Bind it only when a native exploration process actually consumes
+        // authoritative watch completion.
+        var watchStage = state.ActiveProcesses.Any(process =>
+                process.Execution.ExecutionHandler ==
+                    GenericProcedureExecutionHandlers.ExplorationFlowPolicy
+                && process.Execution.IntervalIntegrationModel ==
+                    JourneyIntervalIntegrationModel.CompletedWatchResolutionOpportunity)
+            ? GenericProcedureRuntime.Bind(expedition.CampaignProcedure)
+                .ExplorationFlow?.WatchCompletionStageKey
+            : null;
+        bool UsesWatch(JourneyProcessInstance process) =>
+            process.Execution.IntervalIntegrationModel ==
+                JourneyIntervalIntegrationModel.CompletedWatchResolutionOpportunity
+            && (process.Execution.ExecutionHandler !=
+                    GenericProcedureExecutionHandlers.ExplorationFlowPolicy
+                || process.CurrentStageKey == watchStage);
         var working = state;
         for (var watch = beforeCount + 1; watch <= afterCount; watch++)
         {
             var occurrenceKey = $"watch:{watch}";
             if (working.ObservedRuntimeOccurrenceIds.Contains(occurrenceKey, StringComparer.Ordinal)) continue;
 
-            var processWatchApplies = working.ActiveProcesses.Any(value =>
-                value.Execution.IntervalIntegrationModel == JourneyIntervalIntegrationModel.CompletedWatchResolutionOpportunity);
+            var processWatchApplies = working.ActiveProcesses.Any(UsesWatch);
             if (!processWatchApplies && !watchEventsApply)
             {
                 continue;
@@ -64,7 +80,7 @@ public static class JourneyRuntimeIntegration
             for (var index = 0; index < active.Count; index++)
             {
                 var process = active[index];
-                if (process.Execution.IntervalIntegrationModel != JourneyIntervalIntegrationModel.CompletedWatchResolutionOpportunity)
+                if (!UsesWatch(process))
                 {
                     continue;
                 }
