@@ -30,6 +30,11 @@ export class SourceMapWorkspace {
     private coordinatedRasterView: CoordinatedRasterView = "manual";
     private manualHiddenSourceMapIds: Set<string> | null = null;
     private compatibilityGeneration = 0;
+    private gridFitPreview: {
+        sourceMapId: string;
+        worldVersion: number;
+        alignment: import("../../types").MapRegistrationTransform;
+    } | null = null;
     private disposed = false;
 
     public constructor(
@@ -87,10 +92,18 @@ export class SourceMapWorkspace {
                 <label><input name="bakedGrid" type="checkbox"> Image includes visible tile boundaries</label>
                 <div class="hc-button-row">
                     <button type="submit" class="hc-primary-action">Save metadata</button>
+                    <button type="button" data-fit-playable-grid>Fit image to playable grid</button>
                     <button type="button" data-check-pattern title="Read-only experimental image comparison">Check cell pattern</button>
                     <button type="button" data-register>Manual placement</button>
                     <button type="button" class="hc-danger-action" data-delete>Delete reference map</button>
                 </div>
+                <section class="hc-status-section" data-playable-fit-preview hidden aria-live="polite">
+                    <p data-playable-fit-description></p>
+                    <div class="hc-button-row">
+                        <button type="button" class="hc-primary-action" data-accept-playable-fit>Save this image fit</button>
+                        <button type="button" data-cancel-playable-fit>Discard preview</button>
+                    </div>
+                </section>
                 <section class="hc-status-section" data-pattern-assessment hidden aria-live="polite"></section>
             </form>
             <section data-registration-panel hidden>
@@ -156,6 +169,14 @@ export class SourceMapWorkspace {
                 }
             });
 
+        required<HTMLButtonElement>(this.host, "[data-fit-playable-grid]")
+            .addEventListener("click", () =>
+                void this.run(null, () => this.previewFullGridFit()));
+        required<HTMLButtonElement>(this.host, "[data-accept-playable-fit]")
+            .addEventListener("click", () =>
+                void this.run(null, () => this.acceptFullGridFit()));
+        required<HTMLButtonElement>(this.host, "[data-cancel-playable-fit]")
+            .addEventListener("click", () => this.clearFullGridFit());
         required<HTMLButtonElement>(this.host, "[data-check-pattern]")
             .addEventListener("click", () =>
                 void this.run(null, () => this.assessPattern(this.selected)));
@@ -440,8 +461,65 @@ export class SourceMapWorkspace {
         }
     }
 
+    private clearFullGridFit(): void {
+        const preview = this.gridFitPreview;
+        if (preview && this.map.renderer.registrationPreview?.sourceMapId === preview.sourceMapId
+            && this.map.renderer.registrationPreview.transform === preview.alignment) {
+            this.map.renderer.registrationPreview = null;
+            this.map.requestRender();
+        }
+        this.gridFitPreview = null;
+        required<HTMLElement>(this.editForm, "[data-playable-fit-preview]").hidden = true;
+    }
+
+    private async previewFullGridFit(): Promise<void> {
+        const source = this.selected;
+        if (!source) throw new Error("Select a map image before fitting it.");
+        this.clearFullGridFit();
+        const world = this.getWorld();
+        const candidate = await this.api.previewPlayableGridFit(world.id, source.id);
+        if (this.disposed || this.selected?.id !== source.id
+            || this.getWorld().version !== candidate.worldVersion)
+            throw new Error("The source map or its grid changed. Reload and preview again.");
+        this.registrationController.cancelActive();
+        this.ensureVisibleForEditing(source);
+        this.gridFitPreview = {
+            sourceMapId: source.id,
+            worldVersion: candidate.worldVersion,
+            alignment: candidate.alignment
+        };
+        this.map.renderer.registrationPreview = {
+            sourceMapId: source.id, transform: candidate.alignment
+        };
+        this.map.requestRender();
+        required<HTMLElement>(this.editForm, "[data-playable-fit-description]").textContent =
+            `Suggested fit for ${candidate.playableBounds.width}×${candidate.playableBounds.height} periods. ${candidate.note}`;
+        required<HTMLElement>(this.editForm, "[data-playable-fit-preview]").hidden = false;
+        this.mapHint.textContent =
+            "Check that each printed image cell follows one world tile, including all four map edges. Save only when the image grid fills the raster exactly.";
+    }
+
+    private async acceptFullGridFit(): Promise<void> {
+        const preview = this.gridFitPreview;
+        const world = this.getWorld();
+        if (!preview || !this.selected || this.selected.id !== preview.sourceMapId
+            || world.version !== preview.worldVersion
+            || this.map.renderer.registrationPreview?.sourceMapId !== preview.sourceMapId
+            || this.map.renderer.registrationPreview.transform !== preview.alignment)
+            throw new Error("The grid-fit preview is no longer current. Preview it again.");
+        const saved = await this.api.savePlayableGridFit(
+            world.id, preview.sourceMapId, preview.worldVersion);
+        this.clearFullGridFit();
+        this.applyWorld(saved);
+        await this.refresh();
+        this.mapHint.textContent =
+            "Full-grid image fit saved. The original raster was preserved. Manual placement remains available.";
+    }
+
     private renderSelected(): void {
         this.editForm.hidden = !this.selected;
+        if (this.gridFitPreview && this.gridFitPreview.sourceMapId !== this.selected?.id)
+            this.clearFullGridFit();
         if (!this.selected) return;
         const assessment = required<HTMLElement>(this.editForm, "[data-pattern-assessment]");
         if (assessment.dataset.sourceMapId !== this.selected.id) {
@@ -453,6 +531,12 @@ export class SourceMapWorkspace {
             assessment.replaceChildren();
             assessment.dataset.sourceMapId = this.selected.id;
         }
+        const bounds = this.getWorld().tiling?.playableBounds;
+        const fitButton = required<HTMLButtonElement>(this.editForm, "[data-fit-playable-grid]");
+        fitButton.disabled = !bounds;
+        fitButton.title = bounds
+            ? `Preview fitting the full source raster to the ${bounds.width}×${bounds.height} playable period grid. Requires edge-to-edge image coverage.`
+            : "Set finite world map bounds first. Unbounded worlds cannot fit the whole raster to a board.";
         input(this.editForm, "name").value = this.selected.name;
         this.editGeographySelect.value = this.selected.geographyKey;
         select(this.editForm, "role").value = this.selected.role;

@@ -389,6 +389,24 @@ export class HexCrawlApi {
         }, "Update source map");
     }
 
+    public previewPlayableGridFit(worldId: string, sourceMapId: string): Promise<{
+        alignment: MapRegistrationTransform;
+        worldVersion: number;
+        playableBounds: { width: number; height: number; minU: number; minV: number };
+        note: string;
+    }> {
+        return this.getJson(
+            `/api/overworlds/${encodeURIComponent(worldId)}/source-maps/${encodeURIComponent(sourceMapId)}/playable-grid-fit`,
+            "Preview playable grid image fit");
+    }
+
+    public savePlayableGridFit(
+        worldId: string, sourceMapId: string, expectedVersion: number): Promise<Overworld> {
+        return this.sendJson("PUT",
+            `/api/overworlds/${encodeURIComponent(worldId)}/source-maps/${encodeURIComponent(sourceMapId)}/playable-grid-fit`,
+            { expectedVersion }, "Save playable grid image fit");
+    }
+
     public registerSourceMap(
         worldId: string,
         sourceMapId: string,
