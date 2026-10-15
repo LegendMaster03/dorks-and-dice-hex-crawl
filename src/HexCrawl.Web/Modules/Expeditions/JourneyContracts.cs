@@ -135,7 +135,8 @@ public sealed record ExpeditionJourneyStateContract(
     IReadOnlyList<JourneyHistoryRecord> History,
     ExplorationCellContextContract? ExplorationCell,
     IReadOnlyList<ExplorationCellRecord> ExplorationCells,
-    IReadOnlyList<ExplorationRegionRecord> ExplorationRegions)
+    IReadOnlyList<ExplorationRegionRecord> ExplorationRegions,
+    IReadOnlyList<ExplorationSavedTable> ExplorationSavedTables)
 {
     public static ExpeditionJourneyStateContract From(StoredExpedition expedition) => new(
         expedition.Version,
@@ -148,7 +149,8 @@ public sealed record ExpeditionJourneyStateContract(
         expedition.Journey.History,
         ExplorationCellContextContract.From(expedition),
         expedition.Journey.ExplorationCells,
-        expedition.Journey.ExplorationRegions);
+        expedition.Journey.ExplorationRegions,
+        expedition.Journey.ExplorationSavedTables);
 }
 
 public sealed record JourneyOperationContract(
@@ -183,13 +185,26 @@ public sealed record RecordExplorationCellRequest(
     string? RegionDmNote = null,
     IReadOnlyList<ExplorationTableResult>? LocationTableResults = null,
     IReadOnlyList<ExplorationTableResult>? RegionTableResults = null,
-    IReadOnlyList<ExplorationTableRollRequest>? TableRolls = null)
+    IReadOnlyList<ExplorationTableRollRequest>? TableRolls = null,
+    IReadOnlyList<ExplorationSavedTableReference>? SavedTableReferences = null)
 {
     public RecordExplorationCellCommand ToCommand() =>
         new(ExpectedVersion, OperationId, ActionKey, MarkVisited,
             MarkRestSite, LocationName, DmNote, EncounterOccurs, Provenance,
             ProcessId, Consequences, RegionKey, RegionName, RegionDmNote,
-            LocationTableResults, RegionTableResults, TableRolls);
+            LocationTableResults, RegionTableResults, TableRolls, SavedTableReferences);
+}
+
+public sealed record SetExplorationTableRequest(
+    long ExpectedVersion,
+    Guid OperationId,
+    ExplorationTableScope Scope,
+    string TableKey,
+    ExplorationTableRollRequest? Definition,
+    ExpeditionConsequenceProvenance Provenance)
+{
+    public SetExplorationTableCommand ToCommand() =>
+        new(ExpectedVersion, OperationId, Scope, TableKey, Definition, Provenance);
 }
 
 public sealed record StartExplorationFlowRequest(

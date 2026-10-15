@@ -262,6 +262,26 @@ export type ExplorationTableRollRequest = {
     rows: Array<{ from: number; through: number; resultText: string }>;
 };
 
+export type ExplorationSavedTable = {
+    definition: ExplorationTableRollRequest;
+    lastOperationId: string;
+    provenance: ConsequenceProvenance;
+};
+
+export type ExplorationSavedTableReference = {
+    scope: "Location" | "Region";
+    tableKey: string;
+};
+
+export type SetExplorationTableRequest = {
+    expectedVersion: number;
+    operationId: string;
+    scope: ExplorationSavedTableReference["scope"];
+    tableKey: string;
+    definition: ExplorationTableRollRequest | null;
+    provenance: ConsequenceProvenance;
+};
+
 export type ExplorationCellContext = {
     cell: WorldCellId;
     visited: boolean;
@@ -299,6 +319,7 @@ export type RecordExplorationCellRequest = {
     locationTableResults: ExplorationTableResult[] | null;
     regionTableResults: ExplorationTableResult[] | null;
     tableRolls: ExplorationTableRollRequest[];
+    savedTableReferences: ExplorationSavedTableReference[];
     provenance: StartJourneyProcessRequest["provenance"];
 };
 
@@ -331,6 +352,7 @@ export type ExpeditionJourneyState = {
     explorationCell: ExplorationCellContext | null;
     explorationCells: ExplorationCellLedgerRecord[];
     explorationRegions: ExplorationRegionLedgerRecord[];
+    explorationSavedTables: ExplorationSavedTable[];
 };
 
 export type TimeDelayUnit = "Minutes" | "Hours" | "Days";

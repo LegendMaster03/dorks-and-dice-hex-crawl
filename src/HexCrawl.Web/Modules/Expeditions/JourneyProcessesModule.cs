@@ -28,6 +28,7 @@ public sealed class JourneyProcessesModule : IHexCrawlModule
         api.MapPost("/expeditions/{expeditionId:guid}/journeys/processes", StartProcessAsync);
         api.MapPost("/expeditions/{expeditionId:guid}/journeys/exploration-flow", StartExplorationFlowAsync);
         api.MapPost("/expeditions/{expeditionId:guid}/journeys/exploration-cell", RecordExplorationCellAsync);
+        api.MapPost("/expeditions/{expeditionId:guid}/journeys/exploration-tables", SetExplorationTableAsync);
         api.MapPost("/expeditions/{expeditionId:guid}/journeys/processes/{processId:guid}/resolve", ResolveProcessAsync);
         api.MapPost("/expeditions/{expeditionId:guid}/journeys/processes/{processId:guid}/complete", CompleteProcessAsync);
         api.MapPost("/expeditions/{expeditionId:guid}/journeys/processes/{processId:guid}/fail", FailProcessAsync);
@@ -81,6 +82,18 @@ public sealed class JourneyProcessesModule : IHexCrawlModule
         CancellationToken cancellationToken)
     {
         var result = await journeys.RecordExplorationCellAsync(
+            expeditionId, UserId(context), request.ToCommand(), cancellationToken);
+        return Results.Ok(JourneyOperationContract.From(result));
+    }
+
+    private static async Task<IResult> SetExplorationTableAsync(
+        Guid expeditionId,
+        SetExplorationTableRequest request,
+        HttpContext context,
+        ExpeditionJourneyService journeys,
+        CancellationToken cancellationToken)
+    {
+        var result = await journeys.SetExplorationTableAsync(
             expeditionId, UserId(context), request.ToCommand(), cancellationToken);
         return Results.Ok(JourneyOperationContract.From(result));
     }
