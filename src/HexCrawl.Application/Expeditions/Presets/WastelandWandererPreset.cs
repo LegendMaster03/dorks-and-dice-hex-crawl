@@ -20,7 +20,7 @@ internal static class WastelandWandererPreset
                 TimeSpan.FromHours(4),
                 TravelResolutionMode.CellSteps,
                 ActualDistanceResolutionMode.Fixed,
-                EncounterCheckCadence.None,
+                EncounterCheckCadence.PerWatch,
                 usesNavigationChecks: false,
                 usesPersistentVeer: false,
                 neighborCenterDistanceFactor: 0d,
