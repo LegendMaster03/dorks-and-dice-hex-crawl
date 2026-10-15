@@ -84,6 +84,9 @@ public sealed class ProcedurePresetIdentityTests
         Assert.Equal(["travel", "encounter", "take-action", "journal"],
             wanderer.StageKeys);
         Assert.True(wanderer.RequiresEncounterAfterTravel());
+        Assert.Equal(EncounterCheckCadence.PerWatch, GenericProcedureRuntime.Bind(
+            CrawlProcedureCatalog.Resolve(CrawlProcedureCatalog.WastelandWandererPresetKey)
+                .MaterializeGeneric().Procedure).Encounters.Cadence);
         Assert.Equal(["explore", "rest"], warfare.AvailableActions(false, true));
         Assert.Equal(["travel"], warfare.AvailableActions(true, false));
         Assert.False(warfare.RequiresEncounterAfterTravel());
