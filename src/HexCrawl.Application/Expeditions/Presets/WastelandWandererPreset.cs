@@ -28,7 +28,8 @@ internal static class WastelandWandererPreset
                 .Concat([NativeExplorationFlow(
                     ["travel", "encounter", "take-action", "journal"],
                     ExplorationDiscoveryTrigger.OnFirstVisit,
-                    ExplorationEncounterTrigger.EveryTravel)]).ToArray(),
+                    ExplorationEncounterTrigger.EveryTravel,
+                    watchCompletionStageKey: "travel")]).ToArray(),
             attribution: "Adapted square-map starting point inspired by Modiphius Fallout exploration.",
             disclaimer: "Exploration stages and encounter timing are configured; encounter tables, supplies, health and narrative journaling are not automated. The interval is a placeholder, not a quoted rule.",
             category: "Fallout square-map starting points",

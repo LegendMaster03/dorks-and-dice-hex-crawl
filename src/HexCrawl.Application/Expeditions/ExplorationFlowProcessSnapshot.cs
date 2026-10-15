@@ -42,6 +42,10 @@ internal static class ExplorationFlowProcessSnapshot
             ProgressKind = JourneyProgressValueKind.ExplicitState,
             CompletionModel = "final-stage-completion",
             RoleDriven = false,
+            IntervalIntegrationModel = flow.WatchCompletionStageKey is null
+                ? JourneyIntervalIntegrationModel.None
+                : JourneyIntervalIntegrationModel.CompletedWatchResolutionOpportunity,
+            BlocksRelevantTravelWhileResolutionRequired = flow.WatchCompletionStageKey is not null,
             MechanicKey = selected.Mechanic.Key,
             MechanicVersion = selected.Mechanic.Version,
             ExecutionHandler = selected.Mechanic.ExecutionHandler

@@ -182,7 +182,8 @@ public sealed class GenericProcedureRuntime
                 flow.Parameters.GetValueOrDefault("repeatVisitAction"),
                 flow.Parameters.GetValueOrDefault("restSiteAction"),
                 flow.Parameters.GetValueOrDefault("actionSelectionStageKey"),
-                flow.Parameters.GetValueOrDefault("actionResolutionStageKey")));
+                flow.Parameters.GetValueOrDefault("actionResolutionStageKey"),
+                flow.Parameters.GetValueOrDefault("watchCompletionStageKey")));
     }
 
     private void Validate()

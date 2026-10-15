@@ -368,7 +368,8 @@ public static class GenericProcedureCatalog
                 ("repeatVisitAction", "string", "Action offered at an explored location."),
                 ("restSiteAction", "string", "Additional action offered at a rest-capable location."),
                 ("actionSelectionStageKey", "string", "Stage that persists the chosen exploration action."),
-                ("actionResolutionStageKey", "string", "Next stage that resolves the selected exploration action.")),
+                ("actionResolutionStageKey", "string", "Next stage that resolves the selected exploration action."),
+                ("watchCompletionStageKey", "string", "Stage receiving a resolution opportunity when an authoritative watch completes.")),
             phase: "3")
     ];
 

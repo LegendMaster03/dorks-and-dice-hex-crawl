@@ -19,7 +19,8 @@ public sealed record ExplorationFlowPolicy(
     string? RepeatVisitAction = null,
     string? RestSiteAction = null,
     string? ActionSelectionStageKey = null,
-    string? ActionResolutionStageKey = null)
+    string? ActionResolutionStageKey = null,
+    string? WatchCompletionStageKey = null)
 {
     public void Validate()
     {
@@ -34,6 +35,10 @@ public sealed record ExplorationFlowPolicy(
                 throw new InvalidOperationException("Exploration action keys cannot be blank.");
         if ((ActionSelectionStageKey is null) != (ActionResolutionStageKey is null))
             throw new InvalidOperationException("Action-driven exploration requires both selection and resolution stages.");
+        if (WatchCompletionStageKey is not null
+            && !StageKeys.Contains(WatchCompletionStageKey, StringComparer.Ordinal))
+            throw new InvalidOperationException(
+                "The watch completion stage must belong to the configured exploration stages.");
         if (ActionSelectionStageKey is not null)
         {
             var selection = Array.FindIndex(StageKeys.ToArray(), value => value == ActionSelectionStageKey);
