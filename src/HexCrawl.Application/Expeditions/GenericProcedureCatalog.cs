@@ -366,7 +366,9 @@ public static class GenericProcedureCatalog
                     ("encounterTrigger", "enum", "Manual, EveryTravel, or OnExploreOrOptionalTravel.")),
                 ("firstVisitAction", "string", "Action offered at an unexplored location."),
                 ("repeatVisitAction", "string", "Action offered at an explored location."),
-                ("restSiteAction", "string", "Additional action offered at a rest-capable location.")),
+                ("restSiteAction", "string", "Additional action offered at a rest-capable location."),
+                ("actionSelectionStageKey", "string", "Stage that persists the chosen exploration action."),
+                ("actionResolutionStageKey", "string", "Next stage that resolves the selected exploration action.")),
             phase: "3")
     ];
 

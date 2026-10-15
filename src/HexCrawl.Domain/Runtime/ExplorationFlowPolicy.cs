@@ -17,7 +17,9 @@ public sealed record ExplorationFlowPolicy(
     ExplorationEncounterTrigger EncounterTrigger,
     string? FirstVisitAction = null,
     string? RepeatVisitAction = null,
-    string? RestSiteAction = null)
+    string? RestSiteAction = null,
+    string? ActionSelectionStageKey = null,
+    string? ActionResolutionStageKey = null)
 {
     public void Validate()
     {
@@ -30,6 +32,17 @@ public sealed record ExplorationFlowPolicy(
         foreach (var key in new[] { FirstVisitAction, RepeatVisitAction, RestSiteAction })
             if (key is not null && string.IsNullOrWhiteSpace(key))
                 throw new InvalidOperationException("Exploration action keys cannot be blank.");
+        if ((ActionSelectionStageKey is null) != (ActionResolutionStageKey is null))
+            throw new InvalidOperationException("Action-driven exploration requires both selection and resolution stages.");
+        if (ActionSelectionStageKey is not null)
+        {
+            var selection = Array.FindIndex(StageKeys.ToArray(), value => value == ActionSelectionStageKey);
+            var resolution = Array.FindIndex(StageKeys.ToArray(), value => value == ActionResolutionStageKey);
+            if (selection < 0 || resolution != selection + 1
+                || FirstVisitAction is null || RepeatVisitAction is null)
+                throw new InvalidOperationException(
+                    "Action-driven exploration requires adjacent configured selection/resolution stages and first/repeat action keys.");
+        }
     }
 
     public IReadOnlyList<string> AvailableActions(bool previouslyVisited, bool restSite)

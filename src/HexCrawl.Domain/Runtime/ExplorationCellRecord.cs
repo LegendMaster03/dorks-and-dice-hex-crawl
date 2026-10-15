@@ -28,3 +28,26 @@ public sealed record ExplorationCellRecord
         Provenance?.Validate();
     }
 }
+
+ 
+/// <summary>
+/// Immutable connection between an explicitly recorded action and the shared
+/// journey process. A pending event is resolved through the existing event
+/// engine, never through an exploration-specific encounter subsystem.
+/// </summary>
+public sealed record ExplorationStageActionRecord(
+    Guid OperationId,
+    Guid ProcessId,
+    string StageKey,
+    string ActionKey,
+    WorldCellId Cell,
+    Guid? EncounterOccurrenceId)
+{
+    public void Validate()
+    {
+        if (OperationId == Guid.Empty || ProcessId == Guid.Empty || Cell.TilingId == Guid.Empty
+            || string.IsNullOrWhiteSpace(StageKey) || string.IsNullOrWhiteSpace(ActionKey)
+            || EncounterOccurrenceId == Guid.Empty)
+            throw new InvalidOperationException("An exploration process action must have valid identifiers and keys.");
+    }
+}

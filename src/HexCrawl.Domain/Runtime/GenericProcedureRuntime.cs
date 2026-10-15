@@ -180,7 +180,9 @@ public sealed class GenericProcedureRuntime
                 EnumValue<ExplorationEncounterTrigger>(flow, "encounterTrigger"),
                 flow.Parameters.GetValueOrDefault("firstVisitAction"),
                 flow.Parameters.GetValueOrDefault("repeatVisitAction"),
-                flow.Parameters.GetValueOrDefault("restSiteAction")));
+                flow.Parameters.GetValueOrDefault("restSiteAction"),
+                flow.Parameters.GetValueOrDefault("actionSelectionStageKey"),
+                flow.Parameters.GetValueOrDefault("actionResolutionStageKey")));
     }
 
     private void Validate()
