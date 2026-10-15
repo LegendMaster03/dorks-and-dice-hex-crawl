@@ -389,22 +389,43 @@ export class HexCrawlApi {
         }, "Update source map");
     }
 
-    public previewPlayableGridFit(worldId: string, sourceMapId: string): Promise<{
-        alignment: MapRegistrationTransform;
+    public previewPlayableGridFit(worldId: string, sourceMapId: string, options: {
+        observedColumns: number | null;
+        observedRows: number | null;
+        margins: { leftPercent: number; topPercent: number; rightPercent: number; bottomPercent: number };
+    }): Promise<{
+        alignment: MapRegistrationTransform | null;
+        status: "incompatible" | "unverified" | "reported-match";
         worldVersion: number;
+        expectedColumns: number;
+        expectedRows: number;
         playableBounds: { width: number; height: number; minU: number; minV: number };
         note: string;
     }> {
+        const parameters = new URLSearchParams({
+            leftPercent: String(options.margins.leftPercent),
+            topPercent: String(options.margins.topPercent),
+            rightPercent: String(options.margins.rightPercent),
+            bottomPercent: String(options.margins.bottomPercent)
+        });
+        if (options.observedColumns !== null)
+            parameters.set("observedColumns", String(options.observedColumns));
+        if (options.observedRows !== null)
+            parameters.set("observedRows", String(options.observedRows));
         return this.getJson(
-            `/api/overworlds/${encodeURIComponent(worldId)}/source-maps/${encodeURIComponent(sourceMapId)}/playable-grid-fit`,
+            `/api/overworlds/${encodeURIComponent(worldId)}/source-maps/${encodeURIComponent(sourceMapId)}/playable-grid-fit?${parameters}`,
             "Preview playable grid image fit");
     }
 
     public savePlayableGridFit(
-        worldId: string, sourceMapId: string, expectedVersion: number): Promise<Overworld> {
+        worldId: string, sourceMapId: string, expectedVersion: number, options: {
+            observedColumns: number;
+            observedRows: number;
+            margins: { leftPercent: number; topPercent: number; rightPercent: number; bottomPercent: number };
+        }): Promise<Overworld> {
         return this.sendJson("PUT",
             `/api/overworlds/${encodeURIComponent(worldId)}/source-maps/${encodeURIComponent(sourceMapId)}/playable-grid-fit`,
-            { expectedVersion }, "Save playable grid image fit");
+            { expectedVersion, ...options }, "Save playable grid image fit");
     }
 
     public registerSourceMap(
