@@ -24,6 +24,7 @@ public static class GenericProcedureCatalog
     public const string PersistentEffectsModule = "effects.expedition";
     public const string JourneyEventsModule = "journey.events";
     public const string JourneyProcessModule = "journey.process";
+    public const string ExplorationFlowModule = "exploration.flow";
 
     public const string FixedIntervalDurationMechanic = "fixed-interval-duration";
     public const string MovementResolutionPolicyMechanic = "movement-resolution-policy";
@@ -50,6 +51,7 @@ public static class GenericProcedureCatalog
     public const string JourneyEventPolicyMechanic = "journey-event-policy";
     public const string ProgressTriggeredJourneyEventPolicyMechanic = "progress-triggered-journey-event-policy";
     public const string MultiStageExpeditionProcessMechanic = "multi-stage-expedition-process";
+    public const string ExplorationFlowMechanic = "exploration-flow-policy";
 
     public static IReadOnlyList<ProcedureModuleDefinition> Modules { get; } =
     [
@@ -344,6 +346,26 @@ public static class GenericProcedureCatalog
                 ("progressModel", "enum", "How progress through the journey is measured."),
                 ("completionModel", "enum", "How the process determines arrival or completion."),
                 ("roleDriven", "boolean", "Whether participant roles drive stage or event resolution.")),
+            phase: "3"),
+        Module(
+            ExplorationFlowModule,
+            "Journey processes",
+            "Exploration flow",
+            "Defines ordered exploration stages, actions available by visited location state, and encounter/discovery trigger policy.",
+            "journey",
+            [],
+            ["exploration.flow"],
+            [],
+            [MovementResolutionModule, EncounterCadenceModule],
+            [ExplorationFlowMechanic],
+            WithOptional(
+                RequiredMany(
+                    ("stageKeys", "key-list", "Ordered stages, written as comma-separated keys."),
+                    ("discoveryTrigger", "enum", "Manual, OnFirstVisit, or OnExplore."),
+                    ("encounterTrigger", "enum", "Manual, EveryTravel, or OnExploreOrOptionalTravel.")),
+                ("firstVisitAction", "string", "Action offered at an unexplored location."),
+                ("repeatVisitAction", "string", "Action offered at an explored location."),
+                ("restSiteAction", "string", "Additional action offered at a rest-capable location.")),
             phase: "3")
     ];
 
@@ -698,7 +720,24 @@ public static class GenericProcedureCatalog
                 ("roleDriven", "boolean", "Whether roles drive journey resolution.")),
             GenericProcedureExecutionHandlers.DeclarativeContract,
             ProcedureAutomationLevel.Manual,
-            ["journey", "process", "phase-3"])
+            ["journey", "process", "phase-3"]),
+        Mechanic(
+            ExplorationFlowMechanic,
+            "Exploration flow policy",
+            "Resolves ordered stages and location-state action eligibility; automated encounter and location generation remain separate capabilities.",
+            [],
+            ["exploration.flow"],
+            WithOptional(
+                RequiredMany(
+                    ("stageKeys", "key-list", "Ordered exploration stages."),
+                    ("discoveryTrigger", "enum", "When an unexplored location should be generated."),
+                    ("encounterTrigger", "enum", "When an encounter is mandatory or discretionary.")),
+                ("firstVisitAction", "string", "Action key for an unexplored location."),
+                ("repeatVisitAction", "string", "Action key for a previously explored location."),
+                ("restSiteAction", "string", "Action key for a location supporting rest.")),
+            GenericProcedureExecutionHandlers.ExplorationFlowPolicy,
+            ProcedureAutomationLevel.Assisted,
+            ["exploration", "flow", "generic"])
     ];
 
     public static ProcedureModuleDefinition ResolveModule(string key) =>

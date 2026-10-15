@@ -1,0 +1,61 @@
+namespace HexCrawl.Domain.Runtime;
+
+/// <summary>
+/// A reusable exploration process independent of map shape and source system.
+/// Stage keys are ordered labels. Actions are resolved by observed location
+/// state; the caller supplies visited/rest-site facts from authoritative data.
+/// This policy does not create encounters, alter supplies or silently complete
+/// manual actions.
+/// </summary>
+public enum ExplorationDiscoveryTrigger { Manual, OnFirstVisit, OnExplore }
+public enum ExplorationEncounterTrigger { Manual, EveryTravel, OnExploreOrOptionalTravel }
+
+public sealed record ExplorationFlowPolicy(
+    IReadOnlyList<string> StageKeys,
+    ExplorationDiscoveryTrigger DiscoveryTrigger,
+    ExplorationEncounterTrigger EncounterTrigger,
+    string? FirstVisitAction = null,
+    string? RepeatVisitAction = null,
+    string? RestSiteAction = null)
+{
+    public void Validate()
+    {
+        if (StageKeys.Count == 0 || StageKeys.Any(string.IsNullOrWhiteSpace)
+            || StageKeys.Distinct(StringComparer.OrdinalIgnoreCase).Count() != StageKeys.Count)
+            throw new InvalidOperationException(
+                "An exploration flow requires distinct, nonempty ordered stage keys.");
+        if (!Enum.IsDefined(DiscoveryTrigger) || !Enum.IsDefined(EncounterTrigger))
+            throw new InvalidOperationException("Unknown exploration flow trigger.");
+        foreach (var key in new[] { FirstVisitAction, RepeatVisitAction, RestSiteAction })
+            if (key is not null && string.IsNullOrWhiteSpace(key))
+                throw new InvalidOperationException("Exploration action keys cannot be blank.");
+    }
+
+    public IReadOnlyList<string> AvailableActions(bool previouslyVisited, bool restSite)
+    {
+        var primary = previouslyVisited ? RepeatVisitAction : FirstVisitAction;
+        return new[] { primary, restSite ? RestSiteAction : null }
+            .Where(key => key is not null)
+            .Select(key => key!)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    public bool ShouldGenerateLocation(bool previouslyVisited, string? chosenAction)
+        => DiscoveryTrigger switch
+        {
+            ExplorationDiscoveryTrigger.Manual => false,
+            ExplorationDiscoveryTrigger.OnFirstVisit => !previouslyVisited,
+            ExplorationDiscoveryTrigger.OnExplore =>
+                !previouslyVisited && string.Equals(chosenAction, FirstVisitAction,
+                    StringComparison.OrdinalIgnoreCase),
+            _ => throw new InvalidOperationException("Unsupported location discovery policy.")
+        };
+
+    /// <summary>
+    /// Returns true only for mandatory encounters. Optional/risk-based
+    /// encounters require an explicit external result, not a fabricated roll.
+    /// </summary>
+    public bool RequiresEncounterAfterTravel() =>
+        EncounterTrigger == ExplorationEncounterTrigger.EveryTravel;
+}
