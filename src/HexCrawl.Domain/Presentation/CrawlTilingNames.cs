@@ -38,8 +38,8 @@ public static class CrawlTilingNames
         if (entry is null) return null;
         var preview = RepresentativePreview(entry);
         if (preview is null) return null;
-        var u = Math.Hypot(preview.TranslationU.X, preview.TranslationU.Y);
-        var v = Math.Hypot(preview.TranslationV.X, preview.TranslationV.Y);
+        var u = Math.Sqrt(preview.TranslationU.X * preview.TranslationU.X + preview.TranslationU.Y * preview.TranslationU.Y);
+        var v = Math.Sqrt(preview.TranslationV.X * preview.TranslationV.X + preview.TranslationV.Y * preview.TranslationV.Y);
         var dot = preview.TranslationU.X * preview.TranslationV.X
             + preview.TranslationU.Y * preview.TranslationV.Y;
         var angle = Math.Acos(Math.Clamp(dot / (u * v), -1, 1)) * 180 / Math.PI;
