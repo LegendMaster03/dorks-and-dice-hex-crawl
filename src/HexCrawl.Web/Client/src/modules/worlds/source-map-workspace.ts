@@ -30,6 +30,7 @@ export class SourceMapWorkspace {
     private coordinatedRasterView: CoordinatedRasterView = "manual";
     private manualHiddenSourceMapIds: Set<string> | null = null;
     private compatibilityGeneration = 0;
+    private gridFitRequestGeneration = 0;
     private gridFitPreview: {
         sourceMapId: string;
         worldVersion: number;
@@ -48,7 +49,7 @@ export class SourceMapWorkspace {
         this.host.open = true;
         this.host.innerHTML = `
             <summary>Reference maps</summary>
-            <p class="hc-hint">A map set is a collection of alternate source versions of the same map and geographic extent. Keep GM/player versions, copies with or without a visible hex grid, numbered/keyed references, and other useful versions of that map in one set. A neighboring regional map belongs in a different set.</p>
+            <p class="hc-hint">A map set is a collection of alternate source versions of the same map and geographic extent. Keep GM/player versions, copies with or without a visible cell grid, numbered/keyed references, and other useful versions of that map in one set. A neighboring regional map belongs in a different set.</p>
             <details>
                 <summary>Technical details</summary>
                 <p class="hc-hint">Internally, these are stored as source-map representations. The images remain independent evidence so future image comparison can derive a common base and true visual-difference layers without treating whole map images as the final layer model.</p>
@@ -182,6 +183,7 @@ export class SourceMapWorkspace {
                 void this.run(null, () => this.assessPattern(this.selected)));
         required<HTMLButtonElement>(this.host, "[data-register]").addEventListener("click", () => {
             if (!this.selected) return;
+            this.clearFullGridFit();
             this.ensureVisibleForEditing(this.selected);
             this.registrationController.begin(this.selected);
         });
@@ -209,6 +211,7 @@ export class SourceMapWorkspace {
     public dispose(): void {
         this.disposed = true;
         this.compatibilityGeneration++;
+        this.clearFullGridFit();
         this.registrationController.dispose();
         this.wonderdraftController.dispose();
     }
@@ -426,6 +429,7 @@ export class SourceMapWorkspace {
                 registerButton.type = "button";
                 registerButton.textContent = "Manual placement";
                 registerButton.addEventListener("click", () => {
+                    this.clearFullGridFit();
                     this.selected = sourceMap;
                     this.ensureVisibleForEditing(sourceMap);
                     this.renderSelected();
@@ -447,6 +451,7 @@ export class SourceMapWorkspace {
                         ? "Review the retained Wonderdraft source without uploading the project again."
                         : "Place the reference map before reviewing retained Wonderdraft source.";
                     reviewButton.addEventListener("click", () => {
+                        this.clearFullGridFit();
                         this.selected = sourceMap;
                         this.ensureVisibleForEditing(sourceMap);
                         this.renderSelected();
@@ -462,6 +467,7 @@ export class SourceMapWorkspace {
     }
 
     private clearFullGridFit(): void {
+        this.gridFitRequestGeneration++;
         const preview = this.gridFitPreview;
         if (preview && this.map.renderer.registrationPreview?.sourceMapId === preview.sourceMapId
             && this.map.renderer.registrationPreview.transform === preview.alignment) {
@@ -476,9 +482,11 @@ export class SourceMapWorkspace {
         const source = this.selected;
         if (!source) throw new Error("Select a map image before fitting it.");
         this.clearFullGridFit();
+        const requestGeneration = this.gridFitRequestGeneration;
         const world = this.getWorld();
         const candidate = await this.api.previewPlayableGridFit(world.id, source.id);
-        if (this.disposed || this.selected?.id !== source.id
+        if (this.disposed || requestGeneration !== this.gridFitRequestGeneration
+            || this.selected?.id !== source.id
             || this.getWorld().version !== candidate.worldVersion)
             throw new Error("The source map or its grid changed. Reload and preview again.");
         this.registrationController.cancelActive();
@@ -518,7 +526,11 @@ export class SourceMapWorkspace {
 
     private renderSelected(): void {
         this.editForm.hidden = !this.selected;
-        if (this.gridFitPreview && this.gridFitPreview.sourceMapId !== this.selected?.id)
+        if (this.gridFitPreview
+            && (this.gridFitPreview.sourceMapId !== this.selected?.id
+                || this.gridFitPreview.worldVersion !== this.getWorld().version
+                || this.map.renderer.registrationPreview?.sourceMapId !== this.gridFitPreview.sourceMapId
+                || this.map.renderer.registrationPreview.transform !== this.gridFitPreview.alignment))
             this.clearFullGridFit();
         if (!this.selected) return;
         const assessment = required<HTMLElement>(this.editForm, "[data-pattern-assessment]");
@@ -547,6 +559,7 @@ export class SourceMapWorkspace {
 
     private async assessPattern(sourceMap: SourceMapDetail | null): Promise<void> {
         if (!sourceMap) throw new Error("Select a reference map first.");
+        this.clearFullGridFit();
         const generation = ++this.compatibilityGeneration;
         const button = required<HTMLButtonElement>(this.editForm, "[data-check-pattern]");
         const status = required<HTMLElement>(this.editForm, "[data-pattern-assessment]");
