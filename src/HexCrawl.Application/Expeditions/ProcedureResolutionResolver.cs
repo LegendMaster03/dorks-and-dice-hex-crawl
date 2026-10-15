@@ -7,6 +7,37 @@ namespace HexCrawl.Application;
 
 public sealed class ProcedureResolutionResolver(IProcedureResolutionRandomSource random)
 {
+    /// <summary>
+    /// Executes any user-supplied range table through the same audited dice
+    /// resolution used by generic travel, navigation, and encounters.
+    /// </summary>
+    public IReadOnlyList<ProcedureRangeTableOutcome> ResolveRangeTables(
+        IReadOnlyList<ProcedureRangeTable> tables)
+    {
+        ArgumentNullException.ThrowIfNull(tables);
+        if (tables.Count > 16)
+            throw new InvalidOperationException("At most 16 tables can be rolled per operation.");
+        foreach (var table in tables)
+        {
+            if (table is null)
+                throw new InvalidOperationException("Range table cannot be null.");
+            table.Validate();
+        }
+
+        var results = new List<ProcedureRangeTableOutcome>(tables.Count);
+        foreach (var table in tables)
+        {
+            var rolls = new List<ProcedureResolutionRoll>(1);
+            var face = Roll($"table:{table.TableKey}",
+                new DiceRollFormula(1, table.DieSides), rolls).Total;
+            var row = table.Rows.Single(value => value.From <= face && face <= value.Through);
+            results.Add(new ProcedureRangeTableOutcome(
+                table.TableKey, row.ResultText, table.SourceReference,
+                table.DieSides, face));
+        }
+        return results;
+    }
+
     public CellProcedureResolutionHelperResult ResolveCells(
         GenericProcedureRuntime procedure,
         CrawlSessionContext context,

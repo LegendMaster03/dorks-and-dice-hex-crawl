@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using HexCrawl.Application.Persistence;
 using HexCrawl.Domain.Runtime;
+using HexCrawl.Domain.Procedure;
 using HexCrawl.Domain.World;
 
 namespace HexCrawl.Application;
@@ -85,7 +86,7 @@ public sealed record JourneyOperationResult(
 public sealed class ExpeditionJourneyService(
     IHexCrawlStore store,
     HexCrawlService coreService,
-    ExplorationTableRoller tableRoller)
+    ProcedureResolutionResolver procedureResolver)
 {
     public async Task<JourneyOperationResult> StartProcessAsync(
         Guid expeditionId,
@@ -338,8 +339,15 @@ public sealed class ExpeditionJourneyService(
             throw new InvalidOperationException("Resolve the discovered region before completing this action.");
         // Evaluate the supplied tables once, only on a fresh, version-valid
         // operation. Replay is checked above, before any random source is used.
+        IReadOnlyList<ProcedureRangeTableOutcome> tableOutcomes = rollRequests.Length == 0
+            ? [] : procedureResolver.ResolveRangeTables(
+                rollRequests.Select(request => request.ToProcedureRangeTable()).ToArray());
         IReadOnlyList<(ExplorationTableScope Scope, ExplorationTableResult Result)> rolled =
-            rollRequests.Length == 0 ? [] : tableRoller.Roll(rollRequests);
+            tableOutcomes.Select((outcome, index) =>
+                (rollRequests[index].Scope, new ExplorationTableResult(
+                    outcome.TableKey, outcome.ResultText,
+                    $"1d{outcome.DieSides}={outcome.RolledFace}",
+                    outcome.SourceReference))).ToArray();
         var locationResults = OverlayResults(
             command.LocationTableResults ?? existing?.TableResults ?? [],
             rolled.Where(value => value.Scope == ExplorationTableScope.Location)

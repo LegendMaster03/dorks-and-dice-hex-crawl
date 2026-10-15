@@ -18,7 +18,6 @@ public sealed class JourneyProcessesModule : IHexCrawlModule
 
     public void RegisterServices(IServiceCollection services)
     {
-        services.AddScoped<ExplorationTableRoller>();
         services.AddScoped<ExpeditionJourneyService>();
     }
 
