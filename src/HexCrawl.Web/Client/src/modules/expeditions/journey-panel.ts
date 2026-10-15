@@ -335,8 +335,22 @@ export class ExpeditionJourneyPanel {
         };
         const locationTable = tableFields("Location");
         const regionTable = tableFields("Region");
+        const rollGuide = this.muted(
+            "Optional GM-authored table rolls. Paste a JSON array of table definitions; every die face must appear in exactly one row. " +
+            "The server rolls and saves the selected outcome and supplied source. No publisher tables are built in.");
+        const rollLabel = document.createElement("label");
+        rollLabel.textContent = "Roll supplied tables (JSON, optional)";
+        const rollInput = document.createElement("textarea");
+        rollInput.rows = 5;
+        rollInput.placeholder = JSON.stringify([{
+            scope: "Location", tableKey: runtime?.locationResultTableKey ?? "location",
+            dieSides: 6, sourceReference: "GM table source",
+            rows: [{ from: 1, through: 3, resultText: "First supplied result" },
+                { from: 4, through: 6, resultText: "Second supplied result" }]
+        }], null, 2);
+        rollLabel.append(rollInput);
         regionGroup.append(regionTitle, regionKey.wrapper, regionName.wrapper, regionNote.wrapper,
-            locationTable.group, regionTable.group);
+            locationTable.group, regionTable.group, rollGuide, rollLabel);
         const encounter = this.select("Optional / risk-based encounter result",
             ["|Unresolved", "true|Encounter occurs", "false|No encounter"]);
         const syncEncounter = (): void => {
@@ -367,6 +381,12 @@ export class ExpeditionJourneyPanel {
                 const operationId = crypto.randomUUID();
                 const locationTableResults = locationTable.build(cell.locationTableResults);
                 const regionTableResults = regionTable.build(cell.regionTableResults);
+                const tableRolls: import("../../journey-types").ExplorationTableRollRequest[] =
+                    rollInput.value.trim()
+                        ? JSON.parse(rollInput.value) as import("../../journey-types").ExplorationTableRollRequest[]
+                        : [];
+                if (!Array.isArray(tableRolls))
+                    throw new Error("Supplied table rolls must be a JSON array.");
                 const resolvedRegionKey = nullable(regionKey.control.value);
                 if ((regionTableResults || nullable(regionName.control.value) ||
                     nullable(regionNote.control.value)) && !resolvedRegionKey)
@@ -388,6 +408,7 @@ export class ExpeditionJourneyPanel {
                     regionDmNote: nullable(regionNote.control.value),
                     locationTableResults,
                     regionTableResults,
+                    tableRolls,
                     provenance: dmJourneyProvenance("exploration-cell-record")
                 });
                 this.apply(result.state);

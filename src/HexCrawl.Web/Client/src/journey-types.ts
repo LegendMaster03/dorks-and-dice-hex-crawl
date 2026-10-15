@@ -254,6 +254,14 @@ export type ExplorationTableResult = {
     sourceReference: string | null;
 };
 
+export type ExplorationTableRollRequest = {
+    scope: "Location" | "Region";
+    tableKey: string;
+    dieSides: number;
+    sourceReference: string;
+    rows: Array<{ from: number; through: number; resultText: string }>;
+};
+
 export type ExplorationCellContext = {
     cell: WorldCellId;
     visited: boolean;
@@ -290,6 +298,7 @@ export type RecordExplorationCellRequest = {
     regionDmNote: string | null;
     locationTableResults: ExplorationTableResult[] | null;
     regionTableResults: ExplorationTableResult[] | null;
+    tableRolls: ExplorationTableRollRequest[];
     provenance: StartJourneyProcessRequest["provenance"];
 };
 

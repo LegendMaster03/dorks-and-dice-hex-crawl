@@ -31,3 +31,7 @@ Both presets use the same periodic geometry, movement, optional bounds, pinned e
 - The Wasteland Wanderer 5×5 bounds and its first-visit discovery trigger are carried over from project input/configuration, not independently verified from the publicly accessible publisher summary.
 
 A full published-rules equivalence claim requires checking the relevant rulebooks, including any licensed tables and exceptions, and integration tests that cover the exact procedure. Do not label current manual fallbacks as automatic published rules.
+
+## User-supplied automatic table rolls
+
+The location form accepts explicit GM-authored range tables, with scope `Location` or `Region`, a unique table key per scope, `dieSides`, required `sourceReference`, and rows with inclusive `from`/`through` bounds and `resultText`. All die faces must be covered exactly once. For a new first-visit location that requires a resolved location result, a configured roll of the matching table key satisfies the requirement. Each roll uses the application's existing cryptographic procedure-random source and records the actual die and result text with the GM-supplied source in the expedition-local ledger. The submission is saved atomically with the exploration action, region, encounters, and any explicit resource/time consequences. Replays check the exact table request fingerprint and do not roll again. No official Fallout tables are bundled, imported, or inferred.
