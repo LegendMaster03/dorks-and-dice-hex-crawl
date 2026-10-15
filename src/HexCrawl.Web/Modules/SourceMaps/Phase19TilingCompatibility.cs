@@ -44,7 +44,10 @@ public static class Phase19TilingCompatibility
             return new(
                 observed.Status == "unsupported" ? "unsupported" : "inconclusive",
                 worldName, null, procedureName,
-                "The image does not establish a compatible repeating pattern. "
+                "The image does not establish a verified repeating pattern. "
+                + (string.IsNullOrWhiteSpace(observed.Reason)
+                    ? "The detector did not provide a specific reason. "
+                    : $"Detector result ({observed.Status}): {observed.Reason.Trim()} ")
                 + "The saved world and ruleset were not changed. Use manual placement or retry.",
                 null, null, worldVersion, blockers, false);
 

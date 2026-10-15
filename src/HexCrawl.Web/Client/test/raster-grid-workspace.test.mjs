@@ -104,6 +104,8 @@ test("coordinated map views preserve manual GM/player visibility and leave auxil
     assert.match(workspace, /if \(isCoordinatedViewSource\(sourceMap\)\) this\.switchToManualVisibility\(\)/);
     assert.match(workspace, /visible\.dataset\.sourceMapVisibleId = sourceMap\.id/);
     assert.match(workspace, /private syncVisibilityControls\(\): void/);
+    assert.match(workspace, /if \(!this\.map\.renderer\.hiddenSourceMapIds\.has\(sourceMap\.id\)\) return;/);
+    assert.match(workspace, /Previewing an already visible GM\/player image must not switch/);
 });
 
 test("manual map placement remains independent of detected motif registration", () => {

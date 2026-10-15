@@ -26,6 +26,26 @@ public static class CrawlTilingNames
             Geometry: new(4, EqualSideLengths: true))
     ]);
 
+    /// <summary>
+    /// Supplies a verified Euclidean period for a named regular tiling when no
+    /// author-specified metric exists. Custom patterns still use the general
+    /// harmonic solver. These are geometric defaults, not gameplay presets.
+    /// </summary>
+    public static (double U, double V, double AngleDegrees)? VerifiedDefaultPeriod(string symbol)
+    {
+        var entry = Catalog.ListEntries()
+            .FirstOrDefault(value => value.CanonicalDsSymbol == symbol && value.Geometry is not null);
+        if (entry is null) return null;
+        var preview = RepresentativePreview(entry);
+        if (preview is null) return null;
+        var u = Math.Sqrt(preview.TranslationU.X * preview.TranslationU.X + preview.TranslationU.Y * preview.TranslationU.Y);
+        var v = Math.Sqrt(preview.TranslationV.X * preview.TranslationV.X + preview.TranslationV.Y * preview.TranslationV.Y);
+        var dot = preview.TranslationU.X * preview.TranslationV.X
+            + preview.TranslationU.Y * preview.TranslationV.Y;
+        var angle = Math.Acos(Math.Clamp(dot / (u * v), -1, 1)) * 180 / Math.PI;
+        return (u, v, angle);
+    }
+
     /// <summary>Finds a verified geometric representative; never infers regularity from topology alone.</summary>
     public static PeriodicMetricRealization? RepresentativePreview(TilingNameEntry entry)
     {

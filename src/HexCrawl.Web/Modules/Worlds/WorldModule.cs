@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using HexCrawl.Application;
 using HexCrawl.Application.Assets;
+using HexCrawl.Domain.Presentation;
 using HexCrawl.Domain.Procedure;
 using HexCrawl.Domain.Runtime;
 using HexCrawl.Web.Api;
@@ -147,6 +148,21 @@ public sealed class WorldModule : IHexCrawlModule
         {
             if (request.TopologyWitness is not null)
                 throw new ArgumentException("An explicit topology witness requires an explicit metric realization.");
+            // A named, verified regular geometry must not silently default to
+            // a rectangular affine basis that shears its polygon boundaries.
+            // Only fill in defaults when the author supplied no metric hints.
+            // The same general harmonic realization verifies every choice.
+            if (constraints.Count == 0
+                && request.StraightEdgeSubdivisions is not { Count: > 0 }
+                && CrawlTilingNames.VerifiedDefaultPeriod(request.TilingDsSymbol) is { } period)
+            {
+                var periodU = RequireLength(period.U * request.WorldUnitsPerAbstractPeriod, "period U");
+                var periodV = RequireLength(period.V * request.WorldUnitsPerAbstractPeriod, "period V");
+                constraints.Add(new("period-u-length", "world-unit", periodU, periodU));
+                constraints.Add(new("period-v-length", "world-unit", periodV, periodV));
+                constraints.Add(new("period-angle-degrees", "degrees",
+                    period.AngleDegrees, period.AngleDegrees));
+            }
             var realization = HexCrawl.Domain.Spatial.DelaneyDressHarmonicMetricRealization.Construct(
                 request.TilingDsSymbol, request.WorldUnitsPerAbstractPeriod, "world-unit",
                 request.RotationDegrees,
