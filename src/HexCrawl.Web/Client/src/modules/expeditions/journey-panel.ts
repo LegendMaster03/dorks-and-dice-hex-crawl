@@ -271,9 +271,10 @@ export class ExpeditionJourneyPanel {
         const regionKey = this.input("Region key (GM grouping)", "text", cell.regionKey ?? "");
         const regionName = this.input("Resolved region name", "text", cell.regionName ?? "");
         const regionNote = this.input("Region notes (GM only)", "text", cell.regionDmNote ?? "");
+        const currentLocationResults = cell.locationTableResults;
         const tableFields = (subject: string): {
             group: HTMLElement;
-            build: (existing: typeof cell.locationTableResults) => typeof cell.locationTableResults | null;
+            build: (existing: typeof currentLocationResults) => typeof currentLocationResults | null;
         } => {
             const group = document.createElement("fieldset");
             const legend = document.createElement("legend");
