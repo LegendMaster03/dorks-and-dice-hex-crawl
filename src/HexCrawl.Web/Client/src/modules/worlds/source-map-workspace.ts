@@ -482,6 +482,15 @@ export class SourceMapWorkspace {
         const source = this.selected;
         if (!source) throw new Error("Select a map image before fitting it.");
         this.clearFullGridFit();
+        // A detected-grid candidate has its own preview/accept controls.
+        // Never leave those controls active after swapping the overlay to
+        // an independently computed full-board fit.
+        this.compatibilityGeneration++;
+        const assessment = required<HTMLElement>(this.editForm, "[data-pattern-assessment]");
+        assessment.hidden = true;
+        assessment.replaceChildren();
+        assessment.dataset.sourceMapId = "";
+        required<HTMLButtonElement>(this.editForm, "[data-check-pattern]").disabled = false;
         const requestGeneration = this.gridFitRequestGeneration;
         const world = this.getWorld();
         const candidate = await this.api.previewPlayableGridFit(world.id, source.id);
