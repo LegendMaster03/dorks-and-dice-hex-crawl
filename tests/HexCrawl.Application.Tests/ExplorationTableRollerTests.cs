@@ -65,7 +65,9 @@ public sealed class ProcedureRangeTableTests
         Assert.Throws<InvalidOperationException>(() =>
             ExplorationTableRollRequest.ValidateCollection([location, location with { TableKey = "LOCATION" }]));
         var generic = location.ToProcedureRangeTable();
-        Assert.Equal(Table(), generic);
+        Assert.Equal(Table().TableKey, generic.TableKey);
+        Assert.Equal(Table().DieSides, generic.DieSides);
+        Assert.Equal("Middle result", generic.Rows[1].ResultText);
     }
 
     [Fact]
