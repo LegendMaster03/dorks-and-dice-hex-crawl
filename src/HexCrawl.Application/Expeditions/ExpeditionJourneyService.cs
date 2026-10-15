@@ -143,7 +143,8 @@ public sealed class ExpeditionJourneyService(
     /// Persists DM-confirmed location, region, and table outcomes. When a
     /// configured action stage is linked, its eligible progress and explicitly
     /// supplied consequences are committed atomically with the cell record.
-    /// No random table result is fabricated or player knowledge revealed.
+    /// GM-supplied tables use the shared procedure resolver; neither publisher
+    /// table rows nor player discoveries are fabricated.
     /// </summary>
     public async Task<JourneyOperationResult> RecordExplorationCellAsync(
         Guid expeditionId,

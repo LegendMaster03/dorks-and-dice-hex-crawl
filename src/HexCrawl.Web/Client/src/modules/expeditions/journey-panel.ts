@@ -243,7 +243,7 @@ export class ExpeditionJourneyPanel {
             `${cell.restSite ? "Rest site." : "Not designated as a rest site."}`));
         section.append(this.muted(
             `Discovery trigger: ${humanize(cell.discoveryTrigger)}. Encounter trigger: ${humanize(cell.encounterTrigger)}. ` +
-            "Location details are entered after manual resolution; nothing is generated or revealed to players automatically."));
+            "GM location details remain private; explicitly supplied tables can be rolled by the shared procedure resolver."));
         if (cell.regionKey) section.append(this.muted(
             `Region: ${cell.regionName ?? cell.regionKey} (${cell.regionKey}). ${cell.regionDmNote ?? ""}`));
         const describeTableResults = (subject: string, results: typeof cell.locationTableResults): void => {

@@ -10,7 +10,8 @@ test("Spatial exploration sites use one generic, server-authoritative journey co
     assert.match(ui, /this\.explorationCellView\(state\)/);
     assert.match(ui, /cell\.availableActions/);
     assert.match(ui, /recordExplorationCell\(this\.expeditionId/);
-    assert.match(ui, /nothing is generated or revealed to players automatically/);
+    assert.match(ui, /GM location details remain private/);
+    assert.doesNotMatch(ui, /setExplorationTable|explorationSavedTables|ExplorationTableRoller/);
     assert.match(api, /journeys\/exploration-cell/);
     assert.match(contract, /ExplorationCellContextContract/);
     assert.doesNotMatch(ui, /fallout-wasteland|wasteland-warfare/i);
