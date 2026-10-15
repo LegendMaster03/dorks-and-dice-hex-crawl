@@ -73,7 +73,9 @@ export class ExpeditionJourneyPanel {
         const process = state.processPolicy;
         const events = state.eventPolicy;
         section.append(this.muted(process.support === "None"
-            ? "This procedure does not use a journey process."
+            ? (this.getRuntime().procedure.runtime?.explorationFlow
+                ? "This procedure uses a staged exploration flow, resolved through the shared journey process engine."
+                : "This procedure does not use a journey process.")
             : process.support === "Unsupported"
                 ? process.unsupportedReason ?? "The stored journey rules are not supported by this runtime."
                 : `Journey stages track ${process.progressKind === "Numeric" ? "progress" : "table state"}${process.progressUnit ? ` in ${process.progressUnit}` : ""}. ${process.roleDriven ? "Assigned roles can be used for resolutions." : "No journey role is required by the procedure."}`));
@@ -232,7 +234,41 @@ export class ExpeditionJourneyPanel {
         card.append(this.muted(`Stage: ${current.displayName}. ${describeProgress(process, stageState)} Successes ${stageState.successes}; failures ${stageState.failures}; complications ${stageState.complications}.`));
         if (current.approaches.length > 0) card.append(this.muted(`Approaches: ${current.approaches.map(value => value.displayName).join(" · ")}`));
         if (process.pendingActions.length > 0) card.append(this.muted(`Pending: ${process.pendingActions.map(value => `${humanize(value.kind)}${value.detail ? ` — ${value.detail}` : ""}`).join(" | ")}`));
-        card.append(this.processStageSummary(process), this.resolveProcessForm(process), this.processCloseControls(process));
+        card.append(this.processStageSummary(process));
+        if (process.execution.executionHandler === "procedure.exploration.flow") {
+            const completed = this.button("Mark current stage resolved");
+            completed.addEventListener("click", () => {
+                void this.mutate(completed, async () => {
+                    const result = await this.api.resolveProcess(
+                        this.expeditionId, process.id, {
+                            expectedVersion: this.requireState().expeditionVersion,
+                            captureCurrentEnvironment: false,
+                            resolution: {
+                                resolutionId: crypto.randomUUID(),
+                                processId: process.id,
+                                stageKey: process.currentStageKey,
+                                successDelta: 0,
+                                failureDelta: 0,
+                                complicationDelta: 0,
+                                completeStage: true,
+                                completeProcess: false,
+                                failProcess: false,
+                                consequences: [],
+                                provenance: dmJourneyProvenance("exploration-stage-resolved")
+                            }
+                        });
+                    this.apply(result.state);
+                });
+            });
+            const manual = document.createElement("details");
+            const manualSummary = document.createElement("summary");
+            manualSummary.textContent = "Advanced stage resolution and consequences";
+            manual.append(manualSummary, this.resolveProcessForm(process));
+            card.append(this.muted("Mark the stage only after resolving its action, encounter, or journal step at the table."), completed, manual);
+        } else {
+            card.append(this.resolveProcessForm(process));
+        }
+        card.append(this.processCloseControls(process));
         const technical = document.createElement("details");
         const technicalSummary = document.createElement("summary");
         technicalSummary.textContent = "Advanced technical details";
