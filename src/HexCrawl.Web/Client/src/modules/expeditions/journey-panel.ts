@@ -115,8 +115,28 @@ export class ExpeditionJourneyPanel {
 
     private startView(state: ExpeditionJourneyState): HTMLElement {
         const section = this.section("Start a process / challenge");
+        const exploration = this.getRuntime().procedure.runtime?.explorationFlow;
+        if (exploration) {
+            const active = state.activeProcesses.some(process =>
+                process.execution.executionHandler === "procedure.exploration.flow");
+            const start = this.button("Start exploration flow");
+            start.disabled = active;
+            start.addEventListener("click", () => {
+                void this.mutate(start, async () => {
+                    const result = await this.api.startExplorationFlow(this.expeditionId, {
+                        expectedVersion: this.requireState().expeditionVersion,
+                        processId: crypto.randomUUID(),
+                        provenance: dmJourneyProvenance("exploration-flow-start")
+                    });
+                    this.apply(result.state);
+                });
+            });
+            section.append(this.muted(
+                `Exploration stages: ${exploration.stageKeys.map(humanize).join(" → ")}. Stages advance only after explicit resolution.`),
+                start);
+        }
         if (state.processPolicy.support !== "Supported") {
-            section.append(this.muted("Starting a process requires a supported exact-pinned journey.process policy."));
+            if (!exploration) section.append(this.muted("Starting a process requires a supported exact-pinned journey.process policy."));
             return section;
         }
 

@@ -114,6 +114,15 @@ public sealed record JourneyOperationContract(
         ExpeditionJourneyStateContract.From(result.Expedition));
 }
 
+public sealed record StartExplorationFlowRequest(
+    long ExpectedVersion,
+    Guid ProcessId,
+    ExpeditionConsequenceProvenance Provenance)
+{
+    public StartExplorationFlowCommand ToCommand() =>
+        new(ExpectedVersion, ProcessId, Provenance);
+}
+
 public sealed record StartJourneyProcessRequest(
     long ExpectedVersion,
     Guid ProcessId,

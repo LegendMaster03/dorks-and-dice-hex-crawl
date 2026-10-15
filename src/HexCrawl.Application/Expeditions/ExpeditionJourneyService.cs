@@ -19,6 +19,11 @@ public sealed record StartJourneyProcessCommand
     public required ExpeditionConsequenceProvenance Provenance { get; init; }
 }
 
+public sealed record StartExplorationFlowCommand(
+    long ExpectedVersion,
+    Guid ProcessId,
+    ExpeditionConsequenceProvenance Provenance);
+
 public sealed record ResolveJourneyProcessCommand(
     long ExpectedVersion,
     JourneyProcessResolutionInput Resolution,
@@ -76,6 +81,69 @@ public sealed class ExpeditionJourneyService(
         var updated = expedition with { Journey = transition.State };
         var saved = await SaveAsync(updated, command.ExpectedVersion, cancellationToken);
         return new(saved, $"Started journey process '{definition.DisplayName}'.", true, command.ProcessId);
+    }
+
+    /// <summary>
+    /// Start the ordered exploration flow stored in the pinned campaign procedure.
+    /// It uses the same persistent journey process engine as all other staged
+    /// procedures. No named-game dispatch, second stage state, or inferred
+    /// action outcomes are introduced.
+    /// </summary>
+    public async Task<JourneyOperationResult> StartExplorationFlowAsync(
+        Guid expeditionId,
+        string ownerUserId,
+        StartExplorationFlowCommand command,
+        CancellationToken cancellationToken = default)
+    {
+        var expedition = await LoadAsync(
+            expeditionId, ownerUserId, command.ExpectedVersion, cancellationToken);
+        var runtime = GenericProcedureRuntime.Bind(expedition.CampaignProcedure);
+        var flow = runtime.ExplorationFlow
+            ?? throw new InvalidOperationException(
+                "The pinned procedure has no executable exploration flow.");
+        if (expedition.Journey.ActiveProcesses.Any(process =>
+                process.Execution.ExecutionHandler ==
+                    GenericProcedureExecutionHandlers.ExplorationFlowPolicy))
+            throw new InvalidOperationException(
+                "Resolve or close the active exploration flow before starting another.");
+
+        var selected = expedition.CampaignProcedure.Modules.Single(module =>
+            module.Mechanic.ExecutionHandler ==
+                GenericProcedureExecutionHandlers.ExplorationFlowPolicy);
+        var definition = new JourneyProcessDefinition
+        {
+            ProcessKey = "exploration-flow",
+            DisplayName = "Exploration flow",
+            InitialStageKey = flow.StageKeys[0],
+            StageOrder = flow.StageKeys,
+            Stages = flow.StageKeys.Select(key => new JourneyStageDefinition
+            {
+                StageKey = key,
+                DisplayName = Humanize(key),
+                CompletionModel = JourneyStageCompletionModel.Explicit,
+                InitialProgressState = "unresolved"
+            }).ToArray()
+        };
+        var snapshot = new JourneyProcessExecutionSnapshot
+        {
+            StageModel = "ordered-exploration",
+            StageTransitionModel = JourneyStageTransitionModel.Sequential,
+            ProgressModel = "explicit-resolution",
+            ProgressKind = JourneyProgressValueKind.ExplicitState,
+            CompletionModel = "final-stage-completion",
+            RoleDriven = false,
+            MechanicKey = selected.Mechanic.Key,
+            MechanicVersion = selected.Mechanic.Version,
+            ExecutionHandler = selected.Mechanic.ExecutionHandler
+        };
+        var transition = JourneyProcessEngine.Start(
+            expedition.Journey, command.ProcessId, definition, snapshot,
+            JourneyClockReference.From(expedition.Runtime), expedition.Party,
+            command.Provenance);
+        var saved = await SaveAsync(
+            expedition with { Journey = transition.State },
+            command.ExpectedVersion, cancellationToken);
+        return new(saved, "Started the pinned exploration flow.", true, command.ProcessId);
     }
 
     public async Task<JourneyOperationResult> ResolveProcessAsync(

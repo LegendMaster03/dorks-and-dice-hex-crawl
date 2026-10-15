@@ -26,6 +26,14 @@ export class JourneyApi {
         return this.sendJson("POST", `/api/expeditions/${encodeURIComponent(expeditionId)}/journeys/processes`, request, "Start journey process");
     }
 
+    public startExplorationFlow(expeditionId: string,
+        request: { expectedVersion: number; processId: string; provenance: StartJourneyProcessRequest["provenance"] }
+    ): Promise<JourneyOperation> {
+        return this.sendJson("POST",
+            `/api/expeditions/${encodeURIComponent(expeditionId)}/journeys/exploration-flow`,
+            request, "Start exploration flow");
+    }
+
     public resolveProcess(expeditionId: string, processId: string, request: ResolveJourneyProcessRequest): Promise<JourneyOperation> {
         return this.sendJson("POST", `/api/expeditions/${encodeURIComponent(expeditionId)}/journeys/processes/${encodeURIComponent(processId)}/resolve`, request, "Resolve journey process");
     }
