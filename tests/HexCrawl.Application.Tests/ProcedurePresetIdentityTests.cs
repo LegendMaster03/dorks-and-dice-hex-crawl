@@ -71,6 +71,35 @@ public sealed class ProcedurePresetIdentityTests
     }
 
     [Fact]
+    public void SquarePresetRulesUseTheSameGenericRuntimeAfterIdentityAndGeometryChanges()
+    {
+        foreach (var key in new[]
+        {
+            CrawlProcedureCatalog.WastelandWandererPresetKey,
+            CrawlProcedureCatalog.WastelandWarfarePresetKey
+        })
+        {
+            var original = CrawlProcedureCatalog.Resolve(key).MaterializeGeneric().Procedure;
+            var changed = original with
+            {
+                Key = "custom-table-procedure",
+                Name = "Unrelated homebrew campaign",
+                TilingDsSymbol = CampaignProcedureSchema.CurrentHexTilingDsSymbol,
+                PlayableBounds = new PeriodicMapBounds(3, 7)
+            };
+            changed.Validate();
+            var expected = GenericProcedureRuntime.Bind(original);
+            var actual = GenericProcedureRuntime.Bind(changed);
+            Assert.Equal(expected.Time, actual.Time);
+            Assert.Equal(expected.Movement, actual.Movement);
+            Assert.Equal(expected.TurnPolicy, actual.TurnPolicy);
+            Assert.Equal(expected.Navigation, actual.Navigation);
+            Assert.Equal(expected.Encounters, actual.Encounters);
+            Assert.Equal(expected.ResolutionHelpers, actual.ResolutionHelpers);
+        }
+    }
+
+    [Fact]
     public void ChoosingPresetMaterializesIndependentCampaignOwnedSnapshots()
     {
         var preset = CrawlProcedureCatalog.Resolve("simple-fixed-distance");

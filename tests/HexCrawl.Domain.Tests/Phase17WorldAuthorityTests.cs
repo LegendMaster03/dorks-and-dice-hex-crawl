@@ -1,4 +1,5 @@
 using HexCrawl.Domain.Spatial;
+using HexCrawl.Domain.Runtime;
 using HexCrawl.Domain.World;
 
 namespace HexCrawl.Domain.Tests;
@@ -154,6 +155,48 @@ public sealed class Phase17WorldAuthorityTests
         Assert.Null(PeriodicMapBounds.Intersection(null, null));
         Assert.Throws<InvalidOperationException>(() =>
             PeriodicMapBounds.Intersection(left, new PeriodicMapBounds(2, 2, 12, 12)));
+    }
+
+    [Theory]
+    [InlineData("<1:1,1,1:3,6>")]
+    [InlineData("<1:1,1,1:4,4>")]
+    [InlineData("<1:1,1,1:6,3>")]
+    [InlineData("<10:2 5 4 6 7 8 10,1 4 6 5 9 10,3 5 7 8 9 10:3 3 4,5 5>")]
+    public void GenericMovementNeighborEligibilityRespectsBoundsOnEveryTiling(string symbol)
+    {
+        var result = DelaneyDressHarmonicMetricRealization.Construct(symbol, 1, "unit");
+        Assert.Equal("realized", result.Status);
+        var unbounded = new PeriodicWorldTiling(Guid.NewGuid(),
+            result.Topology!, result.Realization!, new WorldPoint(0, 0));
+        var address = new PeriodicCellAddress(
+            unbounded.Topology.MotifCells[0].Id, new LatticeDisplacement(0, 0));
+        var original = unbounded.MovementNeighbors(address, CellAdjacencyMode.EdgeAndVertex);
+        Assert.NotEmpty(original);
+
+        var bounded = unbounded with { PlayableBounds = new PeriodicMapBounds(1, 1) };
+        bounded.Validate();
+        foreach (var mode in Enum.GetValues<CellAdjacencyMode>())
+            Assert.All(bounded.MovementNeighbors(address, mode),
+                neighbor => Assert.True(bounded.IsPlayable(neighbor.Address)));
+
+        var forbidden = original.First(neighbor => !bounded.IsPlayable(neighbor.Address));
+        Assert.DoesNotContain(forbidden,
+            bounded.MovementNeighbors(address, CellAdjacencyMode.EdgeAndVertex));
+        Assert.Throws<InvalidOperationException>(() =>
+            SpatialCourseSelection.ParallelToNeighborCenters(
+                bounded, new WorldCellId(bounded.Id, address), forbidden,
+                CellAdjacencyMode.EdgeAndVertex));
+        var exit = bounded.Boundaries(address)
+            .FirstOrDefault(boundary => !bounded.IsPlayable(boundary.To.Address));
+        Assert.NotNull(exit);
+        var cursor = new PeriodicCellTraversal
+        {
+            CurrentCell = new WorldCellId(bounded.Id, address),
+            Position = bounded.Resolve(address).Center
+        };
+        Assert.Throws<InvalidOperationException>(() =>
+            SpatialCourseSelection.TowardAtomicInterface(
+                bounded, cursor, exit.InterfaceIndex));
     }
 
     [Fact]

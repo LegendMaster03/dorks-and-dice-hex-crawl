@@ -44,6 +44,9 @@ public static class SpatialCourseSelection
         if (interfaceIndex < 0 || interfaceIndex >= edges.Count)
             throw new ArgumentOutOfRangeException(nameof(interfaceIndex));
         var edge = edges[interfaceIndex];
+        if (!world.IsPlayable(edge.To.Address))
+            throw new InvalidOperationException(
+                "The selected interface leads outside the playable map bounds.");
         var midpoint = new WorldPoint(
             edge.Start.X + (edge.End.X - edge.Start.X) / 2d,
             edge.Start.Y + (edge.End.Y - edge.Start.Y) / 2d);

@@ -304,10 +304,15 @@ public sealed record PeriodicWorldTiling(
     {
         if (!Enum.IsDefined(adjacency))
             throw new ArgumentOutOfRangeException(nameof(adjacency));
-        var edges = Neighbors(address);
+        if (!IsPlayable(address))
+            throw new InvalidOperationException(
+                "Movement cannot originate outside the playable map bounds.");
+        var edges = Neighbors(address).Where(cell => IsPlayable(cell.Address));
         if (adjacency == CellAdjacencyMode.EdgeOnly)
-            return edges;
-        return edges.Concat(VertexOnlyContacts(address).Select(contact => contact.To))
+            return edges.ToArray();
+        return edges.Concat(VertexOnlyContacts(address)
+                .Select(contact => contact.To)
+                .Where(cell => IsPlayable(cell.Address)))
             .Distinct().ToArray();
     }
 
