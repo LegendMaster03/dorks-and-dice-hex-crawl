@@ -100,6 +100,45 @@ public sealed class ProcedurePresetIdentityTests
     }
 
     [Fact]
+    public void FalloutSystemNamesDoNotAppearInGenericRuntimeImplementation()
+    {
+        // The preset catalog registers implementations. All game-specific
+        // values and terminology otherwise belong to the data recipes under
+        // Presets/, not the shared domain/application/web execution pipeline.
+        var root = new DirectoryInfo(AppContext.BaseDirectory);
+        while (root is not null && !File.Exists(Path.Combine(
+            root.FullName, "src", "HexCrawl.Application", "Expeditions",
+            "CrawlProcedureCatalog.cs")))
+            root = root.Parent;
+        Assert.NotNull(root);
+
+        foreach (var project in new[]
+        {
+            "HexCrawl.Domain", "HexCrawl.Application", "HexCrawl.Web", "HexCrawl.Infrastructure"
+        })
+        {
+            var projectRoot = Path.Combine(root!.FullName, "src", project);
+            foreach (var file in Directory.EnumerateFiles(projectRoot, "*.cs",
+                SearchOption.AllDirectories))
+            {
+                if (file.Contains(
+                        $"{Path.DirectorySeparatorChar}Presets{Path.DirectorySeparatorChar}",
+                        StringComparison.Ordinal)
+                    || Path.GetFileName(file) == "CrawlProcedureCatalog.cs")
+                    continue;
+
+                var source = File.ReadAllText(file);
+                Assert.DoesNotContain("fallout-wasteland-", source,
+                    StringComparison.OrdinalIgnoreCase);
+                Assert.DoesNotContain("WastelandWandererPreset", source,
+                    StringComparison.Ordinal);
+                Assert.DoesNotContain("WastelandWarfarePreset", source,
+                    StringComparison.Ordinal);
+            }
+        }
+    }
+
+    [Fact]
     public void ChoosingPresetMaterializesIndependentCampaignOwnedSnapshots()
     {
         var preset = CrawlProcedureCatalog.Resolve("simple-fixed-distance");
