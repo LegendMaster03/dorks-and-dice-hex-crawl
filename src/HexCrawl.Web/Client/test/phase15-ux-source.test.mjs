@@ -1077,7 +1077,7 @@ test("expedition preset selection uses spatial capabilities, not system keys", (
     assert.match(assistant, /runtime\.encounterCadence/);
 });
 
-test("generic exploration does not relocate the established expedition compass", () => {
+test("generic exploration keeps the established compass in the map viewport", () => {
     const expedition = fs.readFileSync(
         path.join(sourceDir, "modules/expeditions/periodic-expedition-workbench.ts"), "utf8");
     const journey = fs.readFileSync(
@@ -1086,7 +1086,7 @@ test("generic exploration does not relocate the established expedition compass",
     // The travel card remains the first content in the table rail.
     // Stage help already exists in the journey panel, not above navigation.
     assert.match(expedition, /<aside class="hc-panel hc-sidebar hc-table-rail" aria-label="At the table">\s*<h2>At the table<\/h2>\s*<section class="hc-current-travel"/);
-    assert.match(expedition, /<div data-cell-navigator><\/div>/);
+    assert.match(expedition, /<div class="hc-map-frame"><div class="hc-map-host" data-map><\/div><div data-cell-navigator aria-label="Map travel compass"><\/div><\/div>/);
     assert.doesNotMatch(expedition, /data-exploration-flow|data-exploration-stages/);
     assert.match(journey, /this\.startView\(state\),\s*this\.processesView\(state\),\s*this\.eventsView\(state\),\s*this\.historyView\(state\)/);
     assert.match(journey, /disclosure\.dataset\.gmCellObservations = ""/);

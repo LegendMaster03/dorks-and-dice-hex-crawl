@@ -71,12 +71,12 @@ test("F2: zero pace choices are fixed server-default normal, not an invalid form
     assert.doesNotMatch(view, /modes\.length === 0;\s*\n\s*required<HTMLButtonElement>\("\[data-advance\]"/);
 });
 
-test("F3: sidebar navigator overrides absolute map-overlay positioning at desktop and mobile sizes", () => {
+test("F3: navigator uses the map overlay at desktop and mobile sizes", () => {
     const css = src("phase15-styles.ts");
     const view = src("modules","expeditions","periodic-expedition-workbench.ts");
     assert.match(view, /hc-periodic-expedition/);
-    assert.match(view, /<div data-cell-navigator><\/div>/);
-    assert.match(css, /\.hc-periodic-expedition \[data-cell-navigator\] \{ display:grid; place-items:center; width:100%; min-width:0; \}/);
-    assert.match(css, /\.hc-periodic-expedition \[data-cell-navigator\] \.hc-adjacency-navigator \{ position:relative; inset:auto; width:min\(8\.5rem,100%\); max-width:100%; height:auto; margin:0; \}/);
-    assert.match(css, /\.hc-periodic-expedition \[data-cell-navigator\] \.hc-adjacency-navigator \{ width:min\(7\.5rem,100%\); inset:auto; \}/);
+    assert.match(view, /<div class="hc-map-frame"><div class="hc-map-host" data-map><\/div><div data-cell-navigator aria-label="Map travel compass"><\/div><\/div>/);
+    assert.match(css, /\.hc-periodic-expedition \.hc-map-frame > \[data-cell-navigator\] \{\s*position:absolute; z-index:6; top:\.8rem; left:\.8rem;/);
+    assert.match(css, /\.hc-periodic-expedition \.hc-map-frame > \[data-cell-navigator\] \.hc-adjacency-navigator \{\s*position:relative; inset:auto; width:100%; height:100%; margin:0;/);
+    assert.match(css, /\.hc-periodic-expedition \.hc-map-frame > \[data-cell-navigator\] \{ top:\.55rem; left:\.55rem; width:7\.5rem; \}/);
 });
