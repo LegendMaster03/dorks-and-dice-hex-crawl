@@ -278,6 +278,16 @@ public sealed class SurveyorPeriodicMotifInvestigationClient(
         if (!double.IsFinite(relativeArea) || Math.Abs(relativeArea) <= 1e-6)
             throw new MapAnalysisProtocolException("Surveyor translation basis is degenerate.");
 
+        // Surveyor's registered metric witness normalizes every motif cell's
+        // periodic lattice gauge near the origin. A polygon crossing that
+        // origin can have negative coordinates even when the *infinite*
+        // translated cover is supported throughout the positive source raster.
+        // The old constant -16 px guard rejected those valid polygons (notably
+        // regular hexagons) after a successful Surveyor response. Bound that
+        // negative gauge by the two independently measured translation vectors,
+        // not a named tiling or an arbitrary source-pixel sign convention.
+        double negativeGaugeX = 2 * (Math.Abs(basis[0].X) + Math.Abs(basis[1].X)) + 16;
+        double negativeGaugeY = 2 * (Math.Abs(basis[0].Y) + Math.Abs(basis[1].Y)) + 16;
         var cellsJson = Array(candidateJson, "motifCells", 1, 24);
         var cells = new List<ObservedMotifCell>();
         foreach (var cell in cellsJson.EnumerateArray())
@@ -285,10 +295,11 @@ public sealed class SurveyorPeriodicMotifInvestigationClient(
             string id = String(cell, "provisionalId", 128);
             var polygon = Array(cell, "polygonSourcePixels", 3, 12)
                 .EnumerateArray().Select(Point).ToArray();
-            if (polygon.Any(point => point.X < -16 || point.Y < -16
+            if (polygon.Any(point => point.X < -negativeGaugeX || point.Y < -negativeGaugeY
                 || point.X > sourceDimensions.Width + 16
                 || point.Y > sourceDimensions.Height + 16))
-                throw new MapAnalysisProtocolException("Surveyor polygon extends outside supported source-image coordinates.");
+                throw new MapAnalysisProtocolException(
+                    "Surveyor polygon exceeds its source-image or observed periodic-gauge envelope.");
             var boundaries = new List<ObservedMotifBoundary>();
             foreach (var edge in Array(cell, "boundaries", polygon.Length, polygon.Length).EnumerateArray())
             {
