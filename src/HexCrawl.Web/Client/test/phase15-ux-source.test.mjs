@@ -1129,3 +1129,18 @@ test("spatial travel compass overlays the upper-left map frame instead of the ta
     assert.match(styles, /@media \(max-width: 760px\)[\s\S]*\.hc-periodic-expedition \.hc-map-frame > \[data-cell-navigator\] \{ top:\.55rem; left:\.55rem; width:7\.5rem; \}/);
     assert.doesNotMatch(styles, /host the same navigator in the sidebar/);
 });
+
+test("boundary-course resolution offers permitted exits in the focused dialog instead of hiding them behind the map", () => {
+    const periodic = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/periodic-expedition-workbench.ts"), "utf8");
+    assert.match(periodic, /data-course-exits role="group" aria-label="Permitted adjacent exits"/);
+    assert.match(periodic, /data-course-unavailable tabindex="-1"/);
+    assert.match(periodic, /adjacencies\.adjacencies\.filter\(candidate => candidate\.traversable\)/);
+    assert.match(periodic, /for \(const contact of allowedVertices\)/);
+    assert.match(periodic, /button\.dataset\.courseExitInterface = String\(edge\.intentValue\)/);
+    assert.match(periodic, /button\.dataset\.courseExitVertex = vertexId\(contact\)/);
+    assert.match(periodic, /if \(selectedExit !== edge\.intentValue\) selectBoundary\(edge\)/);
+    assert.match(periodic, /if \(!selectedVertex \|\| !sameWorldCell\(selectedVertex\.to, contact\.to\)\)/);
+    assert.match(periodic, /!pausedForCourse \|\| courseExits\.childElementCount > 0/);
+    assert.match(periodic, /Choose a permitted adjacent exit below, or close this dialog/);
+});

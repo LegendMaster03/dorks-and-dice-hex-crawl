@@ -175,8 +175,12 @@ export async function renderPeriodicExpeditionWorkbench(
                             </details>
                             <button type="submit" class="hc-primary-action" data-advance>Resolve and advance watch</button>
                         </form>
-                        <div data-course-decision hidden><p>Multiple interfaces meet the resolved course. Choose a valid atomic exit and confirm the heading.</p>
-                            <button type="button" data-confirm-course>Resolve selected exit</button></div>
+                        <div data-course-decision hidden>
+                            <p>The resolved course meets more than one boundary. Choose a permitted adjacent exit below, or close this dialog and choose it on the map compass. Your choice does not move the party until the server confirms it.</p>
+                            <div class="hc-stack" data-course-exits role="group" aria-label="Permitted adjacent exits"></div>
+                            <p class="hc-hint" data-course-unavailable tabindex="-1" hidden>No permitted adjacent exits are available from this cell. Close this dialog to inspect the map and revise the course.</p>
+                            <button type="button" data-confirm-course>Resolve selected exit</button>
+                        </div>
                         <div data-encounter-decision hidden><p data-encounter-description></p>
                             <label>Resolution note <input data-encounter-result></label>
                             <div class="hc-button-row">
@@ -226,7 +230,10 @@ export async function renderPeriodicExpeditionWorkbench(
                 });
         }
         const target = focus === "encounter" ? required<HTMLElement>("[data-resolve-encounter]")
-            : focus === "course" ? required<HTMLElement>("[data-confirm-course]")
+            : focus === "course"
+                ? (root.querySelector<HTMLElement>("[data-course-exits] button[aria-pressed=\"false\"]:not(:disabled)")
+                    ?? root.querySelector<HTMLElement>("[data-course-exits] button:not(:disabled)")
+                    ?? required<HTMLElement>("[data-course-unavailable]"))
                 : focus === "lost" ? input("recognizedLost")
                     : focus === "navigation" ? choice("navigation")
                         : required<HTMLElement>("[data-advance]");
@@ -980,6 +987,11 @@ export async function renderPeriodicExpeditionWorkbench(
             }
             render();
         };
+        const selectBoundary = (edge: (typeof adjacencies.adjacencies)[number]): void => {
+            if (generated) invalidateGenerated();
+            selectHeading(edge.intentValue === selectedExit ? null : edge.intentValue);
+            render();
+        };
         const navigation = renderCurrentCellNavigator(selected, {
             selectable: !busy,
             actualIntent: topology.selectedExitInterfaceIndex,
@@ -1011,9 +1023,7 @@ export async function renderPeriodicExpeditionWorkbench(
             onToggle: edge => {
                 // The navigator is outside the travel form. A new atomic
                 // course still invalidates all previously generated rolls.
-                if (generated) invalidateGenerated();
-                selectHeading(edge.intentValue === selectedExit ? null : edge.intentValue);
-                render();
+                selectBoundary(edge);
                 // Render replaces the navigator buttons; keep keyboard focus
                 // on the same atomic interface for repeated decisions.
                 queueMicrotask(() => {
@@ -1118,6 +1128,44 @@ export async function renderPeriodicExpeditionWorkbench(
                 : "");
         pace.disabled = busy || state.activeWatchNumber !== null;
         const pausedForCourse = state.activeWatchPendingDecision === "CellCourseAdjudicationRequired";
+        const courseExits = required<HTMLElement>("[data-course-exits]");
+        courseExits.replaceChildren();
+        if (pausedForCourse) {
+            // Offer exactly the same topology-derived exits as the map compass;
+            // a focused dialog should not require a hidden map interaction.
+            for (const edge of adjacencies.adjacencies.filter(candidate => candidate.traversable)) {
+                const button = document.createElement("button");
+                button.type = "button";
+                button.dataset.courseExitInterface = String(edge.intentValue);
+                button.setAttribute("aria-pressed", String(selectedExit === edge.intentValue));
+                button.textContent = `${edge.label} · ${edge.targetLabel}`;
+                button.disabled = busy;
+                button.addEventListener("click", () => {
+                    if (selectedExit !== edge.intentValue) selectBoundary(edge);
+                    root.querySelector<HTMLButtonElement>(
+                        `[data-course-exit-interface="${edge.intentValue}"]`)?.focus();
+                });
+                courseExits.append(button);
+            }
+            for (const contact of allowedVertices) {
+                const button = document.createElement("button");
+                button.type = "button";
+                button.dataset.courseExitVertex = vertexId(contact);
+                button.setAttribute("aria-pressed", String(selectedVertex !== null
+                    && sameWorldCell(selectedVertex.to, contact.to)));
+                button.textContent = `Permitted vertex ${contact.fromVertexIndex + 1} · adjacent cell ${contact.to.address.motifCellId}`;
+                button.disabled = busy;
+                button.addEventListener("click", () => {
+                    if (!selectedVertex || !sameWorldCell(selectedVertex.to, contact.to))
+                        toggleVertex(contact);
+                    [...root.querySelectorAll<HTMLButtonElement>("[data-course-exit-vertex]")]
+                        .find(candidate => candidate.dataset.courseExitVertex === vertexId(contact))?.focus();
+                });
+                courseExits.append(button);
+            }
+        }
+        required<HTMLElement>("[data-course-unavailable]").hidden =
+            !pausedForCourse || courseExits.childElementCount > 0;
         const pendingEncounter = state.pendingEncounter;
         required<HTMLElement>("[data-course-decision]").hidden = !pausedForCourse;
         required<HTMLElement>("[data-encounter-decision]").hidden = !pendingEncounter;
