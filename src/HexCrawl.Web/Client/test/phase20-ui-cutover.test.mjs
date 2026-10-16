@@ -160,7 +160,8 @@ test("V2 cell-workbench helpers generate owner/version-scoped automatic rolls", 
     assert.match(view, /form\.addEventListener\("input"/);
     assert.match(view, /form\.addEventListener\("change"/);
     assert.doesNotMatch(view, /if \(\(event\.target as Element\)\.closest\("\[data-helper-section\]"\)\) return/);
-    assert.match(view, /onToggle: edge => \{[\s\S]*if \(generated\) invalidateGenerated\(\)/);
+    assert.match(view, /const selectBoundary = \(edge:[\s\S]*if \(generated\) invalidateGenerated\(\)/);
+    assert.match(view, /onToggle: edge => \{[\s\S]*selectBoundary\(edge\)/);
     assert.match(view, /runtime = next;\s*generated = null/);
     assert.match(view, /next\.version !== result\.expeditionVersion/);
     assert.match(view, /displayedWatchNumber !== state\.activeWatchNumber/);
