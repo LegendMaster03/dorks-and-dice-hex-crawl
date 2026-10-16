@@ -306,6 +306,12 @@ else:
     if state == "guided-pending-consequence" and metrics["guidedConsequenceHelpCount"] < 1:
         raise SystemExit(f'Guided pending-consequence explanation is missing: {metrics}')
 
+    if not metrics["compassInMapFrame"] or metrics["compassInSidebar"]:
+        raise SystemExit(f'spatial compass is not hosted by the map frame: {metrics}')
+    offset = metrics["compassOffset"]
+    if offset is None or not (0 <= offset["left"] <= 32 and 0 <= offset["top"] <= 32):
+        raise SystemExit(f'spatial compass is not in the map upper-left corner: {metrics}')
+
     if state == "no-course":
         if metrics["selectedEdges"] != 0 or metrics["primaryAction"] != "Choose travel direction":
             raise SystemExit(f'no-course state is inconsistent: {metrics}')

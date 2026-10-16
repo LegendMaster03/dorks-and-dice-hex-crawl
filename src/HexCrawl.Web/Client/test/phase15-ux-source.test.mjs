@@ -1077,7 +1077,7 @@ test("expedition preset selection uses spatial capabilities, not system keys", (
     assert.match(assistant, /runtime\.encounterCadence/);
 });
 
-test("generic exploration does not relocate the established expedition compass", () => {
+test("generic exploration keeps the established compass in the map viewport", () => {
     const expedition = fs.readFileSync(
         path.join(sourceDir, "modules/expeditions/periodic-expedition-workbench.ts"), "utf8");
     const journey = fs.readFileSync(
@@ -1086,7 +1086,7 @@ test("generic exploration does not relocate the established expedition compass",
     // The travel card remains the first content in the table rail.
     // Stage help already exists in the journey panel, not above navigation.
     assert.match(expedition, /<aside class="hc-panel hc-sidebar hc-table-rail" aria-label="At the table">\s*<h2>At the table<\/h2>\s*<section class="hc-current-travel"/);
-    assert.match(expedition, /<div data-cell-navigator><\/div>/);
+    assert.match(expedition, /<div class="hc-map-frame"><div class="hc-map-host" data-map><\/div><div data-cell-navigator aria-label="Map travel compass"><\/div><\/div>/);
     assert.doesNotMatch(expedition, /data-exploration-flow|data-exploration-stages/);
     assert.match(journey, /this\.startView\(state\),\s*this\.processesView\(state\),\s*this\.eventsView\(state\),\s*this\.historyView\(state\)/);
     assert.match(journey, /disclosure\.dataset\.gmCellObservations = ""/);
@@ -1109,4 +1109,23 @@ test("bounded world compass omits exits with destinations outside playable bound
     }
     assert.match(topology, /context\.interfaces\.map\(/);
     assert.match(navigation, /vertexChoices: allowedVertices\.map/);
+});
+
+test("spatial travel compass overlays the upper-left map frame instead of the table sidebar", () => {
+    const periodic = fs.readFileSync(
+        path.join(sourceDir, "modules/expeditions/periodic-expedition-workbench.ts"), "utf8");
+    const styles = fs.readFileSync(path.join(sourceDir, "phase15-styles.ts"), "utf8");
+    const mapStart = periodic.indexOf('<div class="hc-map-frame">');
+    const railStart = periodic.indexOf('<aside class="hc-panel hc-sidebar hc-table-rail"');
+    assert.ok(mapStart >= 0 && railStart > mapStart);
+    const mapMarkup = periodic.slice(mapStart, railStart);
+    const railMarkup = periodic.slice(railStart, periodic.indexOf('</aside>', railStart));
+    assert.match(mapMarkup, /<div class="hc-map-frame"><div class="hc-map-host" data-map><\/div><div data-cell-navigator aria-label="Map travel compass"><\/div><\/div>/);
+    assert.doesNotMatch(railMarkup, /data-cell-navigator/);
+    assert.match(periodic, /required<HTMLElement>\("\[data-cell-navigator\]"\)\.replaceChildren\(navigation\)/);
+    assert.match(styles, /\.hc-map-frame \{ position:relative;/);
+    assert.match(styles, /\.hc-periodic-expedition \.hc-map-frame > \[data-cell-navigator\] \{\s*position:absolute; z-index:6; top:\.8rem; left:\.8rem;/);
+    assert.match(styles, /\.hc-periodic-expedition \.hc-map-frame > \[data-cell-navigator\] \.hc-adjacency-navigator \{\s*position:relative; inset:auto; width:100%; height:100%;/);
+    assert.match(styles, /@media \(max-width: 760px\)[\s\S]*\.hc-periodic-expedition \.hc-map-frame > \[data-cell-navigator\] \{ top:\.55rem; left:\.55rem; width:7\.5rem; \}/);
+    assert.doesNotMatch(styles, /host the same navigator in the sidebar/);
 });
