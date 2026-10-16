@@ -2366,6 +2366,19 @@ const metrics = {
     scrollWidth: document.documentElement.scrollWidth,
     scrollHeight: document.documentElement.scrollHeight,
     navigatorButtons: root.querySelectorAll("[data-adjacency-interface-id]").length,
+    compassInMapFrame: Boolean(root.querySelector(".hc-map-frame > [data-cell-navigator] > .hc-adjacency-navigator")),
+    compassInSidebar: Boolean(root.querySelector(".hc-table-rail [data-cell-navigator]")),
+    compassOffset: (() => {
+        const frame = root.querySelector(".hc-map-frame");
+        const navigator = root.querySelector("[data-cell-navigator] .hc-adjacency-navigator");
+        if (!frame || !navigator) return null;
+        const mapBounds = frame.getBoundingClientRect();
+        const compassBounds = navigator.getBoundingClientRect();
+        return {
+            left: Math.round(compassBounds.left - mapBounds.left),
+            top: Math.round(compassBounds.top - mapBounds.top)
+        };
+    })(),
     selectedEdges: root.querySelectorAll('[data-adjacency-interface-id][aria-pressed="true"]').length,
     selectedInterfaceIndex: root.querySelector('[data-adjacency-interface-id][aria-pressed="true"]')?.dataset.adjacencyInterfaceId?.replace("adjacency-", "") ?? null,
     runtimeIntendedHeading: runtime.expedition.isSpatial ? runtime.expedition.intendedHeading : null,

@@ -84,7 +84,7 @@ export async function renderPeriodicExpeditionWorkbench(
             <div class="hc-workspace-grid">
                 <div class="hc-panel hc-map-panel" aria-label="Expedition map">
                     <h2 data-map-title>Expedition map</h2>
-                    <div class="hc-map-frame"><div class="hc-map-host" data-map></div></div>
+                    <div class="hc-map-frame"><div class="hc-map-host" data-map></div><div data-cell-navigator aria-label="Map travel compass"></div></div>
                     <p class="hc-hint" data-inspection>Click a uniquely adjacent cell to set travel intent; distant or ambiguous cells are inspection-only. Clicking never moves the party.</p>
                     <section class="hc-stack" data-cell-details aria-label="Selected cell and player knowledge"></section>
                 </div>
@@ -92,7 +92,6 @@ export async function renderPeriodicExpeditionWorkbench(
                     <h2>At the table</h2>
                     <section class="hc-current-travel" aria-label="Current travel">
                         <h3>Current travel</h3><p data-status></p><p data-actual></p>
-                        <div data-cell-navigator></div>
                         <p class="hc-hint" data-course>Choose a boundary to set intended travel.</p>
                         <button type="button" data-open-travel>Resolve travel / watch</button>
                     </section>
