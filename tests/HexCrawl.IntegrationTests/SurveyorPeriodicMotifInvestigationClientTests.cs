@@ -73,6 +73,46 @@ public sealed class SurveyorPeriodicMotifInvestigationClientTests
     }
 
     [Fact]
+    public async Task VerifiedPeriodicMotifMayStraddleItsNormalizedOrigin()
+    {
+        // The Surveyor metric cover is normalized in periodic coordinates:
+        // its first cell is not necessarily an observed contour at x>=0/y>=0.
+        // This is a genuine gauge shift of an otherwise unchanged periodic
+        // polygon and reciprocal chamber graph, not a request to infer shape.
+        var shifted = JsonNode.Parse(Candidate())!;
+        var polygon = (JsonArray)shifted["candidate"]!["motifCells"]![0]!["polygonSourcePixels"]!;
+        foreach (var vertex in polygon)
+        {
+            vertex!["x"] = vertex["x"]!.GetValue<int>() - 32;
+            vertex["y"] = vertex["y"]!.GetValue<int>() - 32;
+        }
+        var payload = shifted.ToJsonString();
+        var client = Client(new DelegateHandler((request, _) =>
+            Task.FromResult(Json(request.Method == HttpMethod.Get ? Discovery() : payload))));
+        var result = await client.InvestigateAsync(new MemoryStream([1]), "image/png");
+        Assert.Equal("consistent-candidate", result.Status);
+        Assert.False(result.Authoritative);
+        Assert.Equal(-32d, result.Candidate!.MotifCells[0].PolygonSourcePixels[0].X);
+        Assert.Equal(-32d, result.Candidate.MotifCells[0].PolygonSourcePixels[0].Y);
+        Assert.Equal(SquareTranslationSymbol, result.Candidate.DsSymbol);
+        Assert.Equal("supported", result.Evidence!.MetricRegistration!.SourceProjection.Status);
+    }
+
+    [Fact]
+    public async Task NormalizedPeriodicOriginDoesNotPermitUnboundedCoordinates()
+    {
+        // The normalized-gauge allowance depends only on the two observed
+        // period vectors; it never licenses arbitrary off-image polygons.
+        var corrupted = JsonNode.Parse(Candidate())!;
+        corrupted["candidate"]!["motifCells"]![0]!["polygonSourcePixels"]![0]!["x"] = -1000;
+        var payload = corrupted.ToJsonString();
+        var client = Client(new DelegateHandler((request, _) =>
+            Task.FromResult(Json(request.Method == HttpMethod.Get ? Discovery() : payload))));
+        await Assert.ThrowsAsync<MapAnalysisProtocolException>(() =>
+            client.InvestigateAsync(new MemoryStream([1]), "image/png"));
+    }
+
+    [Fact]
     public async Task NonAuthoritativeUncertaintyHasNoPatternIdentityOrGeometry()
     {
         var result = await Client(new DelegateHandler((request, _) =>
