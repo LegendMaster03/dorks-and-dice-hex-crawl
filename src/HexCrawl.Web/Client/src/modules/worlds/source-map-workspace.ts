@@ -204,6 +204,7 @@ export class SourceMapWorkspace {
         required<HTMLButtonElement>(this.host, "[data-register]").addEventListener("click", () => {
             if (!this.selected) return;
             this.clearFullGridFit();
+            this.invalidateDetectedPatternPlacement();
             this.ensureVisibleForEditing(this.selected);
             this.registrationController.begin(this.selected);
         });
@@ -455,6 +456,7 @@ export class SourceMapWorkspace {
                 registerButton.textContent = "Manual placement";
                 registerButton.addEventListener("click", () => {
                     this.clearFullGridFit();
+                    this.invalidateDetectedPatternPlacement();
                     this.selected = sourceMap;
                     this.ensureVisibleForEditing(sourceMap);
                     this.renderSelected();
@@ -489,6 +491,48 @@ export class SourceMapWorkspace {
             }
             this.list.append(group);
         }
+    }
+
+    /**
+     * Detected registration is a separate authoring mode from landmark-based
+     * placement. Leaving the detected mode invalidates its candidate controls,
+     * any in-flight image investigation, and any preview authorization.
+     * A stale detached button must not be able to apply a prior candidate.
+     */
+    private invalidateDetectedPatternPlacement(): void {
+        this.compatibilityGeneration++;
+        const status = required<HTMLElement>(this.editForm, "[data-pattern-assessment]");
+        status.hidden = true;
+        status.replaceChildren();
+        delete status.dataset.sourceMapId;
+        required<HTMLButtonElement>(this.editForm, "[data-check-pattern]").disabled = false;
+        // The controller clears the canvas preview independently. Clear it
+        // here as well so the review controls and image never become out of sync.
+        if (this.map.renderer.registrationPreview) {
+            this.map.renderer.registrationPreview = null;
+            this.map.requestRender();
+        }
+    }
+
+    /** Accept only the same, visible detected preview the user actually saw.
+     * A manual registration can replace the renderer preview without removing
+     * old button closures; validate both controls and renderer here.
+     */
+    private hasActiveDetectedPreview(
+        generation: number,
+        sourceMapId: string,
+        worldVersion: number,
+        alignment: import("../../types").MapRegistrationTransform
+    ): boolean {
+        const preview = this.map.renderer.registrationPreview;
+        return !this.disposed
+            && generation === this.compatibilityGeneration
+            && this.selected?.id === sourceMapId
+            && this.getWorld().version === worldVersion
+            && required<HTMLElement>(this.host, "[data-registration-panel]").hidden
+            && !required<HTMLElement>(this.editForm, "[data-pattern-assessment]").hidden
+            && preview?.sourceMapId === sourceMapId
+            && preview.transform === alignment;
     }
 
     private clearFullGridFit(): void {
@@ -777,16 +821,19 @@ export class SourceMapWorkspace {
                 apply.addEventListener("click", () => {
                     if (previewedIndex === null) return;
                     const chosen = correction.candidates.find(item => item.index === previewedIndex);
-                    if (!chosen) return;
+                    if (!chosen || !this.hasActiveDetectedPreview(
+                        generation, sourceMap.id, assessment.worldVersion, chosen.alignment)) {
+                        apply.disabled = true;
+                        return;
+                    }
                     const confirmed = window.confirm(
                         `Use ${assessment.observedShape ?? "the observed pattern"} as this world's cells?\n\nThis is only available for an unused world. The existing cell tiling will be replaced with a new verified identity, and the selected image placement will be saved. Original image assets are preserved.\n\nThe current cell outlines shown in the preview are the old geometry.`);
                     if (!confirmed) return;
                     apply.disabled = true;
                     void this.run(null, async () => {
-                        if (this.disposed || generation !== this.compatibilityGeneration
-                            || this.selected?.id !== sourceMap.id
-                            || this.getWorld().version !== assessment.worldVersion)
-                            throw new Error("The world changed. Check the image again before correcting its cells.");
+                        if (!this.hasActiveDetectedPreview(
+                            generation, sourceMap.id, assessment.worldVersion, chosen.alignment))
+                            throw new Error("This detected preview is no longer active. Preview it again before correcting its cells.");
                         const corrected = await this.api.applyMotifCorrection(
                             selectedWorld.id, sourceMap.id, chosen.index,
                             chosen.alignment, assessment.worldVersion, pinned);
@@ -865,13 +912,16 @@ export class SourceMapWorkspace {
                     accept.addEventListener("click", () => {
                         if (previewedIndex === null) return;
                         const chosen = registration.candidates.find(item => item.index === previewedIndex);
-                        if (!chosen) return;
+                        if (!chosen || !this.hasActiveDetectedPreview(
+                            generation, sourceMap.id, assessment.worldVersion, chosen.alignment)) {
+                            accept.disabled = true;
+                            return;
+                        }
                         accept.disabled = true;
                         void this.run(null, async () => {
-                            if (this.disposed || generation !== this.compatibilityGeneration
-                                || this.selected?.id !== sourceMap.id
-                                || this.getWorld().version !== assessment.worldVersion)
-                                throw new Error("The map or world changed. Check the image again before accepting placement.");
+                            if (!this.hasActiveDetectedPreview(
+                                generation, sourceMap.id, assessment.worldVersion, chosen.alignment))
+                                throw new Error("This detected placement is no longer previewed. Preview it again before saving.");
                             const saved = await this.api.applyMotifRegistration(
                                 selectedWorld.id, sourceMap.id, chosen.index, chosen.alignment,
                                 assessment.worldVersion);
