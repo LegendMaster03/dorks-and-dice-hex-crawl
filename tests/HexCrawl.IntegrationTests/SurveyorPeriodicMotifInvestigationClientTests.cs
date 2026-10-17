@@ -16,6 +16,101 @@ public sealed class SurveyorPeriodicMotifInvestigationClientTests
     private const string Token = "survey-test-token";
     private const string SquareTranslationSymbol = "<8:2 7 6 8,3 5 7 8,4 6 5 8:4,4>";
 
+    [Theory]
+    [InlineData("qa-regular-hex-grid", "<1:1,1,1:6,3>")]
+    [InlineData("qa-regular-hex-grid-before", "<1:1,1,1:6,3>")]
+    [InlineData("fallout-warfare2-9x9-blank", "<1:1,1,1:4,4>")]
+    [InlineData("fallout-warfare2-9x9-blank-before", "<1:1,1,1:4,4>")]
+    [InlineData("fallout-warfare2-9x9-populated", "<1:1,1,1:4,4>")]
+    [InlineData("fallout-wanderer-5x5-blank", "<1:1,1,1:4,4>")]
+    [InlineData("fallout-wanderer-5x5-populated", "<1:1,1,1:4,4>")]
+    public async Task OriginalRasterResponsesRetainTheirDistantPeriodAlignment(string fixture, string symbol)
+    {
+        // Frozen responses generated from the exact acceptance PNGs. The
+        // -before cases retain 42a46ae output; the rest use the corrected
+        // detector. Exercise parsing AND final placement for both.
+        string payload = await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory,
+            "Fixtures", "Surveyor", fixture + ".json"));
+        var client = Client(new DelegateHandler((request, _) =>
+            Task.FromResult(Json(request.Method == HttpMethod.Get ? Discovery() : payload))));
+        var observed = await client.InvestigateAsync(new MemoryStream([1]), "image/png");
+        var (world, _) = Phase19RasterRegistrationTests.Fixture(symbol);
+        var result = HexCrawl.Web.Api.Phase19RasterRegistration.Assess(world, observed);
+        Assert.Equal("candidates", result.Status);
+        Assert.NotEmpty(result.Candidates);
+        foreach (var option in result.Candidates)
+        {
+            var t = option.Alignment;
+            // Independently compare several distant repetitions to the world
+            // lattice. A locally tolerable per-period error must not accumulate.
+            var origin = t.ToWorld(new(0, 0));
+            var a = observed.Candidate!.TranslationBasisSourcePixels[0];
+            var b = observed.Candidate.TranslationBasisSourcePixels[1];
+            var u = world.Realization.TranslationU;
+            var v = world.Realization.TranslationV;
+            double det = u.X * v.Y - u.Y * v.X;
+            foreach (var (i, j) in new[] { (0, 9), (9, 0), (9, 9), (-9, 9) })
+            {
+                var point = t.ToWorld(new(i * a.X + j * b.X, i * a.Y + j * b.Y));
+                double dx = point.X - origin.X, dy = point.Y - origin.Y;
+                double fu = (dx * v.Y - dy * v.X) / det;
+                double fv = (u.X * dy - u.Y * dx) / det;
+                Assert.InRange(Math.Abs(fu - Math.Round(fu)), 0, 1e-8);
+                Assert.InRange(Math.Abs(fv - Math.Round(fv)), 0, 1e-8);
+            }
+            // Independent fixture geometry, not returned motif coordinates:
+            // inspect printed vertices in distant rows/columns, measuring
+            // error back in source pixels under the EXACT saved transform.
+            foreach (var (center, vertices) in PrintedCells(fixture))
+            {
+                var lookup = world.Containing(t.ToWorld(center), 256);
+                Assert.Equal(WorldCellLookupStatus.Unique, lookup.Status);
+                var target = world.Resolve(lookup.Candidates[0].Address).Polygon;
+                foreach (var vertex in vertices)
+                {
+                    var actual = t.ToWorld(vertex);
+                    double inverseDet = t.M11 * t.M22 - t.M12 * t.M21;
+                    double error = target.Min(p =>
+                    {
+                        double dx = p.X - actual.X, dy = p.Y - actual.Y;
+                        return Math.Sqrt(Math.Pow((t.M22 * dx - t.M12 * dy) / inverseDet, 2)
+                            + Math.Pow((t.M11 * dy - t.M21 * dx) / inverseDet, 2));
+                    });
+                    Assert.InRange(error, 0, 2);
+                }
+            }
+        }
+    }
+
+    private static IEnumerable<(WorldPoint Center, WorldPoint[] Vertices)> PrintedCells(string fixture)
+    {
+        if (fixture.StartsWith("qa-regular-hex-grid", StringComparison.Ordinal))
+        {
+            foreach (int u in new[] { 1, 5, 9 })
+                foreach (int v in new[] { 0, 2, 5 })
+                {
+                    var center = new WorldPoint(90 * u, Math.Sqrt(3) * 60 * (v + u / 2d));
+                    if (center.Y > 660) continue;
+                    yield return (center, Enumerable.Range(0, 6).Select(i => new WorldPoint(
+                        center.X + 60 * Math.Cos(i * Math.PI / 3),
+                        center.Y + 60 * Math.Sin(i * Math.PI / 3))).ToArray());
+                }
+        }
+        else
+        {
+            bool five = fixture.StartsWith("fallout-wanderer", StringComparison.Ordinal);
+            double pitch = five ? 280 : 176;
+            int[] indices = five ? [0, 2, 4] : [0, 4, 8];
+            foreach (int column in indices)
+                foreach (int row in indices)
+                {
+                    double x = pitch * column, y = pitch * row;
+                    yield return (new(x + pitch / 2, y + pitch / 2),
+                        [new(x, y), new(x + pitch, y), new(x + pitch, y + pitch), new(x, y + pitch)]);
+                }
+        }
+    }
+
     [Fact]
     public async Task OldSurveyorDiscoveryReturnsExplicitUnsupportedWithoutSendingAnInvestigation()
     {

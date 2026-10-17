@@ -12,6 +12,7 @@
   </ItemGroup>
   <ItemGroup>
     <Using Include="Xunit" />
+    <Content Include="Fixtures/Surveyor/*.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../../src/HexCrawl.Web/HexCrawl.Web.csproj" />
