@@ -241,11 +241,13 @@ public sealed class SurveyorPeriodicMotifInvestigationClient(
 
         // A supported whole-image projection is impossible on a raster this
         // small or this large: Surveyor's independent projection gate requires
-        // >=96 pixels per side and <=1.5M analysis pixels. Dimension rounding
+        // >=96 pixels per side and <=2048² analysis pixels. Keep this bound
+        // aligned with Surveyor's PERIODIC_ANALYSIS_MAX_PIXELS; the response
+        // byte limit above is an unrelated transport limit. Dimension rounding
         // alone must not make a fake near-zero scale acceptable.
         if (status == "consistent-candidate"
             && (analysisDetails.Width < 96 || analysisDetails.Height < 96
-                || (long)analysisDetails.Width * analysisDetails.Height > 1_500_000))
+                || (long)analysisDetails.Width * analysisDetails.Height > 2048L * 2048))
             throw new MapAnalysisProtocolException(
                 "Surveyor reports a candidate outside the supported source-projection raster envelope.");
 

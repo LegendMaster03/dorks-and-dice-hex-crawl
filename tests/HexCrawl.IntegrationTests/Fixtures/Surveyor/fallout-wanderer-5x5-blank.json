@@ -1,0 +1,125 @@
+{
+  "apiVersion": "v3",
+  "capability": "map.periodic-tiling.investigate",
+  "maturity": "experimental",
+  "authoritative": false,
+  "status": "consistent-candidate",
+  "reason": "Exact original acceptance raster on the D02 correction branch",
+  "candidate": {
+    "dsSymbol": "<8:2 7 6 8,3 5 7 8,4 6 5 8:4,4>",
+    "translationBasisSourcePixels": [
+      {
+        "x": 0,
+        "y": 280
+      },
+      {
+        "x": 280,
+        "y": -280
+      }
+    ],
+    "motifCells": [
+      {
+        "provisionalId": "candidate-0",
+        "polygonSourcePixels": [
+          {
+            "x": -279.5,
+            "y": 0.5
+          },
+          {
+            "x": 0.5,
+            "y": 0.5
+          },
+          {
+            "x": 0.5,
+            "y": 280.5
+          },
+          {
+            "x": -279.5,
+            "y": 280.5
+          }
+        ],
+        "boundaries": [
+          {
+            "sideIndex": 0,
+            "targetProvisionalId": "candidate-0",
+            "targetSideIndex": 2,
+            "translation": {
+              "u": -1,
+              "v": 0
+            },
+            "supportingObservations": 5
+          },
+          {
+            "sideIndex": 1,
+            "targetProvisionalId": "candidate-0",
+            "targetSideIndex": 3,
+            "translation": {
+              "u": 1,
+              "v": 1
+            },
+            "supportingObservations": 5
+          },
+          {
+            "sideIndex": 2,
+            "targetProvisionalId": "candidate-0",
+            "targetSideIndex": 0,
+            "translation": {
+              "u": 1,
+              "v": 0
+            },
+            "supportingObservations": 5
+          },
+          {
+            "sideIndex": 3,
+            "targetProvisionalId": "candidate-0",
+            "targetSideIndex": 1,
+            "translation": {
+              "u": -1,
+              "v": -1
+            },
+            "supportingObservations": 5
+          }
+        ]
+      }
+    ]
+  },
+  "evidence": {
+    "matchedHypotheses": 4,
+    "checkedHypotheses": 5,
+    "rejectedHypotheses": 1,
+    "minimumEdgeObservations": 5,
+    "originalRasterEdgeSupport": 1,
+    "segmentationProvenance": "original-closed-line",
+    "maximumRigidVertexResidualSourcePixels": 0,
+    "translationRefinementResidualSourcePixels": null,
+    "metricRegistration": {
+      "status": "registered",
+      "reason": null,
+      "maximumContourResidualSourcePixels": 2.121320343559643,
+      "rmsContourResidualSourcePixels": 2.121320343559643,
+      "originalRasterEdgeSupport": 1,
+      "mathematicalMetricSymmetries": 8,
+      "rasterSymmetriesChecked": 7,
+      "rasterSymmetriesSupported": 0,
+      "sourceProjection": {
+        "status": "supported",
+        "reason": null,
+        "edgeSupport": 1,
+        "interiorSupport": 0.9955555555555555,
+        "checkedRegions": 9,
+        "supportedRegions": 9
+      }
+    }
+  },
+  "source": {
+    "width": 1400,
+    "height": 1400,
+    "mediaType": "image/png"
+  },
+  "analysis": {
+    "width": 1400,
+    "height": 1400,
+    "scale": 1,
+    "sourceResolutionVerified": true
+  }
+}

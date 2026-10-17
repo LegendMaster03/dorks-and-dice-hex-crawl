@@ -53,6 +53,10 @@ public static class Phase19RasterRegistration
             2 + 2 * metric.MaximumContourResidualSourcePixels, 3, 12 / analysis.Scale);
         if (!double.IsFinite(threshold) || threshold < 0)
             return Unavailable("The raster does not supply a usable accuracy envelope.");
+        // Raw contour uncertainty can help select a correspondence, but it
+        // cannot authorize a visibly inaccurate FINAL overlay. Match the
+        // independent source-projection ink neighborhood in analysis pixels.
+        double placementThreshold = Math.Min(threshold, 3 / analysis.Scale);
 
         var observed = candidate.MotifCells
             .OrderBy(c => c.PolygonSourcePixels.Count)
@@ -94,12 +98,17 @@ public static class Phase19RasterRegistration
                                 ]);
                             }
                             catch (ArgumentException) { continue; }
-                            if (TryVerify(world, candidate, transform, threshold, out double error))
+                            // The three corners select a discrete correspondence,
+                            // not the final scale/shear. Contour uncertainty of a
+                            // few pixels must not be multiplied across every tile.
+                            if (TryFitPeriodicTransform(world, candidate, transform, threshold,
+                                    out var periodicTransform)
+                                && TryVerify(world, candidate, periodicTransform, placementThreshold, out double error))
                             {
                                 // Equivalent placements can arise from several
                                 // seeds. Keep distinct image orientations/phases.
-                                if (!matches.Any(m => Equivalent(m.Transform, transform)))
-                                    matches.Add((transform, error));
+                                if (!matches.Any(m => Equivalent(m.Transform, periodicTransform)))
+                                    matches.Add((periodicTransform, error));
                                 accepted = true;
                             }
                             break;
@@ -126,6 +135,69 @@ public static class Phase19RasterRegistration
 
     private static Phase19RasterRegistrationResult Unavailable(string message) =>
         new("unavailable", message, []);
+
+    private static bool TryFitPeriodicTransform(
+        PeriodicWorldTiling world, PeriodicMotifCandidate candidate,
+        MapRegistrationTransform seed, double threshold,
+        out MapRegistrationTransform fitted)
+    {
+        fitted = seed;
+        var a = candidate.TranslationBasisSourcePixels[0];
+        var b = candidate.TranslationBasisSourcePixels[1];
+        if (!TryLatticeShift(world, TransformVector(seed, a), threshold, seed, out var u)
+            || !TryLatticeShift(world, TransformVector(seed, b), threshold, seed, out var v)
+            || Math.Abs((double)u.U * v.V - (double)u.V * v.U) != 1)
+            return false;
+        var wu = world.Realization.TranslationU;
+        var wv = world.Realization.TranslationV;
+        double ux = u.U * wu.X + u.V * wv.X, uy = u.U * wu.Y + u.V * wv.Y;
+        double vx = v.U * wu.X + v.V * wv.X, vy = v.U * wu.Y + v.V * wv.Y;
+        double det = a.X * b.Y - a.Y * b.X;
+        if (!double.IsFinite(det) || Math.Abs(det) < 1e-12) return false;
+        double m11 = (ux * b.Y - vx * a.Y) / det;
+        double m12 = (vx * a.X - ux * b.X) / det;
+        double m21 = (uy * b.Y - vy * a.Y) / det;
+        double m22 = (vy * a.X - uy * b.X) / det;
+        // With both periods fixed exactly, fit ONE phase over all corresponding
+        // motif vertices. No local deformation or per-tile correction occurs.
+        double offsetX = 0, offsetY = 0;
+        int count = 0;
+        foreach (var cell in candidate.MotifCells)
+        {
+            var polygon = cell.PolygonSourcePixels;
+            var center = new WorldPoint(polygon.Average(p => p.X), polygon.Average(p => p.Y));
+            WorldCellLookup lookup;
+            try { lookup = world.Containing(seed.ToWorld(center), 256); }
+            catch (ArgumentOutOfRangeException) { return false; }
+            if (lookup.Status != WorldCellLookupStatus.Unique) return false;
+            var target = world.Resolve(lookup.Candidates[0].Address).Polygon;
+            if (target.Count != polygon.Count) return false;
+            double best = double.PositiveInfinity;
+            int bestStart = 0, bestDirection = 1;
+            for (int start = 0; start < polygon.Count; start++)
+                foreach (int direction in new[] { -1, 1 })
+                {
+                    double error = 0;
+                    for (int i = 0; i < polygon.Count; i++)
+                        error += Math.Pow(ErrorSourcePixels(seed,
+                            seed.ToWorld(new(polygon[i].X, polygon[i].Y)),
+                            target[Mod(start + direction * i, target.Count)]), 2);
+                    if (error < best) { best = error; bestStart = start; bestDirection = direction; }
+                }
+            for (int i = 0; i < polygon.Count; i++)
+            {
+                var point = polygon[i];
+                var to = target[Mod(bestStart + bestDirection * i, target.Count)];
+                offsetX += to.X - m11 * point.X - m12 * point.Y;
+                offsetY += to.Y - m21 * point.X - m22 * point.Y;
+                count++;
+            }
+        }
+        if (count == 0) return false;
+        fitted = MapRegistrationTransform.Affine(m11, m12, m21, m22,
+            offsetX / count, offsetY / count);
+        return true;
+    }
 
     private static bool TryVerify(
         PeriodicWorldTiling world, PeriodicMotifCandidate candidate,

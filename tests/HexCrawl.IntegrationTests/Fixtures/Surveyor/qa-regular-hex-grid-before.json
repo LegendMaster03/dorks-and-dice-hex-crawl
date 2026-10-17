@@ -1,0 +1,153 @@
+{
+  "apiVersion": "v3",
+  "capability": "map.periodic-tiling.investigate",
+  "maturity": "experimental",
+  "authoritative": false,
+  "status": "consistent-candidate",
+  "reason": "Unmodified Surveyor result from the supplied original raster",
+  "candidate": {
+    "dsSymbol": "<12:2 7 6 10 12 11,3 5 9 12 11 10,4 6 8 11 12 10:6,3 3>",
+    "translationBasisSourcePixels": [
+      {
+        "x": 180.02849783309497,
+        "y": 0.005428878115961402
+      },
+      {
+        "x": 90.01391772703911,
+        "y": 51.97925614983052
+      }
+    ],
+    "motifCells": [
+      {
+        "provisionalId": "candidate-0",
+        "polygonSourcePixels": [
+          {
+            "x": -29.11134181631293,
+            "y": -51.820962834501415
+          },
+          {
+            "x": 29.959571576916176,
+            "y": -52.83627780655493
+          },
+          {
+            "x": 60.9025759107262,
+            "y": 0.15829331532910373
+          },
+          {
+            "x": 29.95890919789943,
+            "y": 51.11680561499014
+          },
+          {
+            "x": -29.112004195329675,
+            "y": 52.13212058704366
+          },
+          {
+            "x": -60.055008529139684,
+            "y": -0.8624505348403773
+          }
+        ],
+        "boundaries": [
+          {
+            "sideIndex": 0,
+            "targetProvisionalId": "candidate-0",
+            "targetSideIndex": 3,
+            "translation": {
+              "u": 1,
+              "v": -2
+            },
+            "supportingObservations": 50
+          },
+          {
+            "sideIndex": 1,
+            "targetProvisionalId": "candidate-0",
+            "targetSideIndex": 4,
+            "translation": {
+              "u": 1,
+              "v": -1
+            },
+            "supportingObservations": 49
+          },
+          {
+            "sideIndex": 2,
+            "targetProvisionalId": "candidate-0",
+            "targetSideIndex": 5,
+            "translation": {
+              "u": 0,
+              "v": 1
+            },
+            "supportingObservations": 50
+          },
+          {
+            "sideIndex": 3,
+            "targetProvisionalId": "candidate-0",
+            "targetSideIndex": 0,
+            "translation": {
+              "u": -1,
+              "v": 2
+            },
+            "supportingObservations": 50
+          },
+          {
+            "sideIndex": 4,
+            "targetProvisionalId": "candidate-0",
+            "targetSideIndex": 1,
+            "translation": {
+              "u": -1,
+              "v": 1
+            },
+            "supportingObservations": 49
+          },
+          {
+            "sideIndex": 5,
+            "targetProvisionalId": "candidate-0",
+            "targetSideIndex": 2,
+            "translation": {
+              "u": 0,
+              "v": -1
+            },
+            "supportingObservations": 50
+          }
+        ]
+      }
+    ]
+  },
+  "evidence": {
+    "matchedHypotheses": 5,
+    "checkedHypotheses": 5,
+    "rejectedHypotheses": 0,
+    "minimumEdgeObservations": 20,
+    "originalRasterEdgeSupport": 1,
+    "segmentationProvenance": "original-closed-line",
+    "maximumRigidVertexResidualSourcePixels": 2.102627199299816,
+    "translationRefinementResidualSourcePixels": 0.15462461526378016,
+    "metricRegistration": {
+      "status": "registered",
+      "reason": null,
+      "maximumContourResidualSourcePixels": 3.545722010660059,
+      "rmsContourResidualSourcePixels": 1.8392255174468495,
+      "originalRasterEdgeSupport": 1,
+      "mathematicalMetricSymmetries": 2,
+      "rasterSymmetriesChecked": 1,
+      "rasterSymmetriesSupported": 1,
+      "sourceProjection": {
+        "status": "supported",
+        "reason": null,
+        "edgeSupport": 1,
+        "interiorSupport": 1,
+        "checkedRegions": 9,
+        "supportedRegions": 9
+      }
+    }
+  },
+  "source": {
+    "width": 960,
+    "height": 720,
+    "mediaType": "image/png"
+  },
+  "analysis": {
+    "width": 960,
+    "height": 720,
+    "scale": 1,
+    "sourceResolutionVerified": true
+  }
+}

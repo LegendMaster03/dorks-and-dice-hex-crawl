@@ -1,0 +1,125 @@
+{
+  "apiVersion": "v3",
+  "capability": "map.periodic-tiling.investigate",
+  "maturity": "experimental",
+  "authoritative": false,
+  "status": "consistent-candidate",
+  "reason": "Unmodified Surveyor result from the supplied original raster",
+  "candidate": {
+    "dsSymbol": "<8:2 7 6 8,3 5 7 8,4 6 5 8:4,4>",
+    "translationBasisSourcePixels": [
+      {
+        "x": 0.008046436546831556,
+        "y": 176.02614622988412
+      },
+      {
+        "x": 175.99040142982184,
+        "y": -0.006472543951199627
+      }
+    ],
+    "motifCells": [
+      {
+        "provisionalId": "candidate-0",
+        "polygonSourcePixels": [
+          {
+            "x": -174.99146326502768,
+            "y": -175.10820527263104
+          },
+          {
+            "x": 0.99893816479414,
+            "y": -175.11467781658223
+          },
+          {
+            "x": 1.0069846013410029,
+            "y": 0.9114684133018613
+          },
+          {
+            "x": -174.98341682848084,
+            "y": 0.9179409572530517
+          }
+        ],
+        "boundaries": [
+          {
+            "sideIndex": 0,
+            "targetProvisionalId": "candidate-0",
+            "targetSideIndex": 2,
+            "translation": {
+              "u": -1,
+              "v": 0
+            },
+            "supportingObservations": 42
+          },
+          {
+            "sideIndex": 1,
+            "targetProvisionalId": "candidate-0",
+            "targetSideIndex": 3,
+            "translation": {
+              "u": 0,
+              "v": 1
+            },
+            "supportingObservations": 42
+          },
+          {
+            "sideIndex": 2,
+            "targetProvisionalId": "candidate-0",
+            "targetSideIndex": 0,
+            "translation": {
+              "u": 1,
+              "v": 0
+            },
+            "supportingObservations": 42
+          },
+          {
+            "sideIndex": 3,
+            "targetProvisionalId": "candidate-0",
+            "targetSideIndex": 1,
+            "translation": {
+              "u": 0,
+              "v": -1
+            },
+            "supportingObservations": 42
+          }
+        ]
+      }
+    ]
+  },
+  "evidence": {
+    "matchedHypotheses": 2,
+    "checkedHypotheses": 2,
+    "rejectedHypotheses": 0,
+    "minimumEdgeObservations": 42,
+    "originalRasterEdgeSupport": 1,
+    "segmentationProvenance": "original-closed-line",
+    "maximumRigidVertexResidualSourcePixels": 0.11125635271573485,
+    "translationRefinementResidualSourcePixels": 0.3613497589380546,
+    "metricRegistration": {
+      "status": "registered",
+      "reason": null,
+      "maximumContourResidualSourcePixels": 1.527750833661486,
+      "rmsContourResidualSourcePixels": 1.4213718184665236,
+      "originalRasterEdgeSupport": 1,
+      "mathematicalMetricSymmetries": 2,
+      "rasterSymmetriesChecked": 1,
+      "rasterSymmetriesSupported": 0,
+      "sourceProjection": {
+        "status": "supported",
+        "reason": null,
+        "edgeSupport": 1,
+        "interiorSupport": 1,
+        "checkedRegions": 9,
+        "supportedRegions": 9
+      }
+    }
+  },
+  "source": {
+    "width": 1584,
+    "height": 1584,
+    "mediaType": "image/png"
+  },
+  "analysis": {
+    "width": 1584,
+    "height": 1584,
+    "scale": 1,
+    "sourceResolutionVerified": true
+  }
+}

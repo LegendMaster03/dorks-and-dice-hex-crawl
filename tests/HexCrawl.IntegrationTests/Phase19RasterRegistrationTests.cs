@@ -29,6 +29,24 @@ public sealed class Phase19RasterRegistrationTests
     }
 
     [Fact]
+    public void ContourUncertaintyDoesNotAuthorizeAnInaccurateFinalWorldOverlay()
+    {
+        var (world, observed) = Fixture("<1:1,1,1:4,4>");
+        var cell = observed.Candidate!.MotifCells[0];
+        var points = cell.PolygonSourcePixels.Select((p, i) =>
+            i == 0 ? new MapAnalysisPoint(p.X + 8, p.Y) : p).ToArray();
+        var uncertain = observed with
+        {
+            Candidate = observed.Candidate with { MotifCells = [cell with { PolygonSourcePixels = points }] },
+            Evidence = observed.Evidence! with
+            {
+                MetricRegistration = observed.Evidence.MetricRegistration! with { MaximumContourResidualSourcePixels = 6 }
+            }
+        };
+        Assert.Empty(Phase19RasterRegistration.Assess(world, uncertain).Candidates);
+    }
+
+    [Fact]
     public void ConstructedMotifCorrectionRetainsFiniteWorldWindow()
     {
         var (world, observed) = Fixture("<1:1,1,1:4,4>");
