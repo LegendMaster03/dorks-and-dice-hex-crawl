@@ -138,3 +138,26 @@ test("normal map-management UI uses plain-language image and placement terminolo
     assert.doesNotMatch(registration, /Shift-drag/);
     assert.doesNotMatch(workspace, />Raster view |\bRaster files\b|>Selected raster map|>Delete raster map|>Advanced registration/);
 });
+
+test("R01: switching to manual placement invalidates detected acceptance in both entry paths", () => {
+    const workspace = fs.readFileSync(path.join(sourceRoot,
+        "modules/worlds/source-map-workspace.ts"), "utf8");
+    // Both the primary editor and the per-reference menu enter through an
+    // invalidation barrier BEFORE manual placement owns the preview.
+    const manualStarts = workspace.match(/this\.registrationController\.begin\(this\.selected\)/g) ?? [];
+    assert.equal(manualStarts.length, 2);
+    assert.equal((workspace.match(/this\.invalidateDetectedPatternPlacement\(\);/g) ?? []).length, 2);
+    assert.match(workspace,
+        /this\.invalidateDetectedPatternPlacement\(\);\s*this\.ensureVisibleForEditing\(this\.selected\);\s*this\.registrationController\.begin/);
+    assert.match(workspace,
+        /this\.invalidateDetectedPatternPlacement\(\);\s*this\.selected = sourceMap;[\s\S]*?this\.registrationController\.begin/);
+    assert.match(workspace,/private invalidateDetectedPatternPlacement\(\): void \{/);
+    assert.match(workspace,/this\.compatibilityGeneration\+\+;[\s\S]*?status\.replaceChildren\(\)/);
+    assert.match(workspace,/status\.hidden = true/);
+    assert.match(workspace,/this\.map\.renderer\.registrationPreview = null/);
+    assert.match(workspace,/private hasActiveDetectedPreview\(/);
+    assert.match(workspace,/\!required<HTMLElement>\(this\.editForm, "\[data-pattern-assessment\]"\)\.hidden/);
+    assert.match(workspace,/required<HTMLElement>\(this\.host, "\[data-registration-panel\]"\)\.hidden/);
+    assert.equal((workspace.match(/\!this\.hasActiveDetectedPreview\(/g) ?? []).length, 4,
+        "Both correction and unchanged-world save verify the live preview before invoking the API.");
+});
