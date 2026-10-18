@@ -33,13 +33,15 @@ public static partial class SourceMapApiEndpoints
 
         var owner = UserId(context);
         var stored = await crawls.GetOverworldAsync(overworldId, owner, cancellationToken);
+        var sourceMap = stored.World.SourceMaps.Single(map => map.Id == sourceMapId);
         var procedure = procedureId is { } selected && procedureRevision is { } revision
             ? (await procedures.GetAsync(owner, selected, revision, cancellationToken)).Procedure
             : null;
         var expeditions = await crawls.ListExpeditionsAsync(overworldId, owner, cancellationToken);
         var blockers = CorrectionBlockers(stored, expeditions);
         var assessment = Phase19TilingCompatibility.Assess(
-            stored.World.SpatialTiling, analyzed.Value, procedure, blockers, stored.Version);
+            stored.World.SpatialTiling, analyzed.Value, procedure, blockers, stored.Version,
+            sourceMap.Alignment);
         return Results.Ok(assessment);
     }
 
@@ -103,9 +105,10 @@ public static partial class SourceMapApiEndpoints
             : null;
         var expeditions = await crawls.ListExpeditionsAsync(
             overworldId, owner, cancellationToken);
+        var sourceMap = world.World.SourceMaps.Single(map => map.Id == sourceMapId);
         var assessment = Phase19TilingCompatibility.Assess(
             world.World.SpatialTiling, analyzed.Value, applicable,
-            CorrectionBlockers(world, expeditions), world.Version);
+            CorrectionBlockers(world, expeditions), world.Version, sourceMap.Alignment);
         if (!assessment.CanCorrectInPlace || assessment.Correction is not
             { Status: "candidates" } options
             || !options.Candidates.Any(candidate => candidate.Index == request.CandidateIndex
@@ -154,8 +157,9 @@ public static partial class SourceMapApiEndpoints
         if (analyzed is not Ok<PeriodicMotifInvestigation> observation
             || observation.Value is null)
             return analyzed;
+        var sourceMap = world.World.SourceMaps.Single(map => map.Id == sourceMapId);
         var options = Phase19RasterRegistration.Assess(
-            world.World.SpatialTiling, observation.Value);
+            world.World.SpatialTiling, observation.Value, sourceMap.Alignment);
         if (options.Status != "candidates"
             || !options.Candidates.Any(candidate => candidate.Index == request.CandidateIndex
                 && Phase19RasterRegistration.Equivalent(candidate.Alignment, request.Alignment)))

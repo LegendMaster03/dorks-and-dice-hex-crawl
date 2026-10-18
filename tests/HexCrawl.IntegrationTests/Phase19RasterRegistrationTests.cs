@@ -28,6 +28,73 @@ public sealed class Phase19RasterRegistrationTests
         });
     }
 
+    [Theory]
+    [InlineData("<1:1,1,1:4,4>")]
+    [InlineData("<1:1,1,1:3,6>")]
+    [InlineData("<20:2 7 6 10 12 13 15 17 20 19,3 5 9 12 10 13 16 18 19 20,4 6 8 11 12 14 15 17 19 20:3 3 4,5 5>")]
+    public void CentersDetectedRasterAtFiniteWorldCenterWithoutChangingLatticePhase(string symbol)
+    {
+        var (world, evidence) = Fixture(symbol);
+        var bounded = world with { PlayableBounds = new PeriodicMapBounds(5, 5, -2, -2) };
+        var uncentered = Phase19RasterRegistration.Assess(world, evidence);
+        var centered = Phase19RasterRegistration.Assess(bounded, evidence);
+        Assert.Equal("candidates", centered.Status);
+        var center = new WorldPoint(evidence.Source!.Width / 2d, evidence.Source.Height / 2d);
+        var envelope = bounded.PlayableEnvelope()!.Value;
+        var target = new WorldPoint((envelope.MinX + envelope.MaxX) / 2,
+            (envelope.MinY + envelope.MaxY) / 2);
+        var u = bounded.Realization.TranslationU;
+        var v = bounded.Realization.TranslationV;
+        var maximumNearestDistance = 0.5 * (
+            Math.Sqrt(u.X * u.X + u.Y * u.Y)
+            + Math.Sqrt(v.X * v.X + v.Y * v.Y)) + 1e-8;
+
+        foreach (var candidate in centered.Candidates)
+        {
+            var placedCenter = candidate.Alignment.ToWorld(center);
+            Assert.True(placedCenter.DistanceTo(target) < maximumNearestDistance);
+            var original = uncentered.Candidates.Single(item =>
+                Math.Abs(item.Alignment.M11 - candidate.Alignment.M11) < 1e-9
+                && Math.Abs(item.Alignment.M12 - candidate.Alignment.M12) < 1e-9
+                && Math.Abs(item.Alignment.M21 - candidate.Alignment.M21) < 1e-9
+                && Math.Abs(item.Alignment.M22 - candidate.Alignment.M22) < 1e-9);
+            var originalCenter = original.Alignment.ToWorld(center);
+            var shiftX = placedCenter.X - originalCenter.X;
+            var shiftY = placedCenter.Y - originalCenter.Y;
+            var determinant = u.X * v.Y - u.Y * v.X;
+            var periodsU = (shiftX * v.Y - shiftY * v.X) / determinant;
+            var periodsV = (u.X * shiftY - u.Y * shiftX) / determinant;
+            Assert.InRange(Math.Abs(periodsU - Math.Round(periodsU)), 0, 1e-8);
+            Assert.InRange(Math.Abs(periodsV - Math.Round(periodsV)), 0, 1e-8);
+        }
+    }
+
+    [Fact]
+    public void NewUnboundedDetectedRasterCentersOnWorldOriginAndExistingPlacementWins()
+    {
+        var (world, evidence) = Fixture("<1:1,1,1:4,4>");
+        var result = Phase19RasterRegistration.Assess(world, evidence);
+        var center = new WorldPoint(evidence.Source!.Width / 2d, evidence.Source.Height / 2d);
+        var origin = world.Origin;
+        var u = world.Realization.TranslationU;
+        var v = world.Realization.TranslationV;
+        var tolerance = 0.5 * (
+            Math.Sqrt(u.X * u.X + u.Y * u.Y)
+            + Math.Sqrt(v.X * v.X + v.Y * v.Y)) + 1e-8;
+        foreach (var candidate in result.Candidates)
+            Assert.True(candidate.Alignment.ToWorld(center).DistanceTo(origin) < tolerance);
+
+        var existing = result.Candidates[0].Alignment with
+        {
+            M13 = result.Candidates[0].Alignment.M13 + 8 * u.X - 6 * v.X,
+            M23 = result.Candidates[0].Alignment.M23 + 8 * u.Y - 6 * v.Y
+        };
+        var retained = Phase19RasterRegistration.Assess(world, evidence, existing);
+        var establishedCenter = existing.ToWorld(center);
+        foreach (var candidate in retained.Candidates)
+            Assert.True(candidate.Alignment.ToWorld(center).DistanceTo(establishedCenter) < tolerance);
+    }
+
     [Fact]
     public void ContourUncertaintyDoesNotAuthorizeAnInaccurateFinalWorldOverlay()
     {
