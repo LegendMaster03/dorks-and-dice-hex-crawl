@@ -125,21 +125,26 @@ public sealed class ProcedurePresetIdentityTests
     }
 
     [Fact]
-    public void ClassicFalloutTerrainRatesAreReferenceOnlyUntilMovementIsConfigured()
+    public void ClassicFalloutRatesRemainManualWithoutInventingMovementBudget()
     {
-        var fallout = MovementCompositionPolicyResolver.Resolve(CrawlProcedureCatalog.Resolve(
-            CrawlProcedureCatalog.FalloutClassicPresetKey).MaterializeGeneric().Procedure);
-        var fallout2 = MovementCompositionPolicyResolver.Resolve(CrawlProcedureCatalog.Resolve(
-            CrawlProcedureCatalog.Fallout2ClassicPresetKey).MaterializeGeneric().Procedure);
+        var falloutPreset = CrawlProcedureCatalog.Resolve(CrawlProcedureCatalog.FalloutClassicPresetKey);
+        var fallout2Preset = CrawlProcedureCatalog.Resolve(CrawlProcedureCatalog.Fallout2ClassicPresetKey);
+        foreach (var preset in new[] { falloutPreset, fallout2Preset })
+        {
+            var procedure = preset.MaterializeGeneric().Procedure;
+            var policy = MovementCompositionPolicyResolver.Resolve(procedure);
+            Assert.Equal(MovementCompositionPolicySupport.None, policy.Support);
+            Assert.Equal(MovementTerrainPolicySupport.None, policy.Terrain.Support);
+            Assert.DoesNotContain(procedure.Modules, module =>
+                module.Module.Key is GenericProcedureCatalog.MovementBudgetModule
+                    or GenericProcedureCatalog.TerrainMovementModule);
+            Assert.Contains("reference values", preset.Disclaimer);
+        }
 
-        Assert.Equal(MovementCompositionPolicySupport.None, fallout.Support);
-        Assert.Equal(MovementCompositionPolicySupport.None, fallout2.Support);
-        Assert.Equal(MovementTerrainPolicySupport.Supported, fallout.Terrain.Support);
-        Assert.Equal(MovementTerrainPolicySupport.Supported, fallout2.Terrain.Support);
-        Assert.Equal("0.5", fallout.Terrain.TerrainAdjustments["mountain"]);
-        Assert.Equal("0.7692307692307692", fallout2.Terrain.TerrainAdjustments["mountain"]);
-        Assert.NotEqual(fallout.Terrain.TerrainAdjustments["city"],
-            fallout2.Terrain.TerrainAdjustments["city"]);
+        Assert.Contains("city 6 h", falloutPreset.Disclaimer);
+        Assert.Contains("mountain 20 h", falloutPreset.Disclaimer);
+        Assert.Contains("25 h/sector", fallout2Preset.Disclaimer);
+        Assert.Contains("mountain 32.5 h", fallout2Preset.Disclaimer);
     }
 
     [Fact]

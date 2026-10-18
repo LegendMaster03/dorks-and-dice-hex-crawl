@@ -26,18 +26,10 @@ internal static class Fallout2ClassicPreset
                 neighborCenterDistanceFactor: 0d,
                 supportsDeliberateDoubleBack: false,
                 adjacency: CellAdjacencyMode.EdgeAndVertex)
-                .Concat([
-                    NativeExplorationFlow(
-                        ["travel", "check-encounter", "reveal-map"],
-                        ExplorationDiscoveryTrigger.OnFirstVisit,
-                        ExplorationEncounterTrigger.Manual),
-                    Structural(GenericProcedureCatalog.TerrainMovementModule,
-                        GenericProcedureCatalog.TerrainMovementPolicyMechanic,
-                        ("adjustmentModel", "multiplier"),
-                        ("terrainAdjustments", "desert=1;coast=1;city=1;mountain=0.7692307692307692"),
-                        ("routeAdjustmentModel", "manual"),
-                        ("weatherAdjustmentModel", "manual"))
-                ]).ToArray(),
+                .Concat([NativeExplorationFlow(
+                    ["travel", "check-encounter", "reveal-map"],
+                    ExplorationDiscoveryTrigger.OnFirstVisit,
+                    ExplorationEncounterTrigger.Manual)]).ToArray(),
             attribution: "Fallout 2 (1998) world-map terrain and travel behavior.",
             disclaimer: "The one-hour interval is for bookkeeping, not a per-sector rule. Relative terrain rates use desert/city/coast as baseline (25 h/sector) and mountain 32.5 h. Without a movement budget and map-distance calibration the rates are reference values, not automatic speeds. Encounter rolls, Outdoorsman, Highwayman fuel/speed, and fog of war remain manual.",
             category: "Other square-grid starting points");
