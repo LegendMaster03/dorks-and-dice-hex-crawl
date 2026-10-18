@@ -22,7 +22,8 @@ public static class Phase19RasterRegistration
         WorldCellId Id, int StartVertex, int Direction, double MaximumResidual);
 
     public static Phase19RasterRegistrationResult Assess(
-        PeriodicWorldTiling world, PeriodicMotifInvestigation observation)
+        PeriodicWorldTiling world, PeriodicMotifInvestigation observation,
+        MapRegistrationTransform? existingAlignment = null)
     {
         ArgumentNullException.ThrowIfNull(world);
         ArgumentNullException.ThrowIfNull(observation);
@@ -105,6 +106,11 @@ public static class Phase19RasterRegistration
                                     out var periodicTransform)
                                 && TryVerify(world, candidate, periodicTransform, placementThreshold, out double error))
                             {
+                                periodicTransform = CenterImageOnReference(
+                                    world, observation, periodicTransform, existingAlignment);
+                                if (!TryVerify(world, candidate, periodicTransform,
+                                        placementThreshold, out error))
+                                    continue;
                                 // Equivalent placements can arise from several
                                 // seeds. Keep distinct image orientations/phases.
                                 if (!matches.Any(m => Equivalent(m.Transform, periodicTransform)))
@@ -132,6 +138,103 @@ public static class Phase19RasterRegistration
                 : $"{matches.Count} geometrically valid image placements were found. Choose one by visually checking the preview; the motif alone does not determine an absolute map orientation.",
             candidates);
     }
+
+    private static MapRegistrationTransform CenterImageOnReference(
+        PeriodicWorldTiling world, PeriodicMotifInvestigation observation,
+        MapRegistrationTransform alignment, MapRegistrationTransform? existingAlignment)
+    {
+        if (observation.Source is not { Width: > 0, Height: > 0 }) return alignment;
+        var center = new WorldPoint(observation.Source.Width / 2d, observation.Source.Height / 2d);
+        WorldPoint target;
+        if (existingAlignment is not null)
+        {
+            // Rechecking a registered map should retain its established
+            // geographic position while allowing the measured orientation and
+            // scale to be refreshed.
+            target = existingAlignment.ToWorld(center);
+        }
+        else if (world.PlayableEnvelope() is { } bounds)
+        {
+            target = new WorldPoint((bounds.MinX + bounds.MaxX) / 2,
+                (bounds.MinY + bounds.MaxY) / 2);
+        }
+        else
+        {
+            // An unbounded map has no finite extent to anchor against. Give a
+            // newly detected image a predictable initial location around the
+            // world origin while preserving the measured lattice phase.
+            target = world.Origin;
+        }
+
+        var current = alignment.ToWorld(center);
+        var displacement = ClosestLatticeDisplacement(
+            target.X - current.X, target.Y - current.Y,
+            world.Realization.TranslationU, world.Realization.TranslationV);
+        var u = world.Realization.TranslationU;
+        var v = world.Realization.TranslationV;
+        return MapRegistrationTransform.Affine(
+            alignment.M11, alignment.M12, alignment.M21, alignment.M22,
+            alignment.M13 + displacement.U * u.X + displacement.V * v.X,
+            alignment.M23 + displacement.U * u.Y + displacement.V * v.Y);
+    }
+
+    private static LatticeDisplacement ClosestLatticeDisplacement(
+        double targetX, double targetY, TilingWorldPoint first, TilingWorldPoint second)
+    {
+        // Gauss-reduce the two-dimensional lattice first. Searching a small
+        // neighborhood in this reduced basis gives the nearest whole-period
+        // translation even when the original basis is skewed.
+        var u = new WorldPoint(first.X, first.Y);
+        var v = new WorldPoint(second.X, second.Y);
+        long uU = 1, uV = 0, vU = 0, vV = 1;
+        for (var iteration = 0; iteration < 128; iteration++)
+        {
+            if (Dot(v, v) < Dot(u, u))
+            {
+                (u, v) = (v, u);
+                (uU, vU) = (vU, uU);
+                (uV, vV) = (vV, uV);
+            }
+            var lengthSquared = Dot(u, u);
+            if (!double.IsFinite(lengthSquared) || lengthSquared <= 1e-24) return default;
+            var multiple = (long)Math.Round(Dot(u, v) / lengthSquared);
+            if (multiple == 0) break;
+            v = new WorldPoint(v.X - multiple * u.X, v.Y - multiple * u.Y);
+            vU = checked(vU - multiple * uU);
+            vV = checked(vV - multiple * uV);
+        }
+
+        var determinant = u.X * v.Y - u.Y * v.X;
+        if (!double.IsFinite(determinant) || Math.Abs(determinant) <= 1e-15) return default;
+        var coordinateU = (targetX * v.Y - targetY * v.X) / determinant;
+        var coordinateV = (u.X * targetY - u.Y * targetX) / determinant;
+        if (!double.IsFinite(coordinateU) || !double.IsFinite(coordinateV)
+            || Math.Abs(coordinateU) > 1e12 || Math.Abs(coordinateV) > 1e12)
+            return default;
+
+        var baseU = (long)Math.Floor(coordinateU);
+        var baseV = (long)Math.Floor(coordinateV);
+        var bestDistance = double.PositiveInfinity;
+        LatticeDisplacement best = default;
+        for (var i = -2; i <= 3; i++)
+            for (var j = -2; j <= 3; j++)
+            {
+                var reducedU = baseU + i;
+                var reducedV = baseV + j;
+                var dx = reducedU * u.X + reducedV * v.X - targetX;
+                var dy = reducedU * u.Y + reducedV * v.Y - targetY;
+                var distance = dx * dx + dy * dy;
+                if (distance >= bestDistance) continue;
+                bestDistance = distance;
+                best = new LatticeDisplacement(
+                    checked(reducedU * uU + reducedV * vU),
+                    checked(reducedU * uV + reducedV * vV));
+            }
+        return best;
+    }
+
+    private static double Dot(WorldPoint first, WorldPoint second) =>
+        first.X * second.X + first.Y * second.Y;
 
     private static Phase19RasterRegistrationResult Unavailable(string message) =>
         new("unavailable", message, []);

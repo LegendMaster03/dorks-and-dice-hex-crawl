@@ -24,7 +24,8 @@ public static class Phase19TilingCompatibility
 
     public static Phase19CompatibilityAssessment Assess(
         PeriodicWorldTiling world, PeriodicMotifInvestigation observed,
-        CampaignProcedure? procedure, IReadOnlyList<string> blockers, long worldVersion)
+        CampaignProcedure? procedure, IReadOnlyList<string> blockers, long worldVersion,
+        HexCrawl.Domain.World.MapRegistrationTransform? existingAlignment = null)
     {
         ArgumentNullException.ThrowIfNull(world);
         ArgumentNullException.ThrowIfNull(observed);
@@ -91,7 +92,7 @@ public static class Phase19TilingCompatibility
             ? Phase19RasterRegistration.ConstructReplacement(world, observed)
             : null;
         var correction = replacement is null ? null
-            : Phase19RasterRegistration.Assess(replacement, observed);
+            : Phase19RasterRegistration.Assess(replacement, observed, existingAlignment);
         bool canCorrect = correction is { Status: "candidates", Candidates.Count: > 0 };
         return new Phase19CompatibilityAssessment(
             mismatched ? "mismatch" : uncertain ? "inconclusive" : "structure-match",
@@ -103,7 +104,7 @@ public static class Phase19TilingCompatibility
             Registration = worldMismatch || worldUncertain || worldComparison.Status is not (
                     TilingComparisonStatus.ExactIdentity or TilingComparisonStatus.ChamberIsomorphic
                         or TilingComparisonStatus.ProvenEquivalent)
-                ? null : Phase19RasterRegistration.Assess(world, observed)
+                ? null : Phase19RasterRegistration.Assess(world, observed, existingAlignment)
         };
     }
 
