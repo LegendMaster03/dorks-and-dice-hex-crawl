@@ -19,6 +19,10 @@ public sealed class ProcedurePresetIdentityTests
             "simple-hex-step",
             CrawlProcedureCatalog.WastelandWandererPresetKey,
             CrawlProcedureCatalog.WastelandWarfarePresetKey,
+            CrawlProcedureCatalog.MutantYearZeroPresetKey,
+            CrawlProcedureCatalog.WalkingDeadUniversePresetKey,
+            CrawlProcedureCatalog.FalloutClassicPresetKey,
+            CrawlProcedureCatalog.Fallout2ClassicPresetKey,
             CrawlProcedureCatalog.BxPresetKey,
             CrawlProcedureCatalog.OseClassicPresetKey,
             CrawlProcedureCatalog.Adnd2ePresetKey,
@@ -39,7 +43,12 @@ public sealed class ProcedurePresetIdentityTests
         {
             preset.Validate();
             var square = preset.PresetKey is
-                CrawlProcedureCatalog.WastelandWandererPresetKey or CrawlProcedureCatalog.WastelandWarfarePresetKey;
+                CrawlProcedureCatalog.WastelandWandererPresetKey
+                or CrawlProcedureCatalog.WastelandWarfarePresetKey
+                or CrawlProcedureCatalog.MutantYearZeroPresetKey
+                or CrawlProcedureCatalog.WalkingDeadUniversePresetKey
+                or CrawlProcedureCatalog.FalloutClassicPresetKey
+                or CrawlProcedureCatalog.Fallout2ClassicPresetKey;
             Assert.Equal(square ? "<1:1,1,1:4,4>" : CampaignProcedureSchema.CurrentHexTilingDsSymbol,
                 preset.Recipe.TilingDsSymbol);
             var materialized = preset.MaterializeGeneric();
@@ -68,6 +77,74 @@ public sealed class ProcedurePresetIdentityTests
         }
         Assert.Null(CrawlProcedureCatalog.Resolve("simple-hex-step")
             .MaterializeGeneric().Procedure.PlayableBounds);
+    }
+
+    [Theory]
+    [InlineData(CrawlProcedureCatalog.MutantYearZeroPresetKey, CellAdjacencyMode.EdgeAndVertex, TravelResolutionMode.CellSteps, 4)]
+    [InlineData(CrawlProcedureCatalog.WalkingDeadUniversePresetKey, CellAdjacencyMode.EdgeOnly, TravelResolutionMode.CellSteps, 24)]
+    [InlineData(CrawlProcedureCatalog.FalloutClassicPresetKey, CellAdjacencyMode.EdgeAndVertex, TravelResolutionMode.ContinuousDistance, 1)]
+    [InlineData(CrawlProcedureCatalog.Fallout2ClassicPresetKey, CellAdjacencyMode.EdgeAndVertex, TravelResolutionMode.ContinuousDistance, 1)]
+    public void AdditionalSquarePresetsUseGenericUnboundedGeometryAndExplicitContactRules(
+        string presetKey, CellAdjacencyMode adjacency, TravelResolutionMode travel, int hours)
+    {
+        var procedure = CrawlProcedureCatalog.Resolve(presetKey).MaterializeGeneric().Procedure;
+        procedure.Validate();
+        Assert.Equal("<1:1,1,1:4,4>", procedure.TilingDsSymbol);
+        Assert.Null(procedure.PlayableBounds);
+
+        var runtime = GenericProcedureRuntime.Bind(procedure);
+        Assert.Equal(adjacency, runtime.Movement.Adjacency);
+        Assert.Equal(travel, runtime.Movement.TravelResolution);
+        Assert.Equal(TimeSpan.FromHours(hours), runtime.Time.IntervalDuration);
+        Assert.Equal(EncounterCheckCadence.None, runtime.Encounters.Cadence);
+        Assert.NotNull(runtime.ExplorationFlow);
+
+        var roundTrip = JsonSerializer.Deserialize<CampaignProcedure>(JsonSerializer.Serialize(procedure));
+        Assert.NotNull(roundTrip);
+        roundTrip.Validate();
+        Assert.Equal(runtime.Movement, GenericProcedureRuntime.Bind(roundTrip).Movement);
+    }
+
+    [Fact]
+    public void AdditionalSquarePresetFlowsDistinguishExplorationFromRepeatCrossing()
+    {
+        var zone = GenericProcedureRuntime.Bind(CrawlProcedureCatalog.Resolve(
+            CrawlProcedureCatalog.MutantYearZeroPresetKey).MaterializeGeneric().Procedure).ExplorationFlow!;
+        Assert.Equal(ExplorationDiscoveryTrigger.OnExplore, zone.DiscoveryTrigger);
+        Assert.Equal(["explore"], zone.AvailableActions(false, false));
+        Assert.Equal(["cross"], zone.AvailableActions(true, false));
+        Assert.True(zone.ShouldGenerateLocation(false, "explore"));
+        Assert.False(zone.ShouldGenerateLocation(true, "cross"));
+        Assert.Equal(ExplorationEncounterTrigger.Manual, zone.EncounterTrigger);
+
+        var walkingDead = GenericProcedureRuntime.Bind(CrawlProcedureCatalog.Resolve(
+            CrawlProcedureCatalog.WalkingDeadUniversePresetKey).MaterializeGeneric().Procedure).ExplorationFlow!;
+        Assert.Equal(ExplorationDiscoveryTrigger.OnFirstVisit, walkingDead.DiscoveryTrigger);
+        Assert.Equal(["enter-sector", "scout-optional", "resolve-sector"], walkingDead.StageKeys);
+        Assert.Equal(ExplorationEncounterTrigger.Manual, walkingDead.EncounterTrigger);
+    }
+
+    [Fact]
+    public void ClassicFalloutRatesRemainManualWithoutInventingMovementBudget()
+    {
+        var falloutPreset = CrawlProcedureCatalog.Resolve(CrawlProcedureCatalog.FalloutClassicPresetKey);
+        var fallout2Preset = CrawlProcedureCatalog.Resolve(CrawlProcedureCatalog.Fallout2ClassicPresetKey);
+        foreach (var preset in new[] { falloutPreset, fallout2Preset })
+        {
+            var procedure = preset.MaterializeGeneric().Procedure;
+            var policy = MovementCompositionPolicyResolver.Resolve(procedure);
+            Assert.Equal(MovementCompositionPolicySupport.None, policy.Support);
+            Assert.Equal(MovementTerrainPolicySupport.None, policy.Terrain.Support);
+            Assert.DoesNotContain(procedure.Modules, module =>
+                module.Module.Key is GenericProcedureCatalog.MovementBudgetModule
+                    or GenericProcedureCatalog.TerrainMovementModule);
+            Assert.Contains("reference values", preset.Disclaimer);
+        }
+
+        Assert.Contains("city 6 h", falloutPreset.Disclaimer);
+        Assert.Contains("mountain 20 h", falloutPreset.Disclaimer);
+        Assert.Contains("25 h/sector", fallout2Preset.Disclaimer);
+        Assert.Contains("mountain 32.5 h", fallout2Preset.Disclaimer);
     }
 
     [Fact]
@@ -110,7 +187,11 @@ public sealed class ProcedurePresetIdentityTests
         foreach (var key in new[]
         {
             CrawlProcedureCatalog.WastelandWandererPresetKey,
-            CrawlProcedureCatalog.WastelandWarfarePresetKey
+            CrawlProcedureCatalog.WastelandWarfarePresetKey,
+            CrawlProcedureCatalog.MutantYearZeroPresetKey,
+            CrawlProcedureCatalog.WalkingDeadUniversePresetKey,
+            CrawlProcedureCatalog.FalloutClassicPresetKey,
+            CrawlProcedureCatalog.Fallout2ClassicPresetKey
         })
         {
             var original = CrawlProcedureCatalog.Resolve(key).MaterializeGeneric().Procedure;
