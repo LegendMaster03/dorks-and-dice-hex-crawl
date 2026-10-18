@@ -41,18 +41,15 @@ internal static class CrawlProcedurePresetFactory
         bool usesPersistentVeer,
         double neighborCenterDistanceFactor,
         bool supportsDeliberateDoubleBack,
-        ProcedureResolutionHelperProfile? resolutionHelpers = null) =>
+        ProcedureResolutionHelperProfile? resolutionHelpers = null,
+        CellAdjacencyMode? adjacency = null) =>
     [
         NativeTime(interval),
         new ProcedureModuleRecipe(
             GenericProcedureCatalog.MovementResolutionModule,
             GenericProcedureCatalog.MovementResolutionPolicyMechanic,
             2,
-            new Dictionary<string, string>(StringComparer.Ordinal)
-            {
-                ["travelResolution"] = travelResolution.ToString(),
-                ["actualDistanceResolution"] = actualDistanceResolution.ToString()
-            }),
+            MovementParameters(travelResolution, actualDistanceResolution, adjacency)),
         Structural(GenericProcedureCatalog.SpatialTurnCostModule,
             GenericProcedureCatalog.SpatialTurnCostPolicyMechanic,
             ("neighborCenterDistanceFactor", Number(neighborCenterDistanceFactor)),
@@ -123,6 +120,21 @@ internal static class CrawlProcedurePresetFactory
             mechanicKey,
             1,
             parameters.ToDictionary(value => value.Key, value => value.Value, StringComparer.Ordinal));
+
+    private static IReadOnlyDictionary<string, string> MovementParameters(
+        TravelResolutionMode travelResolution,
+        ActualDistanceResolutionMode actualDistanceResolution,
+        CellAdjacencyMode? adjacency)
+    {
+        var parameters = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["travelResolution"] = travelResolution.ToString(),
+            ["actualDistanceResolution"] = actualDistanceResolution.ToString()
+        };
+        if (adjacency is { } selected)
+            parameters["adjacencyMode"] = selected.ToString();
+        return parameters;
+    }
 
     private static IReadOnlyDictionary<string, string> HelperValues(ProcedureResolutionHelperProfile? helpers)
     {

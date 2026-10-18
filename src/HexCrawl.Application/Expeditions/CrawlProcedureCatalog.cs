@@ -17,6 +17,10 @@ public static class CrawlProcedureCatalog
     public const string OneRing2ePresetKey = "the-one-ring-2e";
     public const string WastelandWandererPresetKey = "fallout-wasteland-wanderer";
     public const string WastelandWarfarePresetKey = "fallout-wasteland-warfare-2e";
+    public const string MutantYearZeroPresetKey = "mutant-year-zero";
+    public const string WalkingDeadUniversePresetKey = "the-walking-dead-universe-rpg";
+    public const string FalloutClassicPresetKey = "fallout-classic";
+    public const string Fallout2ClassicPresetKey = "fallout-2-classic";
 
     private static IReadOnlyList<CrawlProcedurePresetDefinition> FullCatalog { get; } = BuildCatalog();
 
@@ -43,6 +47,10 @@ public static class CrawlProcedureCatalog
             SimpleHexStepPreset.Create(),
             WastelandWandererPreset.Create(),
             WastelandWarfarePreset.Create(),
+            MutantYearZeroPreset.Create(),
+            WalkingDeadUniversePreset.Create(),
+            FalloutClassicPreset.Create(),
+            Fallout2ClassicPreset.Create(),
             bx,
             ose,
             Adnd2ePreset.Create(),
