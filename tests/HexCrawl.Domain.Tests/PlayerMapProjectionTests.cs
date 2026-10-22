@@ -81,6 +81,26 @@ public sealed class PlayerMapProjectionTests
     }
 
     [Fact]
+    public void ReleasedHiddenLocationDoesNotExposeHiddenFlagsOrDetailAssets()
+    {
+        var source = World();
+        var hidden = Assert.Single(source.Locations, location =>
+            location.Discoverability == LocationDiscoverability.Hidden);
+        source = source with
+        {
+            PlayerMapDisclosure = new PlayerMapDisclosure
+            {
+                VisibleLocationIds = [hidden.Id]
+            }
+        };
+        var displayed = Assert.Single(PlayerMapProjection.Create(source).World.Locations);
+        Assert.Equal("Unlabeled", displayed.Name);
+        Assert.Equal("unlabeled", displayed.Category);
+        Assert.Equal(LocationDiscoverability.Obvious, displayed.Discoverability);
+        Assert.Empty(displayed.DetailMaps);
+    }
+
+    [Fact]
     public void LabelMayNotBeReleasedWithoutGeometry()
     {
         var source = World();

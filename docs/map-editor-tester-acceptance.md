@@ -94,6 +94,38 @@ discarded. Do not include undisclosed campaign details in evidence captures.
 9. With two distinct users, confirm the other user can not fetch the owner's
    raw world, source-map assets, or owner-only player-preview API.
 
+## 6. Live interactive player map
+
+1. Start a spatial expedition in a test world using **Exploration Map** and
+   open **Open player map** from the GM workbench. It should open a separate
+   browser window without replacing the GM workspace.
+2. Leave the new window open. Pan and zoom it independently. Verify that the
+   player view does not include GM tools, encounter history, editing controls,
+   the procedure-composer shortcut, or a direct link back to the GM workbench.
+3. Create a hidden point and location in the GM map. Confirm they remain absent
+   from the player window. Discover them through the GM workbench, then verify
+   they appear with names after the live view refreshes (normally within
+   five seconds while the tab is visible).
+4. Set a cell to forest and another to swamp. Under **HiddenUntilKnown**
+   terrain, verify only visited/known cell colors appear. Under
+   **AlwaysVisible** terrain, both may appear. Under **DM-Controlled**,
+   automatic discovery and terrain reveal must not occur.
+5. Release a map feature's geometry without its label. The player map may
+   display the shape but must not transmit or render its secret name or
+   category. Explicitly release the label and verify the name appears.
+6. Release a Player-role source map intentionally and verify it appears in
+   the player window. GM/Neutral maps and unreleased images must not appear.
+   Inspect all raster images manually for baked-in secrets.
+7. Continue moving or revealing cells in the original GM window. The player
+   window should update from persisted expedition knowledge without exposing
+   the GM's procedure, pending encounters, event history, or other private
+   data. Hidden tabs may defer refresh until visible again.
+8. Open the player-map URL while signed in as a different account. It must
+   deny access; an anonymous browser must never receive world content. This
+   display is owner-operated, not an independently shared player-account URL.
+9. Close the player-map window. The original GM expedition controls and
+   current travel state should remain unchanged.
+
 ## Automated validation
 
 GitHub Actions checks frontend tests, TypeScript, .NET builds, domain tests,

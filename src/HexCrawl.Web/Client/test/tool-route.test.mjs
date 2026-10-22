@@ -44,6 +44,9 @@ test("parses home, world alias, canonical expedition, and focused utility routes
     assert.deepEqual(parseToolRoute("/worlds/abc/edit"), { kind: "edit", worldId: "abc" });
     assert.deepEqual(parseToolRoute("/worlds/abc/expeditions/def"), { kind: "expedition", worldId: "abc", expeditionId: "def" });
     assert.deepEqual(parseToolRoute("/expeditions/def"), { kind: "expedition", expeditionId: "def" });
+    assert.deepEqual(parseToolRoute("/expeditions/def/player-map"), {
+        kind: "player-map", expeditionId: "def"
+    });
     assert.deepEqual(parseToolRoute("/expeditions/def/travel"), { kind: "assistant", expeditionId: "def", assistant: "travel" });
     assert.deepEqual(parseToolRoute("/expeditions/def/navigation"), { kind: "assistant", expeditionId: "def", assistant: "navigation" });
     assert.deepEqual(parseToolRoute("/expeditions/def/encounters"), { kind: "assistant", expeditionId: "def", assistant: "encounters" });

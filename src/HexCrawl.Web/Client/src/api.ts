@@ -30,7 +30,8 @@ import type {
     UpdateExpeditionPartyRequest,
     WorldPoint,
     PlayerMapDisclosure,
-    PlayerMapPreview
+    PlayerMapPreview,
+    ExpeditionPlayerMapView
 } from "./types";
 import type {
     EnvironmentWorkbench,
@@ -273,6 +274,11 @@ export class HexCrawlApi {
         id: string, disclosure: PlayerMapDisclosure, expectedVersion: number): Promise<Overworld> {
         return this.sendJson("PUT", `/api/overworlds/${encodeURIComponent(id)}/player-map-disclosure`,
             { disclosure, expectedVersion }, "Update player map visibility");
+    }
+
+    public getExpeditionPlayerMap(id: string): Promise<ExpeditionPlayerMapView> {
+        return this.getJson(`/api/expeditions/${encodeURIComponent(id)}/player-map`,
+            "Expedition player map");
     }
 
     public getPlayerMapPreview(id: string): Promise<PlayerMapPreview> {

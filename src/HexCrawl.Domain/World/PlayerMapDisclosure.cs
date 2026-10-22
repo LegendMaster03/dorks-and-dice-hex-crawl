@@ -54,10 +54,22 @@ public static class PlayerMapProjection
             .Select(f => release.VisibleFeatureLabelIds.Contains(f.Id)
                 ? f : f with { Name = "Unlabeled", Category = "unlabeled" }).ToArray();
         var locations = source.Locations.Where(l => release.VisibleLocationIds.Contains(l.Id))
-            .Select(l => release.VisibleLocationLabelIds.Contains(l.Id)
-                ? l : l with { Name = "Unlabeled", Category = "unlabeled" }).ToArray();
+            .Select(l => (release.VisibleLocationLabelIds.Contains(l.Id)
+                ? l : l with { Name = "Unlabeled", Category = "unlabeled" }) with
+            {
+                // A released marker does not need private discoverability flags
+                // or references to GM-only detail-map assets.
+                Discoverability = LocationDiscoverability.Obvious,
+                DetailMaps = []
+            }).ToArray();
         var maps = source.SourceMaps.Where(m =>
-            m.Role == SourceMapRole.Player && release.VisibleSourceMapIds.Contains(m.Id)).ToArray();
+                m.Role == SourceMapRole.Player && release.VisibleSourceMapIds.Contains(m.Id))
+            .Select(m => m with
+            {
+                // Only a registered raster is needed by the player renderer.
+                // Imported source records and archives can contain GM secrets.
+                ImportedContent = null, ImportProvenance = null, SourceArchive = null
+            }).ToArray();
         // Only terrain tags are needed for color rendering. Notes/provenance and
         // other DM environment rules must never enter the projected result.
         EnvironmentAnnotation[] terrain = release.ShowTerrain

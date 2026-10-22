@@ -76,11 +76,43 @@ map's `Player` role and explicit release are not proof that the image content
 is harmless. Full-map and viewport export both support a filtered player copy;
 unbounded worlds are limited to viewport export.
 
-This static release configuration does not replace expedition-specific
-`PlayerKnowledgeState` or `MapPresentationPolicy`. It does not modify
-exploration/discovery mechanics, grant live player map access, or publish any
-endpoint without owner authorization. Integrating live player views with
-per-expedition knowledge remains a separate future task.
+## Live expedition player display
+
+The GM's spatial expedition workbench includes **Open player map**, which
+opens a second, owner-authenticated, read-only browser window at
+`/expeditions/{expeditionId}/player-map`. It refreshes every five seconds
+while visible, and can be panned or zoomed without changing expedition state.
+The GM continues managing watches, travel, and discoveries in the original
+window. The player display itself contains no return link to GM controls.
+
+The owner-only `GET /api/expeditions/{id}/player-map` endpoint composes the
+player view on the server from the saved expedition's `PlayerKnowledgeState`
+and `MapPresentationPolicy`, plus explicit static map disclosures:
+
+- Discovered feature and location IDs become visible, including their names.
+  Unreleased, undiscovered objects are omitted, and explicitly displayed
+  objects without released labels have their names and categories redacted.
+- Automatic hidden-until-known terrain reveals tags only for known,
+  tiling-qualified cells. Always-visible terrain reveals all terrain tags.
+  DM-controlled/manual terrain remains hidden without an explicit GM
+  terrain-release override.
+- Grid outlines are governed by both the expedition presentation policy
+  and the explicit map grid setting.
+- Source images require the `Player` role **and** explicit GM release.
+  No GM source images, non-terrain facts, private notes, or runtime history
+  enter the player-map response.
+- The party marker is omitted until its location is known under the selected
+  presentation mode.
+
+This feature **does not introduce independent cross-account player access**.
+The live display is launched by the authenticated world owner for second-screen
+presentation. It remains protected by the established owner authorization;
+there is no anonymous share URL or player token to expose GM maps. Granting
+remote players access under their own logins requires a separate ownership
+and sharing design, not a client-side visibility toggle.
+
+The existing exploration/discovery mechanics are unchanged. This route reads
+their persisted outcomes and does not mutate knowledge or rules.
 
 Appearance and disclosure are optional fields in the version 3 PostgreSQL
 world snapshot. Existing snapshots deserialize without those fields, using

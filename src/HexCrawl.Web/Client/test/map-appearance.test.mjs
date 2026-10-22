@@ -92,3 +92,19 @@ test("geometry authoring displays unsaved draft vertices and disables incomplete
     assert.match(view, /saveButton\.disabled = !geometryReady/);
     assert.match(view, /if \(kind !== "Point"\) draft = \[\]/);
 });
+
+test("live player map is read-only and never downloads GM world or expedition detail", () => {
+    const view = read("modules/expeditions/player-map-view.ts");
+    const module = read("modules/expeditions/module.ts");
+    const backend = read("api.ts");
+    assert.match(view, /api\.getExpeditionPlayerMap\(expeditionId\)/);
+    assert.match(view, /surface\.setClickInterceptor\(\(\) => true\)/);
+    assert.match(view, /labelAllowedSubjectIds = new Set/);
+    assert.match(view, /setTerrainAnnotations\(next\.terrainAnnotations\)/);
+    assert.match(view, /surface\.renderer\.showGrid = next\.showGrid/);
+    assert.match(view, /window\.setInterval/);
+    assert.match(view, /window\.clearInterval/);
+    assert.doesNotMatch(view, /api\.getOverworld\(|api\.getExpedition\(/);
+    assert.match(module, /"player-map"/);
+    assert.match(backend, /\/api\/expeditions\/\$\{encodeURIComponent\(id\)\}\/player-map/);
+});

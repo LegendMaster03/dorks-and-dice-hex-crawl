@@ -10,6 +10,7 @@ export type ToolRoute =
     | { kind: "world"; worldId: string }
     | { kind: "edit"; worldId: string }
     | { kind: "expedition"; expeditionId: string; worldId?: string }
+    | { kind: "player-map"; expeditionId: string }
     | { kind: "assistant"; expeditionId: string; assistant: ExpeditionAssistant }
     | { kind: "assistant-entry"; assistant: ExpeditionAssistant }
     | { kind: "unknown"; path: string };
@@ -63,6 +64,8 @@ export function parseToolRoute(path: string): ToolRoute {
         kind: "assistant-entry",
         assistant: match[1] as ExpeditionAssistant
     };
+    match = normalized.match(/^\/expeditions\/([^/]+)\/player-map$/);
+    if (match) return { kind: "player-map", expeditionId: decodeURIComponent(match[1]) };
     match = normalized.match(/^\/expeditions\/([^/]+)\/(travel|navigation|encounters)$/);
     if (match) return {
         kind: "assistant",

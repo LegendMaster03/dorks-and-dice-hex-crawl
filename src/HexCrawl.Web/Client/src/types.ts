@@ -137,6 +137,12 @@ export type SourceMapList = {
     sourceMaps: SourceMapDetail[];
 };
 
+export type ExpeditionPlayerMapView = PlayerMapPreview & {
+    expeditionVersion: number;
+    knownCells: WorldCellId[];
+    partyPosition: WorldPoint | null;
+};
+
 export type PlayerMapPreview = {
     world: Overworld;
     terrainAnnotations: import("./environment-types").EnvironmentAnnotation[];

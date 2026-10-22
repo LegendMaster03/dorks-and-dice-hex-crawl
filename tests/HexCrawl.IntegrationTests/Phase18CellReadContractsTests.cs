@@ -149,6 +149,26 @@ public sealed class Phase18CellReadContractsTests
                 Assert.Equal(boundary.To.TilingId,
                     first.GetProperty("neighborCell").GetProperty("tilingId").GetGuid());
 
+                using var hiddenMapResponse = await client.GetAsync(
+                    $"/api/expeditions/{runtime.Id:D}/player-map");
+                hiddenMapResponse.EnsureSuccessStatusCode();
+                var hiddenMapJson = await hiddenMapResponse.Content.ReadAsStringAsync();
+                using (var hiddenMap = JsonDocument.Parse(hiddenMapJson))
+                {
+                    Assert.Empty(hiddenMap.RootElement.GetProperty("world")
+                        .GetProperty("locations").EnumerateArray());
+                    Assert.False(hiddenMap.RootElement.GetProperty("showGrid").GetBoolean());
+                    Assert.Equal(JsonValueKind.Null,
+                        hiddenMap.RootElement.GetProperty("partyPosition").ValueKind);
+                }
+                Assert.DoesNotContain("Sealed archive", hiddenMapJson);
+
+                using var otherOwnerHost = TestWebHost.Create(database, "bob");
+                using var otherOwner = otherOwnerHost.CreateClient();
+                using var forbiddenPlayerMap = await otherOwner.GetAsync(
+                    $"/api/expeditions/{runtime.Id:D}/player-map");
+                Assert.Equal(HttpStatusCode.NotFound, forbiddenPlayerMap.StatusCode);
+
                 using var discover = await client.PostAsJsonAsync(
                     $"/api/expeditions/{runtime.Id:D}/discover",
                     new
@@ -168,6 +188,24 @@ public sealed class Phase18CellReadContractsTests
                 Assert.Equal(cell.Id.TilingId,
                     discoveredEvent.GetProperty("cell").GetProperty("tilingId").GetGuid());
                 Assert.False(discoveredEvent.TryGetProperty("hex", out _));
+                using var learnedMapResponse = await client.GetAsync(
+                    $"/api/expeditions/{runtime.Id:D}/player-map");
+                learnedMapResponse.EnsureSuccessStatusCode();
+                var learnedMapJson = await learnedMapResponse.Content.ReadAsStringAsync();
+                using (var learnedMap = JsonDocument.Parse(learnedMapJson))
+                {
+                    var root = learnedMap.RootElement;
+                    var revealed = Assert.Single(root.GetProperty("world")
+                        .GetProperty("locations").EnumerateArray());
+                    Assert.Equal(landmark.Id, revealed.GetProperty("id").GetGuid());
+                    Assert.Equal("Sealed archive", revealed.GetProperty("name").GetString());
+                    Assert.Empty(root.GetProperty("world").GetProperty("features").EnumerateArray());
+                    Assert.Empty(root.GetProperty("terrainAnnotations").EnumerateArray());
+                    Assert.False(root.TryGetProperty("history", out _));
+                    Assert.False(root.TryGetProperty("knowledge", out _));
+                    Assert.False(root.TryGetProperty("procedure", out _));
+                    Assert.False(root.TryGetProperty("party", out _));
+                }
 
                 var heading = new WorldPoint(
                     (boundary.Start.X + boundary.End.X) / 2 - cell.Center.X,
