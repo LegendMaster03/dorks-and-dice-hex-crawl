@@ -28,7 +28,9 @@ import type {
     StartStandaloneCrawlSessionInput,
     ToolHostContext,
     UpdateExpeditionPartyRequest,
-    WorldPoint
+    WorldPoint,
+    PlayerMapDisclosure,
+    PlayerMapPreview
 } from "./types";
 import type {
     EnvironmentWorkbench,
@@ -263,6 +265,17 @@ export class HexCrawlApi {
         expectedVersion: number): Promise<Overworld> {
         return this.sendJson("PUT", `/api/overworlds/${encodeURIComponent(id)}/appearance`,
             { appearance, expectedVersion }, "Update map appearance");
+    }
+
+    public updatePlayerMapDisclosure(
+        id: string, disclosure: PlayerMapDisclosure, expectedVersion: number): Promise<Overworld> {
+        return this.sendJson("PUT", `/api/overworlds/${encodeURIComponent(id)}/player-map-disclosure`,
+            { disclosure, expectedVersion }, "Update player map visibility");
+    }
+
+    public getPlayerMapPreview(id: string): Promise<PlayerMapPreview> {
+        return this.getJson(`/api/overworlds/${encodeURIComponent(id)}/player-map-preview`,
+            "Player map preview");
     }
 
     public getWorldEnvironment(id: string): Promise<WorldEnvironment> {

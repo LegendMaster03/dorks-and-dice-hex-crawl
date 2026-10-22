@@ -137,6 +137,14 @@ export type SourceMapList = {
     sourceMaps: SourceMapDetail[];
 };
 
+export type PlayerMapPreview = {
+    world: Overworld;
+    terrainAnnotations: import("./environment-types").EnvironmentAnnotation[];
+    featureLabelIds: string[];
+    locationLabelIds: string[];
+    showGrid: boolean;
+};
+
 export type OverworldSummary = {
     id: string;
     name: string;
@@ -154,6 +162,16 @@ export type PeriodicWorldTiling = {
     playableBounds?: { width: number; height: number; minU: number; minV: number } | null;
 };
 
+export type PlayerMapDisclosure = {
+    visibleFeatureIds: string[];
+    visibleLocationIds: string[];
+    visibleFeatureLabelIds: string[];
+    visibleLocationLabelIds: string[];
+    visibleSourceMapIds: string[];
+    showTerrain: boolean;
+    showGrid: boolean;
+};
+
 export type Overworld = {
     id: string;
     name: string;
@@ -166,6 +184,7 @@ export type Overworld = {
     locations: Location[];
     sourceMaps: SourceMapRepresentation[];
     mapAppearance?: MapAppearance;
+    playerMapDisclosure?: PlayerMapDisclosure;
 };
 
 export type DemoWorld = Overworld;

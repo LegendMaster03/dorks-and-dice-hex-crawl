@@ -41,11 +41,14 @@ public sealed partial class PostgresHexCrawlStore
         IReadOnlyList<SourceMapRepresentation> SourceMaps,
         IReadOnlyList<EnvironmentAnnotation> EnvironmentAnnotations,
         PeriodicWorldTiling Tiling,
-        int FormatVersion = 3)
+        int FormatVersion = 3,
+        MapAppearance? Appearance = null,
+        PlayerMapDisclosure? PlayerDisclosure = null)
     {
         public static WorldSnapshot FromDomain(OverworldDefinition world)
         {
             world.ValidateEnvironmentAnnotations();
+            world.PlayerMapDisclosure.Validate(world);
             return new WorldSnapshot(
                 world.Id,
                 world.Name,
@@ -53,7 +56,10 @@ public sealed partial class PostgresHexCrawlStore
                 world.Locations,
                 world.SourceMaps,
                 world.EnvironmentAnnotations,
-                world.SpatialTiling);
+                world.SpatialTiling,
+                3,
+                world.MapAppearance.NormalizeAndValidate(),
+                world.PlayerMapDisclosure);
         }
 
         public OverworldDefinition ToDomain()
@@ -69,9 +75,12 @@ public sealed partial class PostgresHexCrawlStore
                 Features = Features.Select(item => item.ToDomain()).ToArray(),
                 Locations = Locations.ToArray(),
                 SourceMaps = SourceMaps.ToArray(),
-                EnvironmentAnnotations = EnvironmentAnnotations.ToArray()
+                EnvironmentAnnotations = EnvironmentAnnotations.ToArray(),
+                MapAppearance = Appearance?.NormalizeAndValidate() ?? new(),
+                PlayerMapDisclosure = PlayerDisclosure ?? new()
             };
             world.ValidateEnvironmentAnnotations();
+            world.PlayerMapDisclosure.Validate(world);
             return world;
         }
     }

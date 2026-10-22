@@ -46,20 +46,48 @@ Export does not silently omit missing images or incomplete cell batches.
 The renderer uses the same topology and world-space geometry as the live map;
 no rule-system-specific hex/square drawing engine is introduced.
 
-## Security and next phase
+## Player visibility and static player exports
 
-**PNG exports from the world editor are GM exports.** They may show hidden
-locations or unpublished spatial features. Do not share them with players
-when secrets are present.
+Map disclosure is a separate, versioned setting on the overworld. The owner can
+explicitly release each location or spatial feature (point, line, or region),
+and separately release its label. Terrain coloring and grid visibility are
+independent settings. Source images are excluded unless their role is
+`Player` **and** the owner explicitly releases them. All release lists and
+terrain visibility default to empty/off.
 
-Player-safe projection is a separate authorization feature, not just a canvas
-visibility toggle. A future implementation must filter the owner-scoped
-world/knowledge payload and image assets appropriately before offering a
-player-export mode. This branch does not claim player-safe exports.
+The owner-only `player-map-preview` endpoint constructs a server-filtered
+map contract. Unselected objects and their IDs, geometry, names, categories,
+source-image metadata, and environment facts are removed before response
+serialization. Geometry released without its label receives neutral
+`Unlabeled` name and category values to avoid transmitting unreleased labels
+or revealing category text. Only explicitly released cell terrain tags are
+projected when the owner enables terrain. Non-terrain facts and private notes
+or provenance are always excluded.
 
-The appearance model is an additive optional world JSON field; the existing
-PostgreSQL schema and map assets are unchanged. No destructive migration is
-required.
+Player PNG export uses this filtered contract in an isolated offscreen
+renderer, never the full live GM canvas. Player source images remain
+owner-authenticated during rendering; the PNG is what the owner may then
+distribute offline. The preview endpoint does **not** grant player accounts
+access to the original world, map data, or source asset URLs.
+
+**Selected raster images may have secret details permanently baked into their
+pixels.** The owner must review the resulting PNG before sharing it. A source
+map's `Player` role and explicit release are not proof that the image content
+is harmless. Full-map and viewport export both support a filtered player copy;
+unbounded worlds are limited to viewport export.
+
+This static release configuration does not replace expedition-specific
+`PlayerKnowledgeState` or `MapPresentationPolicy`. It does not modify
+exploration/discovery mechanics, grant live player map access, or publish any
+endpoint without owner authorization. Integrating live player views with
+per-expedition knowledge remains a separate future task.
+
+Appearance and disclosure are optional fields in the version 3 PostgreSQL
+world snapshot. Existing snapshots deserialize without those fields, using
+empty appearance overrides and default-private disclosure. Updated snapshots
+save both fields and restore them on restart. The SQL schema and map assets
+remain unchanged; no destructive migration or database reset is required.
+HTTP integration tests explicitly cover persistence across a new host instance.
 
 ## Regression coverage
 

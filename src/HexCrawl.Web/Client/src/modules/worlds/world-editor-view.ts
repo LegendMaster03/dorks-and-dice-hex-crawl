@@ -4,7 +4,7 @@ import { MapSurface } from "../../map-surface";
 import { defaultTerrainColors, defaultFeatureColors, mapCategoryColor, type MapAppearance } from "../../map-appearance";
 import { enhanceExpeditionSetup } from "../expeditions/expedition-setup";
 import { SourceMapWorkspace } from "./source-map-workspace";
-import type { Location, Overworld, SpatialFeature, WorldPoint, WorldCellGeometry, WorldCellId } from "../../types";
+import type { Location, Overworld, SpatialFeature, WorldPoint, WorldCellGeometry, WorldCellId, PlayerMapDisclosure } from "../../types";
 import { clearUiError, showUiError } from "../../ui-error";
 import { input, numeric, required, select } from "../../ui/dom";
 import { applyGuidedExperience, guidancePreferenceButton } from "../../ui/guidance";
@@ -52,6 +52,7 @@ export async function renderWorldEditor(
                     <p class="hc-hint" data-map-hint>Click to select or author map content; drag to pan; wheel to zoom. The focused map also supports keyboard pan, zoom, and center-point selection.</p>
                     <details><summary>Export map as PNG</summary>
                         <form class="hc-form" data-export-form>
+                            <label>Audience <select name="audience"><option value="gm">GM (all authored details)</option><option value="player">Players (only released details)</option></select></label>
                             <label>Export area <select name="scope">
                                 <option value="visible">Export visible area (PNG)</option>
                                 <option value="full">Full bounded map</option>
@@ -61,7 +62,7 @@ export async function renderWorldEditor(
                             <label><input name="grid" type="checkbox" checked> Draw tile grid (full-map export)</label>
                             <label><input name="labels" type="checkbox" checked> Draw labels (full-map export)</label>
                             <button type="submit" class="hc-primary-action" data-export-map>Export PNG</button>
-                            <p class="hc-hint">Full-map export uses finite map boundaries rather than the current view. Unbounded worlds can export only the visible area. Exports contain GM-authored information; do not share them with players if they include secrets.</p>
+                            <p class="hc-hint">Player exports contain only objects explicitly released below, but selected source images may already contain baked secrets. Review the PNG before sharing. Full-map exports require finite boundaries.</p>
                         </form>
                     </details>
                 </section>
@@ -86,6 +87,10 @@ export async function renderWorldEditor(
                             <label>Color <input name="color" type="color" value="#538a55" required></label>
                             <button type="submit">Set category color</button>
                         </form>
+                    </details>
+                    <details><summary>Player map visibility</summary>
+                        <p class="hc-hint">All features, locations, labels, terrain colors, and source images are excluded by default. Release only the details players may see. These controls affect static player map exports, not expedition discovery mechanics.</p>
+                        <div data-player-map-disclosure></div>
                     </details>
                     <details data-advanced-world-objects><summary>Advanced world objects</summary>
                     <details><summary>Locations</summary>
@@ -133,6 +138,7 @@ export async function renderWorldEditor(
     const featureForm = required<HTMLFormElement>(root, "[data-feature-form]");
     const paletteForm = required<HTMLFormElement>(root, "[data-palette-form]");
     const exportForm = required<HTMLFormElement>(root, "[data-export-form]");
+    const disclosureHost = required<HTMLElement>(root, "[data-player-map-disclosure]");
      const draftLabel = required<HTMLElement>(root, "[data-draft]");
     required<HTMLElement>(root, "[data-guidance-controls]").append(guidancePreferenceButton(root));
     const selectedCellEmpty = required<HTMLElement>(root, "[data-selected-cell-empty]");
@@ -174,6 +180,7 @@ export async function renderWorldEditor(
         renderLocations();
         renderFeatures();
         renderPalette();
+        renderDisclosure();
         mapSurface.setTerrainAnnotations(worldEnvironment.annotations);
         renderPeriodicCell();
         mapSurface.requestRender();
@@ -284,6 +291,100 @@ export async function renderWorldEditor(
         featureColors: { ...world.mapAppearance?.featureColors },
         labelColors: { ...world.mapAppearance?.labelColors }
     });
+
+    const currentDisclosure = (): PlayerMapDisclosure => ({
+        visibleFeatureIds: [...world.playerMapDisclosure?.visibleFeatureIds ?? []],
+        visibleLocationIds: [...world.playerMapDisclosure?.visibleLocationIds ?? []],
+        visibleFeatureLabelIds: [...world.playerMapDisclosure?.visibleFeatureLabelIds ?? []],
+        visibleLocationLabelIds: [...world.playerMapDisclosure?.visibleLocationLabelIds ?? []],
+        visibleSourceMapIds: [...world.playerMapDisclosure?.visibleSourceMapIds ?? []],
+        showTerrain: world.playerMapDisclosure?.showTerrain ?? false,
+        showGrid: world.playerMapDisclosure?.showGrid ?? true
+    });
+
+    const updateDisclosure = async (next: PlayerMapDisclosure): Promise<void> => {
+        applyWorld(await api.updatePlayerMapDisclosure(world.id, next, world.version));
+    };
+
+    const renderDisclosure = (): void => {
+        disclosureHost.replaceChildren();
+        const state = currentDisclosure();
+        const toggleFlag = (label: string, key: "showTerrain" | "showGrid"): void => {
+            const line = document.createElement("label");
+            const choice = document.createElement("input");
+            choice.type = "checkbox";
+            choice.checked = state[key];
+            choice.addEventListener("change", () => void run(null, () =>
+                updateDisclosure({ ...currentDisclosure(), [key]: choice.checked })));
+            line.append(choice, document.createTextNode(" " + label));
+            disclosureHost.append(line);
+        };
+        const toggleSubject = (name: string, id: string, key: "visibleFeatureIds" | "visibleLocationIds"
+            | "visibleFeatureLabelIds" | "visibleLocationLabelIds" | "visibleSourceMapIds",
+            extra?: string): void => {
+            const line = document.createElement("label");
+            line.className = "hc-discovery-row";
+            const choice = document.createElement("input");
+            choice.type = "checkbox";
+            choice.checked = state[key].includes(id);
+            if (key === "visibleFeatureLabelIds" && !state.visibleFeatureIds.includes(id)
+                || key === "visibleLocationLabelIds" && !state.visibleLocationIds.includes(id))
+                choice.disabled = true;
+            choice.addEventListener("change", () => void run(null, async () => {
+                const next = currentDisclosure();
+                const selection = new Set(next[key]);
+                if (choice.checked) selection.add(id);
+                else selection.delete(id);
+                const updated: PlayerMapDisclosure = { ...next, [key]: [...selection] };
+                if (key === "visibleFeatureIds" && !choice.checked)
+                    updated.visibleFeatureLabelIds = updated.visibleFeatureLabelIds.filter(value => value !== id);
+                if (key === "visibleLocationIds" && !choice.checked)
+                    updated.visibleLocationLabelIds = updated.visibleLocationLabelIds.filter(value => value !== id);
+                await updateDisclosure(updated);
+            }));
+            line.append(choice, document.createTextNode(" " + name + (extra ?? "")));
+            disclosureHost.append(line);
+        };
+        toggleFlag("Show terrain colors", "showTerrain");
+        toggleFlag("Show grid", "showGrid");
+        for (const [title, values, key, labelKey] of [
+            ["Features", world.features, "visibleFeatureIds", "visibleFeatureLabelIds"],
+            ["Locations", world.locations, "visibleLocationIds", "visibleLocationLabelIds"]
+        ] as const) {
+            const heading = document.createElement("strong");
+            heading.textContent = title;
+            disclosureHost.append(heading);
+            for (const item of values) {
+                toggleSubject(item.name, item.id, key, " · " + item.category);
+                toggleSubject("Show label: " + item.name, item.id, labelKey);
+            }
+        }
+        const heading = document.createElement("strong");
+        heading.textContent = "Player source images";
+        disclosureHost.append(heading);
+        const playerMaps = world.sourceMaps.filter(map => map.role === "Player");
+        for (const map of playerMaps)
+            toggleSubject(map.name, map.id, "visibleSourceMapIds", " · may contain baked information");
+        if (!playerMaps.length) {
+            const message = document.createElement("p");
+            message.className = "hc-hint";
+            message.textContent = "No source images have the Player role.";
+            disclosureHost.append(message);
+        }
+        const reset = document.createElement("button");
+        reset.type = "button";
+        reset.textContent = "Hide all player details";
+        reset.addEventListener("click", () => void run(null, () => updateDisclosure({
+            visibleFeatureIds: [],
+            visibleLocationIds: [],
+            visibleFeatureLabelIds: [],
+            visibleLocationLabelIds: [],
+            visibleSourceMapIds: [],
+            showTerrain: false,
+            showGrid: true
+        })));
+        disclosureHost.append(reset);
+    };
 
     const renderFeatures = (): void => {
         const host = required<HTMLElement>(root, "[data-feature-list]");
@@ -663,15 +764,19 @@ export async function renderWorldEditor(
             const scope = select(exportForm, "scope").value;
             const background = select(exportForm, "background").value as
                 "light" | "dark" | "transparent";
+            const preview = select(exportForm, "audience").value === "player"
+                ? await api.getPlayerMapPreview(world.id) : undefined;
+            if (preview && preview.world.version !== world.version)
+                throw new Error("The map changed before export. Reload and try again.");
             if (scope === "visible") {
-                await mapSurface.exportViewportPng(world.name, background);
+                await mapSurface.exportViewportPng(world.name, background, preview);
             } else {
                 const dimension = Number(select(exportForm, "resolution").value);
                 if (![1600, 2400, 3200].includes(dimension))
                     throw new Error("Select an available image resolution.");
                 await mapSurface.exportFullMapPng(world.name, background,
                     dimension as 1600 | 2400 | 3200,
-                    input(exportForm, "grid").checked, input(exportForm, "labels").checked);
+                    input(exportForm, "grid").checked, input(exportForm, "labels").checked, preview);
             }
         });
     });

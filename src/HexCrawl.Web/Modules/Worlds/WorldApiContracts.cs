@@ -69,7 +69,8 @@ public sealed record OverworldContract(
     IReadOnlyList<LocationContract> Locations,
     IReadOnlyList<SourceMapContract> SourceMaps,
     PeriodicWorldTiling Tiling,
-    MapAppearance MapAppearance)
+    MapAppearance MapAppearance,
+    PlayerMapDisclosure PlayerMapDisclosure)
 {
     public static OverworldContract From(StoredOverworld world) => new(
         world.World.Id,
@@ -81,7 +82,8 @@ public sealed record OverworldContract(
         world.World.Locations.Select(LocationContract.From).ToArray(),
         world.World.SourceMaps.Select(SourceMapContract.From).ToArray(),
         world.World.SpatialTiling,
-        world.World.MapAppearance);
+        world.World.MapAppearance,
+        world.World.PlayerMapDisclosure);
 }
 
 public sealed record LocationMutationRequest(

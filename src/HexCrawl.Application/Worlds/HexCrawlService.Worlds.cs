@@ -66,6 +66,28 @@ public sealed partial class HexCrawlService
         return await SaveWorldAsync(updated, expectedVersion, cancellationToken);
     }
 
+    public async Task<StoredOverworld> UpdatePlayerMapDisclosureAsync(
+        Guid overworldId, string ownerUserId, PlayerMapDisclosure disclosure, long expectedVersion,
+        CancellationToken cancellationToken = default)
+    {
+        var current = await GetOverworldAsync(overworldId, ownerUserId, cancellationToken);
+        RequireVersion(expectedVersion, current.Version);
+        disclosure.Validate(current.World);
+        return await SaveWorldAsync(current with
+        {
+            World = current.World with { PlayerMapDisclosure = disclosure }
+        }, expectedVersion, cancellationToken);
+    }
+
+    public async Task<(StoredOverworld Stored, OverworldDefinition Preview,
+        IReadOnlyList<Guid> FeatureLabels, IReadOnlyList<Guid> LocationLabels)> GetPlayerMapPreviewAsync(
+            Guid overworldId, string ownerUserId, CancellationToken cancellationToken = default)
+    {
+        var stored = await GetOverworldAsync(overworldId, ownerUserId, cancellationToken);
+        var projected = PlayerMapProjection.Create(stored.World);
+        return (stored, projected.World, projected.FeatureLabelIds, projected.LocationLabelIds);
+    }
+
     public async Task<StoredOverworld> DeleteOverworldAsync(
         Guid overworldId,
         string ownerUserId,

@@ -24,6 +24,8 @@ export class CanvasMapRenderer {
     public terrainByCell = new Map<string, string>();
     public showGrid = true;
     public showLabels = true;
+    /** Null means GM view; a set restricts text to explicitly released object IDs. */
+    public labelAllowedSubjectIds: Set<string> | null = null;
     public expeditionPosition: WorldPoint | null = null;
     public discoveredSubjectIds = new Set<string>();
     public hiddenSourceMapIds = new Set<string>();
@@ -308,21 +310,25 @@ export class CanvasMapRenderer {
                 mapCategoryColor(world.mapAppearance, category, "label") ?? "#20251f");
         };
         for (const location of world.locations) {
+            if (this.labelAllowedSubjectIds && !this.labelAllowedSubjectIds.has(location.id)) continue;
             const point = this.toScreen(location.position, width, height);
             tryLabel(location.name, location.category, point.x + 11, point.y);
         }
         for (const feature of world.features) {
-            if (feature.kind !== "Point" || !feature.position) continue;
+            if (feature.kind !== "Point" || !feature.position
+                || this.labelAllowedSubjectIds && !this.labelAllowedSubjectIds.has(feature.id)) continue;
             const point = this.toScreen(feature.position, width, height);
             tryLabel(feature.name, feature.category, point.x + 10, point.y);
         }
         for (const feature of world.features) {
-            if (feature.kind !== "Line" || !feature.path?.length) continue;
+            if (feature.kind !== "Line" || !feature.path?.length
+                || this.labelAllowedSubjectIds && !this.labelAllowedSubjectIds.has(feature.id)) continue;
             const position = midpointOnPath(feature.path.map(point => this.toScreen(point, width, height)));
             if (position) tryLabel(feature.name, feature.category, position.x, position.y - 11, true);
         }
         for (const feature of world.features) {
-            if (feature.kind !== "Region" || !feature.boundary?.length) continue;
+            if (feature.kind !== "Region" || !feature.boundary?.length
+                || this.labelAllowedSubjectIds && !this.labelAllowedSubjectIds.has(feature.id)) continue;
             const position = polygonLabelPoint(feature.boundary.map(point => this.toScreen(point, width, height)));
             if (position) tryLabel(feature.name, feature.category, position.x, position.y, true);
         }

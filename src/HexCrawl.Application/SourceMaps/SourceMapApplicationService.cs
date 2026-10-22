@@ -134,7 +134,12 @@ public sealed partial class SourceMapApplicationService(IHexCrawlStore store)
         {
             World = current.World with
             {
-                SourceMaps = current.World.SourceMaps.Where(item => item.Id != sourceMapId).ToArray()
+                SourceMaps = current.World.SourceMaps.Where(item => item.Id != sourceMapId).ToArray(),
+                PlayerMapDisclosure = current.World.PlayerMapDisclosure with
+                {
+                    VisibleSourceMapIds = current.World.PlayerMapDisclosure.VisibleSourceMapIds
+                        .Where(id => id != sourceMapId).ToArray()
+                }
             }
         }, expectedVersion, cancellationToken);
         return new DeletedSourceMapResult(updated, existing);
@@ -150,7 +155,14 @@ public sealed partial class SourceMapApplicationService(IHexCrawlStore store)
         {
             World = current.World with
             {
-                SourceMaps = current.World.SourceMaps.Select(item => item.Id == sourceMapId ? replacement : item).ToArray()
+                SourceMaps = current.World.SourceMaps.Select(item => item.Id == sourceMapId ? replacement : item).ToArray(),
+                PlayerMapDisclosure = replacement.Role == SourceMapRole.Player
+                    ? current.World.PlayerMapDisclosure
+                    : current.World.PlayerMapDisclosure with
+                    {
+                        VisibleSourceMapIds = current.World.PlayerMapDisclosure.VisibleSourceMapIds
+                            .Where(id => id != sourceMapId).ToArray()
+                    }
             }
         }, expectedVersion, cancellationToken);
 

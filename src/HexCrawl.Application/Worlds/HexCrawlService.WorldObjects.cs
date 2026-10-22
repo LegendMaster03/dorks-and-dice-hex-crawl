@@ -74,7 +74,17 @@ public sealed partial class HexCrawlService
         await EnsureSemanticDeletionIsSafeAsync(current, cancellationToken);
         var updated = current with
         {
-            World = current.World with { Locations = current.World.Locations.Where(item => item.Id != locationId).ToArray() }
+            World = current.World with
+            {
+                Locations = current.World.Locations.Where(item => item.Id != locationId).ToArray(),
+                PlayerMapDisclosure = current.World.PlayerMapDisclosure with
+                {
+                    VisibleLocationIds = current.World.PlayerMapDisclosure.VisibleLocationIds
+                        .Where(id => id != locationId).ToArray(),
+                    VisibleLocationLabelIds = current.World.PlayerMapDisclosure.VisibleLocationLabelIds
+                        .Where(id => id != locationId).ToArray()
+                }
+            }
         };
         return await SaveWorldAsync(updated, expectedVersion, cancellationToken);
     }
@@ -189,7 +199,17 @@ public sealed partial class HexCrawlService
         await EnsureSemanticDeletionIsSafeAsync(current, cancellationToken);
         var updated = current with
         {
-            World = current.World with { Features = current.World.Features.Where(item => item.Id != featureId).ToArray() }
+            World = current.World with
+            {
+                Features = current.World.Features.Where(item => item.Id != featureId).ToArray(),
+                PlayerMapDisclosure = current.World.PlayerMapDisclosure with
+                {
+                    VisibleFeatureIds = current.World.PlayerMapDisclosure.VisibleFeatureIds
+                        .Where(id => id != featureId).ToArray(),
+                    VisibleFeatureLabelIds = current.World.PlayerMapDisclosure.VisibleFeatureLabelIds
+                        .Where(id => id != featureId).ToArray()
+                }
+            }
         };
         return await SaveWorldAsync(updated, expectedVersion, cancellationToken);
     }

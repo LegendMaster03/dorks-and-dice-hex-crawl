@@ -33,6 +33,8 @@ public sealed class WorldModule : IHexCrawlModule
         api.MapGet("/overworlds/{overworldId:guid}/cells/resolve", ResolveCellAsync);
         api.MapPut("/overworlds/{overworldId:guid}/name", RenameOverworldAsync);
         api.MapPut("/overworlds/{overworldId:guid}/appearance", UpdateMapAppearanceAsync);
+        api.MapPut("/overworlds/{overworldId:guid}/player-map-disclosure", UpdatePlayerMapDisclosureAsync);
+        api.MapGet("/overworlds/{overworldId:guid}/player-map-preview", GetPlayerMapPreviewAsync);
         api.MapDelete("/overworlds/{overworldId:guid}", DeleteOverworldAsync);
 
         api.MapPost("/overworlds/{overworldId:guid}/locations", CreateLocationAsync);
@@ -452,6 +454,32 @@ public sealed class WorldModule : IHexCrawlModule
         Results.Ok(OverworldContract.From(await service.UpdateMapAppearanceAsync(
             overworldId, UserId(context), request.Appearance, request.ExpectedVersion,
             cancellationToken)));
+
+    private sealed record PlayerMapDisclosureRequest(
+        HexCrawl.Domain.World.PlayerMapDisclosure Disclosure, long ExpectedVersion);
+
+    private static async Task<IResult> UpdatePlayerMapDisclosureAsync(
+        Guid overworldId, PlayerMapDisclosureRequest request,
+        HttpContext context, HexCrawlService service, CancellationToken cancellationToken) =>
+        Results.Ok(OverworldContract.From(await service.UpdatePlayerMapDisclosureAsync(
+            overworldId, UserId(context), request.Disclosure, request.ExpectedVersion, cancellationToken)));
+
+    // Owner-only export preview, deliberately not a player-facing map API.
+    private static async Task<IResult> GetPlayerMapPreviewAsync(
+        Guid overworldId, HttpContext context,
+        HexCrawlService service, CancellationToken cancellationToken)
+    {
+        var preview = await service.GetPlayerMapPreviewAsync(
+            overworldId, UserId(context), cancellationToken);
+        return Results.Ok(new
+        {
+            world = OverworldContract.From(preview.Stored with { World = preview.Preview }),
+            terrainAnnotations = preview.Preview.EnvironmentAnnotations,
+            featureLabelIds = preview.FeatureLabels,
+            locationLabelIds = preview.LocationLabels,
+            showGrid = preview.Stored.World.PlayerMapDisclosure.ShowGrid
+        });
+    }
 
     private static async Task<IResult> DeleteOverworldAsync(
         Guid overworldId,

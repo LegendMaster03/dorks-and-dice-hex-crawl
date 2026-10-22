@@ -3,7 +3,7 @@ import type { HexCrawlApi } from "./api";
 import { RenderLifecycle } from "./render-lifecycle";
 import { resolveLatestWorldCellSelection } from "./map-selection-policy";
 import type { EnvironmentAnnotation } from "./environment-types";
-import type { Overworld, WorldPoint, WorldCellGeometry } from "./types";
+import type { Overworld, WorldPoint, WorldCellGeometry, PlayerMapPreview } from "./types";
 import { Viewport } from "./viewport";
 
 export class MapSurface {
@@ -168,62 +168,70 @@ export class MapSurface {
 
     /** Apply existing authoritative cell terrain facts; never duplicate their semantics in styles. */
     public setTerrainAnnotations(annotations: readonly EnvironmentAnnotation[]): void {
-        const categories = new Map<string, Set<string>>();
-        for (const annotation of annotations) {
-            if (annotation.scope.kind !== "Cell" || !annotation.scope.cell) continue;
-            const key = JSON.stringify(annotation.scope.cell);
-            for (const fact of annotation.facts) {
-                if (fact.dimension.trim().toLowerCase() !== "terrain"
-                    || fact.valueKind !== "Tag" || !fact.tag?.trim()) continue;
-                if (!categories.has(key)) categories.set(key, new Set());
-                categories.get(key)!.add(fact.tag.trim().toLowerCase());
-            }
-        }
-        // Conflicting terrain declarations receive no arbitrary visual preference.
-        this.renderer.terrainByCell = new Map([...categories]
-            .filter(([, values]) => values.size === 1)
-            .map(([key, values]) => [key, [...values][0]]));
+        this.renderer.terrainByCell = terrainForDisplay(annotations);
         this.requestRender();
     }
 
     /** Export the currently visible map, including all loaded image layers. */
     public async exportViewportPng(
-        name: string, background: "light" | "dark" | "transparent"): Promise<void> {
+        name: string, background: "light" | "dark" | "transparent",
+        preview?: PlayerMapPreview): Promise<void> {
         if (this.disposed) throw new Error("The map editor is no longer active.");
-        const world = this.getWorld();
-        if (world?.tiling && this.api) {
-            const width = this.canvas.clientWidth;
-            const height = this.canvas.clientHeight;
-            if (!(width > 0 && height > 0))
-                throw new Error("The map canvas has no visible area to export.");
-            const corners = [
-                this.viewport.screenToWorld(0, 0, width, height),
-                this.viewport.screenToWorld(width, 0, width, height),
-                this.viewport.screenToWorld(width, height, width, height),
-                this.viewport.screenToWorld(0, height, width, height)
-            ];
-            // Query the exact viewport instead of trusting a pending or failed
-            // interactive cell fetch. Never download an incomplete empty grid.
-            const cells = await this.api.listVisibleCells(world.id, {
-                minX: Math.min(...corners.map(point => point.x)),
-                minY: Math.min(...corners.map(point => point.y)),
-                maxX: Math.max(...corners.map(point => point.x)),
-                maxY: Math.max(...corners.map(point => point.y))
-            });
-            if (this.getWorld()?.id !== world.id || this.getWorld()?.tiling.revision !== world.tiling.revision)
-                throw new Error("The map changed during export. Reload and try again.");
+        const world = preview?.world ?? this.getWorld();
+        if (!world || !this.api) throw new Error("A saved map is required for export.");
+        const width = this.canvas.clientWidth;
+        const height = this.canvas.clientHeight;
+        if (!(width > 0 && height > 0))
+            throw new Error("The map canvas has no visible area to export.");
+        const corners = [
+            this.viewport.screenToWorld(0, 0, width, height),
+            this.viewport.screenToWorld(width, 0, width, height),
+            this.viewport.screenToWorld(width, height, width, height),
+            this.viewport.screenToWorld(0, height, width, height)
+        ];
+        const cells = await this.api.listVisibleCells(world.id, {
+            minX: Math.min(...corners.map(point => point.x)),
+            minY: Math.min(...corners.map(point => point.y)),
+            maxX: Math.max(...corners.map(point => point.x)),
+            maxY: Math.max(...corners.map(point => point.y))
+        });
+        if (this.getWorld()?.version !== world.version)
+            throw new Error("The map changed during export. Reload and try again.");
+        if (!preview) {
             this.renderer.visibleWorldCells = cells;
+            await this.renderer.waitForSourceMaps();
+            this.renderer.render();
+            await this.downloadPng(this.canvas, name, background);
+            return;
         }
-        await this.renderer.waitForSourceMaps();
-        this.renderer.render();
-        await this.downloadPng(this.canvas, name, background);
+        const canvas = document.createElement("canvas");
+        canvas.width = this.canvas.width;
+        canvas.height = this.canvas.height;
+        const viewport = new Viewport();
+        viewport.center = { ...this.viewport.center };
+        viewport.zoom = this.viewport.zoom * canvas.width / width;
+        const renderer = new CanvasMapRenderer(canvas, viewport, () => world, () => {}, true);
+        renderer.visibleWorldCells = cells;
+        renderer.terrainByCell = terrainForDisplay(preview.terrainAnnotations);
+        renderer.showGrid = preview.showGrid;
+        renderer.labelAllowedSubjectIds = new Set([...preview.featureLabelIds, ...preview.locationLabelIds]);
+        try {
+            await renderer.waitForSourceMaps();
+            if (this.disposed || this.getWorld()?.version !== world.version)
+                throw new Error("The map changed during export. Reload and try again.");
+            renderer.render();
+            await this.downloadPng(canvas, name + "-players", background);
+        } finally {
+            renderer.dispose();
+        }
     }
 
     /** Export a bounded world independently of current pan, zoom, or monitor size. */
     public async exportFullMapPng(
         name: string, background: "light" | "dark" | "transparent",
-        maxDimension: 1600 | 2400 | 3200, includeGrid: boolean, includeLabels: boolean): Promise<void> {
-        const world = this.getWorld();
+        maxDimension: 1600 | 2400 | 3200, includeGrid: boolean, includeLabels: boolean,
+        preview?: PlayerMapPreview): Promise<void> {
+        const world = preview?.world ?? this.getWorld();
         if (this.disposed || !world || !this.api)
             throw new Error("The map editor is no longer active.");
         if (!world.tiling.playableBounds)
@@ -270,15 +278,21 @@ export class MapSurface {
         canvas.height = imageHeight;
         const renderer = new CanvasMapRenderer(canvas, viewport, () => world, () => {}, true);
         renderer.visibleWorldCells = cells;
-        renderer.terrainByCell = new Map(this.renderer.terrainByCell);
-        renderer.hiddenSourceMapIds = new Set(this.renderer.hiddenSourceMapIds);
-        renderer.showGrid = includeGrid;
+        renderer.terrainByCell = preview ? terrainForDisplay(preview.terrainAnnotations)
+            : new Map(this.renderer.terrainByCell);
+        renderer.hiddenSourceMapIds = preview ? new Set() : new Set(this.renderer.hiddenSourceMapIds);
+        renderer.showGrid = includeGrid && (preview?.showGrid ?? true);
         renderer.showLabels = includeLabels;
+        if (preview)
+            renderer.labelAllowedSubjectIds = new Set([
+                ...preview.featureLabelIds, ...preview.locationLabelIds
+            ]);
         try {
             await renderer.waitForSourceMaps();
-            if (this.disposed) throw new Error("The map editor was closed during export.");
+            if (this.disposed || this.getWorld()?.version !== world.version)
+                throw new Error("The map changed during export. Reload and try again.");
             renderer.render();
-            await this.downloadPng(canvas, name, background);
+            await this.downloadPng(canvas, preview ? name + "-players" : name, background);
         } finally {
             renderer.dispose();
         }
@@ -518,4 +532,21 @@ export class MapSurface {
         }
         this.canvas.setAttribute("aria-label", parts.join(". "));
     }
+}
+/** Conflicting terrain tags remain uncolored rather than guessing at DM facts. */
+function terrainForDisplay(annotations: readonly EnvironmentAnnotation[]): Map<string, string> {
+    const categories = new Map<string, Set<string>>();
+    for (const annotation of annotations) {
+        if (annotation.scope.kind !== "Cell" || !annotation.scope.cell) continue;
+        const key = JSON.stringify(annotation.scope.cell);
+        for (const fact of annotation.facts) {
+            if (fact.dimension.trim().toLowerCase() !== "terrain"
+                || fact.valueKind !== "Tag" || !fact.tag?.trim()) continue;
+            if (!categories.has(key)) categories.set(key, new Set());
+            categories.get(key)!.add(fact.tag.trim().toLowerCase());
+        }
+    }
+    return new Map([...categories]
+        .filter(([, values]) => values.size === 1)
+        .map(([key, values]) => [key, [...values][0]]));
 }
