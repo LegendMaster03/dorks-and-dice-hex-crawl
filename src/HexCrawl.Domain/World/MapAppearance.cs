@@ -10,6 +10,8 @@ public sealed record MapAppearance
         new Dictionary<string, string>();
     public IReadOnlyDictionary<string, string> FeatureColors { get; init; } =
         new Dictionary<string, string>();
+    public IReadOnlyDictionary<string, string> LabelColors { get; init; } =
+        new Dictionary<string, string>();
 
     public MapAppearance NormalizeAndValidate()
     {
@@ -38,7 +40,8 @@ public sealed record MapAppearance
         return this with
         {
             TerrainColors = Normalize(TerrainColors, "Terrain palette"),
-            FeatureColors = Normalize(FeatureColors, "Feature palette")
+            FeatureColors = Normalize(FeatureColors, "Feature palette"),
+            LabelColors = Normalize(LabelColors, "Label palette")
         };
     }
 }

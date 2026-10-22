@@ -2,6 +2,7 @@
 export type MapAppearance = {
     terrainColors: Record<string, string>;
     featureColors: Record<string, string>;
+    labelColors?: Record<string, string>;
 };
 
 export const defaultTerrainColors: Readonly<Record<string, string>> = {
@@ -29,12 +30,14 @@ export const defaultFeatureColors: Readonly<Record<string, string>> = {
 export function mapCategoryColor(
     appearance: MapAppearance | undefined,
     category: string,
-    kind: "terrain" | "feature"): string | null {
+    kind: "terrain" | "feature" | "label"): string | null {
     const key = category.trim().toLowerCase();
     if (!key) return null;
-    const custom = kind === "terrain" ? appearance?.terrainColors : appearance?.featureColors;
+    const custom = kind === "terrain" ? appearance?.terrainColors
+        : kind === "feature" ? appearance?.featureColors : appearance?.labelColors;
     const candidate = Object.entries(custom ?? {})
         .find(([name]) => name.trim().toLowerCase() === key)?.[1]
-        ?? (kind === "terrain" ? defaultTerrainColors : defaultFeatureColors)[key];
+        ?? (kind === "terrain" ? defaultTerrainColors
+            : kind === "feature" ? defaultFeatureColors : {})[key];
     return candidate && /^#[0-9a-fA-F]{6}$/.test(candidate) ? candidate : null;
 }

@@ -195,6 +195,23 @@ export class HexCrawlApi {
             "Visible world cells");
     }
 
+    public getBoundedExportCells(worldId: string, expectedVersion: number, offset: number, limit = 500): Promise<{
+        bounds: { minX: number; minY: number; maxX: number; maxY: number };
+        totalCells: number;
+        offset: number;
+        worldVersion: number;
+        tilingId: string;
+        tilingRevision: number;
+        cells: WorldCellGeometry[];
+    }> {
+        const params = new URLSearchParams({
+            expectedVersion: String(expectedVersion), offset: String(offset), limit: String(limit)
+        });
+        return this.getJson(
+            `/api/overworlds/${encodeURIComponent(worldId)}/cells/export?${params}`,
+            "Full map geometry");
+    }
+
     public resolveWorldCell(worldId: string, cell: WorldCellId): Promise<WorldCellGeometry> {
         const params = new URLSearchParams({
             motifCellId: cell.address.motifCellId,

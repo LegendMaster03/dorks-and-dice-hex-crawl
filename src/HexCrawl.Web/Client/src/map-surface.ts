@@ -186,20 +186,118 @@ export class MapSurface {
         this.requestRender();
     }
 
-    /** Capture the current authoritative map viewport with a readable PNG background. */
-    public async exportViewportPng(name: string, background: "light" | "dark" | "transparent"): Promise<void> {
+    /** Export the currently visible map, including all loaded image layers. */
+    public async exportViewportPng(
+        name: string, background: "light" | "dark" | "transparent"): Promise<void> {
         if (this.disposed) throw new Error("The map editor is no longer active.");
+        const world = this.getWorld();
+        if (world?.tiling && this.api) {
+            const width = this.canvas.clientWidth;
+            const height = this.canvas.clientHeight;
+            if (!(width > 0 && height > 0))
+                throw new Error("The map canvas has no visible area to export.");
+            const corners = [
+                this.viewport.screenToWorld(0, 0, width, height),
+                this.viewport.screenToWorld(width, 0, width, height),
+                this.viewport.screenToWorld(width, height, width, height),
+                this.viewport.screenToWorld(0, height, width, height)
+            ];
+            // Query the exact viewport instead of trusting a pending or failed
+            // interactive cell fetch. Never download an incomplete empty grid.
+            const cells = await this.api.listVisibleCells(world.id, {
+                minX: Math.min(...corners.map(point => point.x)),
+                minY: Math.min(...corners.map(point => point.y)),
+                maxX: Math.max(...corners.map(point => point.x)),
+                maxY: Math.max(...corners.map(point => point.y))
+            });
+            if (this.getWorld()?.id !== world.id || this.getWorld()?.tiling.revision !== world.tiling.revision)
+                throw new Error("The map changed during export. Reload and try again.");
+            this.renderer.visibleWorldCells = cells;
+        }
+        await this.renderer.waitForSourceMaps();
         this.renderer.render();
+        await this.downloadPng(this.canvas, name, background);
+    }
+
+    /** Export a bounded world independently of current pan, zoom, or monitor size. */
+    public async exportFullMapPng(
+        name: string, background: "light" | "dark" | "transparent",
+        maxDimension: 1600 | 2400 | 3200, includeGrid: boolean, includeLabels: boolean): Promise<void> {
+        const world = this.getWorld();
+        if (this.disposed || !world || !this.api)
+            throw new Error("The map editor is no longer active.");
+        if (!world.tiling.playableBounds)
+            throw new Error("This world has no finite map bounds. Export the visible area instead.");
+        const unaligned = world.sourceMaps.filter(map =>
+            !this.renderer.hiddenSourceMapIds.has(map.id)
+            && map.alignment?.kind !== "Affine");
+        if (unaligned.length)
+            throw new Error(`Align or hide these source images before full-map export: ${unaligned.map(map => map.name).join(", ")}.`);
+
+        const cells: WorldCellGeometry[] = [];
+        let bounds: { minX: number; minY: number; maxX: number; maxY: number } | null = null;
+        let total = 0;
+        do {
+            const page = await this.api.getBoundedExportCells(world.id, world.version, cells.length);
+            if (page.tilingId !== world.tiling.id || page.tilingRevision !== world.tiling.revision
+                || page.offset !== cells.length || !page.bounds || (cells.length && total !== page.totalCells))
+                throw new Error("The map geometry changed during export. Reload and try again.");
+            total = page.totalCells;
+            bounds = page.bounds;
+            if (!page.cells.length || total > 20000 || cells.length + page.cells.length > total)
+                throw new Error("The map exporter received incomplete geometry.");
+            cells.push(...page.cells);
+        } while (cells.length < total);
+
+        if (!bounds || ![bounds.minX, bounds.minY, bounds.maxX, bounds.maxY].every(Number.isFinite))
+            throw new Error("The map has no finite export envelope.");
+        const dx = bounds.maxX - bounds.minX;
+        const dy = bounds.maxY - bounds.minY;
+        if (!(dx > 0 && dy > 0)) throw new Error("The map export envelope is empty.");
+        const pad = 0.035;
+        const aspect = dx / dy;
+        const imageWidth = Math.max(1, Math.round(maxDimension * Math.min(1, aspect)));
+        const imageHeight = Math.max(1, Math.round(maxDimension / Math.max(1, aspect)));
+        const viewport = new Viewport();
+        viewport.center = { x: (bounds.minX + bounds.maxX) / 2, y: (bounds.minY + bounds.maxY) / 2 };
+        viewport.zoom = Math.min(imageWidth / (dx * (1 + 2 * pad)),
+            imageHeight / (dy * (1 + 2 * pad)));
+        if (!Number.isFinite(viewport.zoom) || viewport.zoom <= 0)
+            throw new Error("The map geometry exceeds the exportable coordinate range.");
+
+        const canvas = document.createElement("canvas");
+        canvas.width = imageWidth;
+        canvas.height = imageHeight;
+        const renderer = new CanvasMapRenderer(canvas, viewport, () => world, () => {}, true);
+        renderer.visibleWorldCells = cells;
+        renderer.terrainByCell = new Map(this.renderer.terrainByCell);
+        renderer.hiddenSourceMapIds = new Set(this.renderer.hiddenSourceMapIds);
+        renderer.showGrid = includeGrid;
+        renderer.showLabels = includeLabels;
+        try {
+            await renderer.waitForSourceMaps();
+            if (this.disposed) throw new Error("The map editor was closed during export.");
+            renderer.render();
+            await this.downloadPng(canvas, name, background);
+        } finally {
+            renderer.dispose();
+        }
+    }
+
+    private async downloadPng(
+        source: HTMLCanvasElement, name: string,
+        background: "light" | "dark" | "transparent"): Promise<void> {
         const target = document.createElement("canvas");
-        target.width = this.canvas.width;
-        target.height = this.canvas.height;
+        target.width = source.width;
+        target.height = source.height;
+        if (!target.width || !target.height) throw new Error("The map has no drawable area.");
         const context = target.getContext("2d");
         if (!context) throw new Error("The browser does not support exporting this map.");
         if (background !== "transparent") {
             context.fillStyle = background === "light" ? "#FFFFFF" : "#202020";
             context.fillRect(0, 0, target.width, target.height);
         }
-        context.drawImage(this.canvas, 0, 0);
+        context.drawImage(source, 0, 0);
         const blob = await new Promise<Blob | null>(resolve => target.toBlob(resolve, "image/png"));
         if (!blob) throw new Error("The browser could not encode the map PNG.");
         const url = URL.createObjectURL(blob);

@@ -28,6 +28,7 @@ public sealed class WorldModule : IHexCrawlModule
         api.MapGet("/overworlds/{overworldId:guid}/cell-procedures/compatibility", AssessCellProcedureAsync);
         api.MapGet("/overworlds/{overworldId:guid}", GetOverworldAsync);
         api.MapGet("/overworlds/{overworldId:guid}/cells/viewport", GetVisibleCellsAsync);
+        api.MapGet("/overworlds/{overworldId:guid}/cells/export", GetBoundedExportCellsAsync);
         api.MapGet("/overworlds/{overworldId:guid}/cells/containing", GetContainingCellsAsync);
         api.MapGet("/overworlds/{overworldId:guid}/cells/resolve", ResolveCellAsync);
         api.MapPut("/overworlds/{overworldId:guid}/name", RenameOverworldAsync);
@@ -343,6 +344,52 @@ public sealed class WorldModule : IHexCrawlModule
         // Hard cap on candidate enumeration, not merely on response length.
         return Results.Ok(world.World.SpatialTiling.Intersecting(bounds, limit: 2500)
             .Where(world.World.SpatialTiling.IsPlayable).ToArray());
+    }
+
+    // Full-map geometry is derived from the same verified tiling as the live viewport.
+    // Pagination never infers tile shape, and enforces a finite work budget.
+    private static async Task<IResult> GetBoundedExportCellsAsync(
+        Guid overworldId, long expectedVersion, int offset, int limit,
+        HttpContext context, HexCrawlService service, CancellationToken cancellationToken)
+    {
+        var stored = await service.GetOverworldAsync(overworldId, UserId(context), cancellationToken);
+        if (stored.Version != expectedVersion)
+            throw new HexCrawlConcurrencyException("The map changed during export. Reload and try again.");
+        var tiling = stored.World.SpatialTiling;
+        if (tiling.PlayableBounds is not { } bounds)
+            throw new ArgumentException("A full-map export requires finite map bounds. Export the visible area instead.");
+        const int maxCells = 20000;
+        const int pageSize = 500;
+        var motif = tiling.Topology.MotifCells;
+        var count = checked((long)bounds.Width * bounds.Height * motif.Count);
+        if (count <= 0 || count > maxCells)
+            throw new ArgumentException($"Full-map export supports at most {maxCells} cells. Export a visible area instead.");
+        if (offset < 0 || offset > count || limit is < 1 or > pageSize)
+            throw new ArgumentOutOfRangeException(nameof(offset), "Invalid export page parameters.");
+
+        var cells = new List<HexCrawl.Domain.Spatial.WorldCellGeometry>();
+        for (long i = offset; i < Math.Min(count, (long)offset + limit); i++)
+        {
+            var index = (int)(i % motif.Count);
+            var tileIndex = i / motif.Count;
+            var v = tileIndex % bounds.Height;
+            var u = tileIndex / bounds.Height;
+            var address = new HexCrawl.Domain.Spatial.PeriodicCellAddress(
+                motif[index].Id,
+                new HexCrawl.Domain.Spatial.LatticeDisplacement(
+                    bounds.MinU + u, bounds.MinV + v));
+            cells.Add(tiling.Resolve(address));
+        }
+        return Results.Ok(new
+        {
+            bounds = tiling.PlayableEnvelope(),
+            totalCells = (int)count,
+            offset,
+            worldVersion = stored.Version,
+            tilingId = tiling.Id,
+            tilingRevision = tiling.Revision,
+            cells
+        });
     }
 
     private static async Task<IResult> GetContainingCellsAsync(

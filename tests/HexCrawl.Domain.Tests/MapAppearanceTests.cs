@@ -10,11 +10,13 @@ public sealed class MapAppearanceTests
         var appearance = new MapAppearance
         {
             TerrainColors = new Dictionary<string, string> { [" Forest "] = "#a0c099" },
-            FeatureColors = new Dictionary<string, string> { ["River"] = "#123abc" }
+            FeatureColors = new Dictionary<string, string> { ["River"] = "#123abc" },
+            LabelColors = new Dictionary<string, string> { ["Town"] = "#0a1b2c" }
         }.NormalizeAndValidate();
 
         Assert.Equal("#A0C099", appearance.TerrainColors["forest"]);
         Assert.Equal("#123ABC", appearance.FeatureColors["river"]);
+        Assert.Equal("#0A1B2C", appearance.LabelColors["town"]);
         Assert.Single(appearance.TerrainColors);
     }
 

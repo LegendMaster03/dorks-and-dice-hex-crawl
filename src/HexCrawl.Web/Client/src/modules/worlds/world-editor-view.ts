@@ -43,13 +43,27 @@ export async function renderWorldEditor(
         <section class="hc-page hc-workspace hc-world-editor">
             <header class="hc-page-header">
                 <div><span class="hc-sheet-kicker">Map preparation</span><h1 data-title></h1><p>World map editor · source maps, locations, and features.</p></div>
-                <nav class="hc-button-row"><button type="button" data-worlds>All overworlds</button><button type="button" data-reset-view>Reset map view</button><label>PNG background <select data-export-background><option value="light">Light</option><option value="dark">Dark</option><option value="transparent">Transparent</option></select></label><button type="button" data-export-map>Export visible area (PNG)</button><span data-guidance-controls></span></nav>
+                <nav class="hc-button-row"><button type="button" data-worlds>All overworlds</button><button type="button" data-reset-view>Reset map view</button><span data-guidance-controls></span></nav>
             </header>
             <div class="hc-error" data-error hidden role="alert"></div>
             <div class="hc-workspace-grid">
                 <section class="hc-map-panel" aria-label="Overworld map">
                     <div class="hc-map-host" data-map></div>
                     <p class="hc-hint" data-map-hint>Click to select or author map content; drag to pan; wheel to zoom. The focused map also supports keyboard pan, zoom, and center-point selection.</p>
+                    <details><summary>Export map as PNG</summary>
+                        <form class="hc-form" data-export-form>
+                            <label>Export area <select name="scope">
+                                <option value="visible">Export visible area (PNG)</option>
+                                <option value="full">Full bounded map</option>
+                            </select></label>
+                            <label>Background <select name="background"><option value="light">Light</option><option value="dark">Dark</option><option value="transparent">Transparent</option></select></label>
+                            <label data-full-export-size>Maximum image dimension <select name="resolution"><option value="1600">1600 px</option><option value="2400" selected>2400 px</option><option value="3200">3200 px</option></select></label>
+                            <label><input name="grid" type="checkbox" checked> Draw tile grid (full-map export)</label>
+                            <label><input name="labels" type="checkbox" checked> Draw labels (full-map export)</label>
+                            <button type="submit" class="hc-primary-action" data-export-map>Export PNG</button>
+                            <p class="hc-hint">Full-map export uses finite map boundaries rather than the current view. Unbounded worlds can export only the visible area. Exports contain GM-authored information; do not share them with players if they include secrets.</p>
+                        </form>
+                    </details>
                 </section>
                 <aside class="hc-sidebar" aria-label="Overworld authoring controls">
                     <details open class="hc-selected-cell-panel" data-selected-cell-panel><summary>Selected cell</summary>
@@ -67,7 +81,7 @@ export async function renderWorldEditor(
                         <p class="hc-hint">Category colors are visual preferences only. Terrain and feature rules are unchanged.</p>
                         <div data-map-palette></div>
                         <form class="hc-form" data-palette-form>
-                            <label>Layer <select name="layer"><option value="terrain">Tile terrain</option><option value="feature">Feature lines, points, and regions</option></select></label>
+                            <label>Layer <select name="layer"><option value="terrain">Tile terrain</option><option value="feature">Feature lines, points, and regions</option><option value="label">Text labels</option></select></label>
                             <label>Category <input name="category" placeholder="forest, river, urban..." required maxlength="80"></label>
                             <label>Color <input name="color" type="color" value="#538a55" required></label>
                             <button type="submit">Set category color</button>
@@ -118,6 +132,7 @@ export async function renderWorldEditor(
     const locationForm = required<HTMLFormElement>(root, "[data-location-form]");
     const featureForm = required<HTMLFormElement>(root, "[data-feature-form]");
     const paletteForm = required<HTMLFormElement>(root, "[data-palette-form]");
+    const exportForm = required<HTMLFormElement>(root, "[data-export-form]");
      const draftLabel = required<HTMLElement>(root, "[data-draft]");
     required<HTMLElement>(root, "[data-guidance-controls]").append(guidancePreferenceButton(root));
     const selectedCellEmpty = required<HTMLElement>(root, "[data-selected-cell-empty]");
@@ -198,9 +213,10 @@ export async function renderWorldEditor(
     const renderPalette = (): void => {
         const host = required<HTMLElement>(root, "[data-map-palette]");
         host.replaceChildren();
-        for (const layer of ["terrain", "feature"] as const) {
-            const palette = layer === "terrain" ? defaultTerrainColors : defaultFeatureColors;
-            const overrides = layer === "terrain" ? world.mapAppearance?.terrainColors : world.mapAppearance?.featureColors;
+        for (const layer of ["terrain", "feature", "label"] as const) {
+            const palette = layer === "terrain" ? defaultTerrainColors : layer === "feature" ? defaultFeatureColors : {};
+            const overrides = layer === "terrain" ? world.mapAppearance?.terrainColors
+                : layer === "feature" ? world.mapAppearance?.featureColors : world.mapAppearance?.labelColors;
             const categories = new Set([...Object.keys(palette), ...Object.keys(overrides ?? {})]);
             if (layer === "terrain") {
                 for (const annotation of worldEnvironment.annotations) {
@@ -211,9 +227,12 @@ export async function renderWorldEditor(
                 }
             } else {
                 for (const feature of world.features) categories.add(feature.category.toLowerCase());
+                if (layer === "label")
+                    for (const location of world.locations) categories.add(location.category.toLowerCase());
             }
             const title = document.createElement("strong");
-            title.textContent = layer === "terrain" ? "Tile terrain" : "Feature categories";
+            title.textContent = layer === "terrain" ? "Tile terrain"
+                : layer === "feature" ? "Feature categories" : "Feature and location labels";
             host.append(title);
             for (const category of [...categories].sort()) {
                 const row = document.createElement("div");
@@ -234,7 +253,7 @@ export async function renderWorldEditor(
                 edit.addEventListener("click", () => {
                     select(paletteForm, "layer").value = layer;
                     input(paletteForm, "category").value = category;
-                    input(paletteForm, "color").value = color ?? "#808080";
+                    input(paletteForm, "color").value = color ?? "#20251f";
                     input(paletteForm, "category").focus();
                 });
                 row.append(edit);
@@ -244,7 +263,8 @@ export async function renderWorldEditor(
                     reset.textContent = "Reset";
                     reset.addEventListener("click", () => void run(null, async () => {
                         const appearance = currentAppearance();
-                        const key = layer === "terrain" ? "terrainColors" : "featureColors";
+                        const key = layer === "terrain" ? "terrainColors"
+                            : layer === "feature" ? "featureColors" : "labelColors";
                         const existing = { ...appearance[key] };
                         for (const name of Object.keys(existing))
                             if (name.toLowerCase() === category) delete existing[name];
@@ -261,7 +281,8 @@ export async function renderWorldEditor(
 
     const currentAppearance = (): MapAppearance => ({
         terrainColors: { ...world.mapAppearance?.terrainColors },
-        featureColors: { ...world.mapAppearance?.featureColors }
+        featureColors: { ...world.mapAppearance?.featureColors },
+        labelColors: { ...world.mapAppearance?.labelColors }
     });
 
     const renderFeatures = (): void => {
@@ -636,12 +657,31 @@ export async function renderWorldEditor(
     });
 
     required<HTMLButtonElement>(root, "[data-worlds]").addEventListener("click", () => navigate("/worlds"));
-    required<HTMLButtonElement>(root, "[data-export-map]").addEventListener("click", () =>
-        void run(null, async () => {
-            const background = required<HTMLSelectElement>(root, "[data-export-background]").value as
+    exportForm.addEventListener("submit", event => {
+        event.preventDefault();
+        void run(exportForm, async () => {
+            const scope = select(exportForm, "scope").value;
+            const background = select(exportForm, "background").value as
                 "light" | "dark" | "transparent";
-            await mapSurface.exportViewportPng(world.name, background);
-        }));
+            if (scope === "visible") {
+                await mapSurface.exportViewportPng(world.name, background);
+            } else {
+                const dimension = Number(select(exportForm, "resolution").value);
+                if (![1600, 2400, 3200].includes(dimension))
+                    throw new Error("Select an available image resolution.");
+                await mapSurface.exportFullMapPng(world.name, background,
+                    dimension as 1600 | 2400 | 3200,
+                    input(exportForm, "grid").checked, input(exportForm, "labels").checked);
+            }
+        });
+    });
+    select(exportForm, "scope").addEventListener("change", () => {
+        required<HTMLElement>(exportForm, "[data-full-export-size]").hidden =
+            select(exportForm, "scope").value !== "full";
+    });
+    required<HTMLElement>(exportForm, "[data-full-export-size]").hidden = true;
+    select(exportForm, "scope").querySelector<HTMLOptionElement>('option[value="full"]')!.disabled =
+        !world.tiling.playableBounds;
     paletteForm.addEventListener("submit", event => {
         event.preventDefault();
         void run(paletteForm, async () => {
@@ -651,7 +691,8 @@ export async function renderWorldEditor(
             if (!/^[\p{L}\p{N}_ .:\/-]{1,80}$/u.test(category))
                 throw new Error("Category names must contain 1–80 letters, numbers, spaces, or _ . : / -.");
             if (!/^#[0-9A-F]{6}$/.test(color)) throw new Error("Choose a six-digit hex color.");
-            const key = layer === "terrain" ? "terrainColors" : "featureColors";
+            const key = layer === "terrain" ? "terrainColors"
+                            : layer === "feature" ? "featureColors" : "labelColors";
             const appearance = currentAppearance();
             applyWorld(await api.updateMapAppearance(world.id, {
                 ...appearance,
