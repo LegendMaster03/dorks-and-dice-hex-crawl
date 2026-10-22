@@ -65,6 +65,12 @@ public sealed class MapExportEndpointsTests
             using var stale = await client.GetAsync(
                 $"/api/overworlds/{id:D}/cells/export?expectedVersion={version}&offset=0&limit=7");
             Assert.Equal(HttpStatusCode.Conflict, stale.StatusCode);
+            using var staleViewport = await client.GetAsync(
+                $"/api/overworlds/{id:D}/cells/viewport?minX=-5&minY=-5&maxX=5&maxY=5&expectedVersion={version}");
+            Assert.Equal(HttpStatusCode.Conflict, staleViewport.StatusCode);
+            using var currentViewport = await client.GetAsync(
+                $"/api/overworlds/{id:D}/cells/viewport?minX=-5&minY=-5&maxX=5&maxY=5");
+            currentViewport.EnsureSuccessStatusCode();
 
             using var otherHost = TestWebHost.Create(database, "bob");
             using var other = otherHost.CreateClient();

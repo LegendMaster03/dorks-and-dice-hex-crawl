@@ -185,13 +185,15 @@ export class HexCrawlApi {
 
     public listVisibleCells(
         worldId: string,
-        bounds: { minX: number; minY: number; maxX: number; maxY: number }): Promise<WorldCellGeometry[]> {
+        bounds: { minX: number; minY: number; maxX: number; maxY: number },
+        expectedVersion?: number): Promise<WorldCellGeometry[]> {
         const params = new URLSearchParams({
             minX: String(bounds.minX),
             minY: String(bounds.minY),
             maxX: String(bounds.maxX),
             maxY: String(bounds.maxY)
         });
+        if (expectedVersion !== undefined) params.set("expectedVersion", String(expectedVersion));
         return this.getJson(
             `/api/overworlds/${encodeURIComponent(worldId)}/cells/viewport?${params}`,
             "Visible world cells");

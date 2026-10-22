@@ -62,6 +62,33 @@ test("named points, lines and regions are rendered; geometry validates before re
     assert.match(renderer, /polygonLabelPoint\(feature\.boundary/);
     assert.match(view, /draft\.length < 2/);
     assert.match(view, /draft\.length < 3/);
-    assert.match(view, /A line requires at least two points/);
+    assert.match(view, /A line requires at least two distinct positions/);
     assert.match(view, /A region requires at least three points/);
+});
+
+test("terrain color fills render when the map grid is hidden", () => {
+    const renderer = read("canvas-renderer.ts");
+    assert.match(renderer, /this\.drawGrid\(ctx, world, width, height\)/);
+    assert.doesNotMatch(renderer, /if \(this\.showGrid\) this\.drawGrid/);
+    assert.match(renderer, /if \(this\.showGrid\) ctx\.stroke\(\)/);
+    assert.match(renderer, /ctx\.fill\(\)/);
+});
+
+test("dark export changes contrast but never leaves temporary editor visuals in the PNG", () => {
+    const renderer = read("canvas-renderer.ts");
+    const surface = read("map-surface.ts");
+    assert.match(renderer, /backgroundTheme === "dark"/);
+    assert.match(surface, /this\.renderer\.authoringGeometry = null/);
+    assert.match(surface, /this\.renderer\.registrationPreview = null/);
+    assert.match(surface, /this\.renderer\.backgroundTheme = originalTheme/);
+    assert.match(surface, /renderer\.backgroundTheme = background/);
+});
+
+test("geometry authoring displays unsaved draft vertices and disables incomplete saves", () => {
+    const renderer = read("canvas-renderer.ts");
+    const view = read("modules/worlds/world-editor-view.ts");
+    assert.match(renderer, /drawAuthoringGeometry\(ctx, width, height\)/);
+    assert.match(view, /mapSurface\.renderer\.authoringGeometry/);
+    assert.match(view, /saveButton\.disabled = !geometryReady/);
+    assert.match(view, /if \(kind !== "Point"\) draft = \[\]/);
 });

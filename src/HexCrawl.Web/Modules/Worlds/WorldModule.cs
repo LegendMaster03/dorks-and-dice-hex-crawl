@@ -323,6 +323,7 @@ public sealed class WorldModule : IHexCrawlModule
         double minY,
         double maxX,
         double maxY,
+        long? expectedVersion,
         HttpContext context,
         HexCrawlService service,
         CancellationToken cancellationToken)
@@ -330,6 +331,8 @@ public sealed class WorldModule : IHexCrawlModule
         var bounds = new HexCrawl.Domain.Spatial.WorldBounds(minX, minY, maxX, maxY);
         bounds.Validate();
         var world = await service.GetOverworldAsync(overworldId, UserId(context), cancellationToken);
+        if (expectedVersion is { } pinned && pinned != world.Version)
+            throw new HexCrawlConcurrencyException("The map changed during export. Reload and try again.");
         // Clamp the search *before* candidate enumeration. A large viewport
         // cannot make an otherwise small bounded map exceed the enumeration cap.
         if (world.World.SpatialTiling.PlayableEnvelope() is { } envelope)

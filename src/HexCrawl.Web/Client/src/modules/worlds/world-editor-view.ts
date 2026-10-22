@@ -423,10 +423,8 @@ export async function renderWorldEditor(
         input(featureForm, "name").value = feature.name;
         input(featureForm, "category").value = feature.category;
         select(featureForm, "kind").value = feature.kind;
-        if (feature.position) {
-            input(featureForm, "x").value = String(feature.position.x);
-            input(featureForm, "y").value = String(feature.position.y);
-        }
+        input(featureForm, "x").value = feature.position ? String(feature.position.x) : "";
+        input(featureForm, "y").value = feature.position ? String(feature.position.y) : "";
         draft = feature.kind === "Line" ? [...(feature.path ?? [])] : feature.kind === "Region" ? [...(feature.boundary ?? [])] : [];
         updatePointFieldVisibility();
         updateDraftLabel();
@@ -447,10 +445,41 @@ export async function renderWorldEditor(
     };
 
     const updateDraftLabel = (): void => {
-        const kind = select(featureForm, "kind").value;
+        const kind = select(featureForm, "kind").value as "Point" | "Line" | "Region";
+        const xText = input(featureForm, "x").value.trim();
+        const yText = input(featureForm, "y").value.trim();
+        const point = kind === "Point" && xText && yText
+            && Number.isFinite(Number(xText)) && Number.isFinite(Number(yText))
+            ? { x: Number(xText), y: Number(yText) } : null;
+        const enclosedArea = draft.length >= 3 ? Math.abs(draft.reduce((sum, vertex, index) => {
+            const next = draft[(index + 1) % draft.length];
+            return sum + vertex.x * next.y - next.x * vertex.y;
+        }, 0)) : 0;
+        const geometryReady = kind === "Point"
+            ? point !== null
+            : kind === "Line"
+                ? draft.length >= 2 && draft.some((vertex, index) =>
+                    index > 0 && (vertex.x !== draft[index - 1].x || vertex.y !== draft[index - 1].y))
+                : draft.length >= 3 && enclosedArea >= 1e-9;
+        const minimum = kind === "Line" ? 2 : 3;
         draftLabel.textContent = kind === "Point"
-            ? `Point: ${input(featureForm, "x").value || "?"}, ${input(featureForm, "y").value || "?"}`
-            : `Geometry vertices (${draft.length}): ${draft.map(point => `${point.x.toFixed(2)},${point.y.toFixed(2)}`).join(" · ") || "none"}`;
+            ? point ? `Point position: ${point.x.toFixed(2)}, ${point.y.toFixed(2)}.`
+                : "Point position required. Choose Author geometry on map or enter X/Y."
+            : `${kind} vertices: ${draft.length}/${minimum} required. `
+                + (geometryReady ? "Ready to save or continue adding vertices."
+                    : draft.length >= minimum
+                        ? "Vertices must define a nonzero-length line or enclosed polygon area."
+                        : "Choose Author geometry on map and click additional positions.");
+        const saveButton = required<HTMLButtonElement>(featureForm, 'button[type="submit"]');
+        saveButton.disabled = !geometryReady;
+        const pointChanged = point && (!selectedFeature || selectedFeature.kind !== "Point"
+            || selectedFeature.position?.x !== point.x || selectedFeature.position?.y !== point.y);
+        mapSurface.renderer.authoringGeometry = kind === "Point" && pointChanged
+            ? { kind, position: point, vertices: [] }
+            : (kind === "Line" || kind === "Region") && placement === kind.toLowerCase() && draft.length
+                ? { kind, position: null, vertices: [...draft] }
+                : null;
+        mapSurface.requestRender();
     };
 
     const onMapClick = (point: WorldPoint): void => {
@@ -823,13 +852,21 @@ export async function renderWorldEditor(
     required<HTMLButtonElement>(root, "[data-clear-geometry]").addEventListener("click", () => {
         placement = null;
         draft = [];
+        if (select(featureForm, "kind").value === "Point") {
+            input(featureForm, "x").value = "";
+            input(featureForm, "y").value = "";
+        }
         updateDraftLabel();
+        mapHint.textContent = "Geometry cleared. Choose Author geometry on map to create new geometry.";
     });
     select(featureForm, "kind").addEventListener("change", () => {
+        placement = null;
         draft = [];
         updatePointFieldVisibility();
         updateDraftLabel();
     });
+    for (const axis of ["x", "y"])
+        input(featureForm, axis).addEventListener("input", updateDraftLabel);
 
     gridForm.addEventListener("submit", event => {
         event.preventDefault();
@@ -872,8 +909,9 @@ export async function renderWorldEditor(
         event.preventDefault();
         void run(featureForm, async () => {
             const kind = select(featureForm, "kind").value as "Point" | "Line" | "Region";
-            if (kind === "Line" && draft.length < 2)
-                throw new Error("A line requires at least two points. Select Author geometry on map and click two or more positions before saving.");
+            if (kind === "Line" && (draft.length < 2 || !draft.some((vertex, index) =>
+                index > 0 && (vertex.x !== draft[index - 1].x || vertex.y !== draft[index - 1].y))))
+                throw new Error("A line requires at least two distinct positions. Select Author geometry on map and click separate positions before saving.");
             if (kind === "Region") {
                 if (draft.length < 3)
                     throw new Error("A region requires at least three points. Select Author geometry on map and click three or more positions before saving.");

@@ -194,14 +194,34 @@ export class MapSurface {
             minY: Math.min(...corners.map(point => point.y)),
             maxX: Math.max(...corners.map(point => point.x)),
             maxY: Math.max(...corners.map(point => point.y))
-        });
+        }, world.version);
         if (this.getWorld()?.version !== world.version)
             throw new Error("The map changed during export. Reload and try again.");
         if (!preview) {
             this.renderer.visibleWorldCells = cells;
             await this.renderer.waitForSourceMaps();
-            this.renderer.render();
-            await this.downloadPng(this.canvas, name, background);
+            const originalTheme = this.renderer.backgroundTheme;
+            const originalDraft = this.renderer.authoringGeometry;
+            const originalSelection = this.renderer.selectedWorldCell;
+            const originalReview = this.renderer.reviewOverlay;
+            const originalRegistration = this.renderer.registrationPreview;
+            try {
+                this.renderer.backgroundTheme = background;
+                // Export saved cartography, not temporary editing handles or drafts.
+                this.renderer.authoringGeometry = null;
+                this.renderer.selectedWorldCell = null;
+                this.renderer.reviewOverlay = null;
+                this.renderer.registrationPreview = null;
+                this.renderer.render();
+                await this.downloadPng(this.canvas, name, background);
+            } finally {
+                this.renderer.backgroundTheme = originalTheme;
+                this.renderer.authoringGeometry = originalDraft;
+                this.renderer.selectedWorldCell = originalSelection;
+                this.renderer.reviewOverlay = originalReview;
+                this.renderer.registrationPreview = originalRegistration;
+                if (!this.disposed) this.renderer.render();
+            }
             return;
         }
         const canvas = document.createElement("canvas");
@@ -214,6 +234,7 @@ export class MapSurface {
         renderer.visibleWorldCells = cells;
         renderer.terrainByCell = terrainForDisplay(preview.terrainAnnotations);
         renderer.showGrid = preview.showGrid;
+        renderer.backgroundTheme = background;
         renderer.labelAllowedSubjectIds = new Set([...preview.featureLabelIds, ...preview.locationLabelIds]);
         try {
             await renderer.waitForSourceMaps();
@@ -283,6 +304,7 @@ export class MapSurface {
         renderer.hiddenSourceMapIds = preview ? new Set() : new Set(this.renderer.hiddenSourceMapIds);
         renderer.showGrid = includeGrid && (preview?.showGrid ?? true);
         renderer.showLabels = includeLabels;
+        renderer.backgroundTheme = background;
         if (preview)
             renderer.labelAllowedSubjectIds = new Set([
                 ...preview.featureLabelIds, ...preview.locationLabelIds

@@ -23,6 +23,8 @@ export class CanvasMapRenderer {
     public visibleWorldCells: WorldCellGeometry[] = [];
     public terrainByCell = new Map<string, string>();
     public showGrid = true;
+    /** Presentation-only export contrast; does not change saved map semantics. */
+    public backgroundTheme: "light" | "dark" | "transparent" = "light";
     public showLabels = true;
     /** Null means GM view; a set restricts text to explicitly released object IDs. */
     public labelAllowedSubjectIds: Set<string> | null = null;
@@ -31,6 +33,12 @@ export class CanvasMapRenderer {
     public hiddenSourceMapIds = new Set<string>();
     public registrationPreview: { sourceMapId: string; transform: MapRegistrationTransform } | null = null;
     public reviewOverlay: MapReviewOverlay | null = null;
+    /** Unsaved GM authoring geometry. Never copy this into export renderers. */
+    public authoringGeometry: {
+        kind: "Point" | "Line" | "Region";
+        position: WorldPoint | null;
+        vertices: WorldPoint[];
+    } | null = null;
     private readonly rasterCache = new RasterImageCache();
     private readonly provisionalSourceMapTransforms = new Map<string, MapRegistrationTransform>();
 
@@ -68,10 +76,11 @@ export class CanvasMapRenderer {
             this.drawSourceMaps(ctx, world, width, height);
             this.drawReviewOverlay(ctx, width, height);
             this.drawRegions(ctx, world, width, height);
-            if (this.showGrid) this.drawGrid(ctx, world, width, height);
+            this.drawGrid(ctx, world, width, height);
             this.drawLinesAndPoints(ctx, world, width, height);
             this.drawLocations(ctx, world, width, height);
             this.drawSelection(ctx, world, width, height);
+            this.drawAuthoringGeometry(ctx, width, height);
             if (this.showLabels) this.drawMapLabels(ctx, world, width, height);
         }
         // Mapless V2 sessions still have authoritative cell geometry.
@@ -257,10 +266,47 @@ export class CanvasMapRenderer {
         }
     }
 
+    private drawAuthoringGeometry(ctx: CanvasRenderingContext2D, width: number, height: number): void {
+        const draft = this.authoringGeometry;
+        if (!draft) return;
+        const points = draft.kind === "Point"
+            ? draft.position ? [draft.position] : []
+            : draft.vertices;
+        if (!points.length) return;
+        ctx.save();
+        ctx.strokeStyle = "#E49035";
+        ctx.fillStyle = "rgba(228, 144, 53, .20)";
+        ctx.lineWidth = 3;
+        ctx.setLineDash([7, 5]);
+        ctx.beginPath();
+        points.map(point => this.toScreen(point, width, height)).forEach((point, index) => {
+            if (!index) ctx.moveTo(point.x, point.y);
+            else ctx.lineTo(point.x, point.y);
+        });
+        if (draft.kind === "Region" && points.length >= 3) {
+            ctx.closePath();
+            ctx.fill();
+        }
+        if (draft.kind !== "Point" && points.length >= 2) ctx.stroke();
+        ctx.setLineDash([]);
+        for (const vertex of points) {
+            const point = this.toScreen(vertex, width, height);
+            ctx.beginPath();
+            ctx.arc(point.x, point.y, 5, 0, 2 * Math.PI);
+            ctx.fillStyle = "#E49035";
+            ctx.fill();
+            ctx.lineWidth = 1.5;
+            ctx.strokeStyle = "#FFFFFF";
+            ctx.stroke();
+        }
+        ctx.restore();
+    }
+
     private drawGrid(ctx: CanvasRenderingContext2D, world: DemoWorld, width: number, height: number): void {
         if (!world.tiling) return;
         ctx.save();
-        ctx.strokeStyle = "rgba(52, 67, 55, .38)";
+        ctx.strokeStyle = this.backgroundTheme === "dark"
+            ? "rgba(212, 227, 218, .72)" : "rgba(52, 67, 55, .60)";
         ctx.lineWidth = 1;
         for (const cell of this.visibleWorldCells) {
             // Render only authoritative bounded polygon geometry. No inferred
@@ -275,7 +321,7 @@ export class CanvasMapRenderer {
                 ctx.fill();
                 ctx.globalAlpha = 1;
             }
-            ctx.stroke();
+            if (this.showGrid) ctx.stroke();
         }
         ctx.restore();
     }
@@ -307,7 +353,8 @@ export class CanvasMapRenderer {
             if (occupied.length >= 600 || !Number.isFinite(x) || !Number.isFinite(y)
                 || x < -20 || y < -20 || x > width + 20 || y > height + 20) return;
             this.drawFeatureLabel(ctx, name, x, y, occupied, width, height, centered,
-                mapCategoryColor(world.mapAppearance, category, "label") ?? "#20251f");
+                mapCategoryColor(world.mapAppearance, category, "label")
+                    ?? (this.backgroundTheme === "dark" ? "#EDF3EE" : "#20251f"));
         };
         for (const location of world.locations) {
             if (this.labelAllowedSubjectIds && !this.labelAllowedSubjectIds.has(location.id)) continue;
