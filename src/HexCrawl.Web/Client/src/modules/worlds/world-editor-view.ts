@@ -1,6 +1,7 @@
 import { HexCrawlApiError, type HexCrawlApi } from "../../api";
 import type { EnvironmentAnnotation, EnvironmentFact, WorldEnvironment } from "../../environment-types";
 import { MapSurface } from "../../map-surface";
+import { defaultTerrainColors, defaultFeatureColors, mapCategoryColor, type MapAppearance } from "../../map-appearance";
 import { enhanceExpeditionSetup } from "../expeditions/expedition-setup";
 import { SourceMapWorkspace } from "./source-map-workspace";
 import type { Location, Overworld, SpatialFeature, WorldPoint, WorldCellGeometry, WorldCellId } from "../../types";
@@ -42,7 +43,7 @@ export async function renderWorldEditor(
         <section class="hc-page hc-workspace hc-world-editor">
             <header class="hc-page-header">
                 <div><span class="hc-sheet-kicker">Map preparation</span><h1 data-title></h1><p>World map editor · source maps, locations, and features.</p></div>
-                <nav class="hc-button-row"><button type="button" data-worlds>All overworlds</button><button type="button" data-reset-view>Reset map view</button><span data-guidance-controls></span></nav>
+                <nav class="hc-button-row"><button type="button" data-worlds>All overworlds</button><button type="button" data-reset-view>Reset map view</button><label>PNG background <select data-export-background><option value="light">Light</option><option value="dark">Dark</option><option value="transparent">Transparent</option></select></label><button type="button" data-export-map>Export visible area (PNG)</button><span data-guidance-controls></span></nav>
             </header>
             <div class="hc-error" data-error hidden role="alert"></div>
             <div class="hc-workspace-grid">
@@ -62,6 +63,16 @@ export async function renderWorldEditor(
                         <button type="submit" class="hc-primary-action">Save world name</button>
                     </form></details>
 
+                    <details><summary>Map appearance</summary>
+                        <p class="hc-hint">Category colors are visual preferences only. Terrain and feature rules are unchanged.</p>
+                        <div data-map-palette></div>
+                        <form class="hc-form" data-palette-form>
+                            <label>Layer <select name="layer"><option value="terrain">Tile terrain</option><option value="feature">Feature lines, points, and regions</option></select></label>
+                            <label>Category <input name="category" placeholder="forest, river, urban..." required maxlength="80"></label>
+                            <label>Color <input name="color" type="color" value="#538a55" required></label>
+                            <button type="submit">Set category color</button>
+                        </form>
+                    </details>
                     <details data-advanced-world-objects><summary>Advanced world objects</summary>
                     <details><summary>Locations</summary>
                         <div data-location-list></div>
@@ -106,6 +117,7 @@ export async function renderWorldEditor(
     const gridForm = required<HTMLFormElement>(root, "[data-world-form]");
     const locationForm = required<HTMLFormElement>(root, "[data-location-form]");
     const featureForm = required<HTMLFormElement>(root, "[data-feature-form]");
+    const paletteForm = required<HTMLFormElement>(root, "[data-palette-form]");
      const draftLabel = required<HTMLElement>(root, "[data-draft]");
     required<HTMLElement>(root, "[data-guidance-controls]").append(guidancePreferenceButton(root));
     const selectedCellEmpty = required<HTMLElement>(root, "[data-selected-cell-empty]");
@@ -146,6 +158,8 @@ export async function renderWorldEditor(
         fillGrid();
         renderLocations();
         renderFeatures();
+        renderPalette();
+        mapSurface.setTerrainAnnotations(worldEnvironment.annotations);
         renderPeriodicCell();
         mapSurface.requestRender();
     };
@@ -153,6 +167,7 @@ export async function renderWorldEditor(
     const applyWorldEnvironment = (next: WorldEnvironment): void => {
         worldEnvironment = next;
         if (world.version !== next.version) world = { ...world, version: next.version };
+        mapSurface.setTerrainAnnotations(next.annotations);
         renderPeriodicCell();
         mapSurface.requestRender();
     };
@@ -179,6 +194,75 @@ export async function renderWorldEditor(
         }
         for (const location of world.locations) host.append(resourceButton(`${location.name} · ${location.category}`, () => loadLocation(location)));
     };
+
+    const renderPalette = (): void => {
+        const host = required<HTMLElement>(root, "[data-map-palette]");
+        host.replaceChildren();
+        for (const layer of ["terrain", "feature"] as const) {
+            const palette = layer === "terrain" ? defaultTerrainColors : defaultFeatureColors;
+            const overrides = layer === "terrain" ? world.mapAppearance?.terrainColors : world.mapAppearance?.featureColors;
+            const categories = new Set([...Object.keys(palette), ...Object.keys(overrides ?? {})]);
+            if (layer === "terrain") {
+                for (const annotation of worldEnvironment.annotations) {
+                    for (const fact of annotation.facts) {
+                        if (fact.dimension.trim().toLowerCase() === "terrain" && fact.valueKind === "Tag" && fact.tag)
+                            categories.add(fact.tag.toLowerCase());
+                    }
+                }
+            } else {
+                for (const feature of world.features) categories.add(feature.category.toLowerCase());
+            }
+            const title = document.createElement("strong");
+            title.textContent = layer === "terrain" ? "Tile terrain" : "Feature categories";
+            host.append(title);
+            for (const category of [...categories].sort()) {
+                const row = document.createElement("div");
+                row.className = "hc-discovery-row";
+                const swatch = document.createElement("span");
+                swatch.style.display = "inline-block";
+                swatch.style.width = "20px";
+                swatch.style.height = "20px";
+                swatch.style.border = "1px solid currentColor";
+                const color = mapCategoryColor(world.mapAppearance, category, layer);
+                swatch.style.backgroundColor = color ?? "transparent";
+                const label = document.createElement("span");
+                label.textContent = category + (overrides?.[category] ? " (custom)" : "");
+                row.append(swatch, label);
+                const edit = document.createElement("button");
+                edit.type = "button";
+                edit.textContent = "Edit";
+                edit.addEventListener("click", () => {
+                    select(paletteForm, "layer").value = layer;
+                    input(paletteForm, "category").value = category;
+                    input(paletteForm, "color").value = color ?? "#808080";
+                    input(paletteForm, "category").focus();
+                });
+                row.append(edit);
+                if (overrides && Object.keys(overrides).some(key => key.toLowerCase() === category)) {
+                    const reset = document.createElement("button");
+                    reset.type = "button";
+                    reset.textContent = "Reset";
+                    reset.addEventListener("click", () => void run(null, async () => {
+                        const appearance = currentAppearance();
+                        const key = layer === "terrain" ? "terrainColors" : "featureColors";
+                        const existing = { ...appearance[key] };
+                        for (const name of Object.keys(existing))
+                            if (name.toLowerCase() === category) delete existing[name];
+                        applyWorld(await api.updateMapAppearance(world.id, {
+                            ...appearance, [key]: existing
+                        }, world.version));
+                    }));
+                    row.append(reset);
+                }
+                host.append(row);
+            }
+        }
+    };
+
+    const currentAppearance = (): MapAppearance => ({
+        terrainColors: { ...world.mapAppearance?.terrainColors },
+        featureColors: { ...world.mapAppearance?.featureColors }
+    });
 
     const renderFeatures = (): void => {
         const host = required<HTMLElement>(root, "[data-feature-list]");
@@ -211,6 +295,7 @@ export async function renderWorldEditor(
     };
 
     const loadFeature = (feature: SpatialFeature): void => {
+        placement = null;
         selectedFeature = feature;
         input(featureForm, "id").value = feature.id;
         input(featureForm, "name").value = feature.name;
@@ -226,6 +311,7 @@ export async function renderWorldEditor(
     };
 
     const newFeature = (): void => {
+        placement = null;
         selectedFeature = null;
         featureForm.reset();
         input(featureForm, "id").value = "";
@@ -550,6 +636,29 @@ export async function renderWorldEditor(
     });
 
     required<HTMLButtonElement>(root, "[data-worlds]").addEventListener("click", () => navigate("/worlds"));
+    required<HTMLButtonElement>(root, "[data-export-map]").addEventListener("click", () =>
+        void run(null, async () => {
+            const background = required<HTMLSelectElement>(root, "[data-export-background]").value as
+                "light" | "dark" | "transparent";
+            await mapSurface.exportViewportPng(world.name, background);
+        }));
+    paletteForm.addEventListener("submit", event => {
+        event.preventDefault();
+        void run(paletteForm, async () => {
+            const layer = select(paletteForm, "layer").value;
+            const category = input(paletteForm, "category").value.trim().toLowerCase();
+            const color = input(paletteForm, "color").value.toUpperCase();
+            if (!/^[\p{L}\p{N}_ .:\/-]{1,80}$/u.test(category))
+                throw new Error("Category names must contain 1–80 letters, numbers, spaces, or _ . : / -.");
+            if (!/^#[0-9A-F]{6}$/.test(color)) throw new Error("Choose a six-digit hex color.");
+            const key = layer === "terrain" ? "terrainColors" : "featureColors";
+            const appearance = currentAppearance();
+            applyWorld(await api.updateMapAppearance(world.id, {
+                ...appearance,
+                [key]: { ...appearance[key], [category]: color }
+            }, world.version));
+        });
+    });
     required<HTMLButtonElement>(root, "[data-reset-view]").addEventListener("click", () => mapSurface.resetView());
 
     required<HTMLButtonElement>(root, "[data-place-location]").addEventListener("click", () => {
@@ -566,6 +675,7 @@ export async function renderWorldEditor(
         mapHint.textContent = kind === "Point" ? "Click the map for the point." : `Click the map to add ${kind === "Line" ? "polyline" : "polygon"} vertices.`;
     });
     required<HTMLButtonElement>(root, "[data-clear-geometry]").addEventListener("click", () => {
+        placement = null;
         draft = [];
         updateDraftLabel();
     });
@@ -616,6 +726,22 @@ export async function renderWorldEditor(
         event.preventDefault();
         void run(featureForm, async () => {
             const kind = select(featureForm, "kind").value as "Point" | "Line" | "Region";
+            if (kind === "Line" && draft.length < 2)
+                throw new Error("A line requires at least two points. Select Author geometry on map and click two or more positions before saving.");
+            if (kind === "Region") {
+                if (draft.length < 3)
+                    throw new Error("A region requires at least three points. Select Author geometry on map and click three or more positions before saving.");
+                const twiceArea = draft.reduce((area, point, index) => {
+                    const next = draft[(index + 1) % draft.length];
+                    return area + point.x * next.y - next.x * point.y;
+                }, 0);
+                if (Math.abs(twiceArea) < 1e-9)
+                    throw new Error("A region requires three or more points enclosing an area. Reauthor its boundary before saving.");
+            }
+            if (kind === "Point" && (!Number.isFinite(Number(input(featureForm, "x").value))
+                || !Number.isFinite(Number(input(featureForm, "y").value))
+                || !input(featureForm, "x").value.trim() || !input(featureForm, "y").value.trim()))
+                throw new Error("A point requires a valid position. Select Author geometry on map or enter its X and Y coordinates.");
             const payload = {
                 name: input(featureForm, "name").value,
                 category: input(featureForm, "category").value,

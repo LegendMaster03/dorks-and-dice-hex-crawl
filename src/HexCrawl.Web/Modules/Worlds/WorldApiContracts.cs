@@ -68,7 +68,8 @@ public sealed record OverworldContract(
     IReadOnlyList<FeatureContract> Features,
     IReadOnlyList<LocationContract> Locations,
     IReadOnlyList<SourceMapContract> SourceMaps,
-    PeriodicWorldTiling Tiling)
+    PeriodicWorldTiling Tiling,
+    MapAppearance MapAppearance)
 {
     public static OverworldContract From(StoredOverworld world) => new(
         world.World.Id,
@@ -79,7 +80,8 @@ public sealed record OverworldContract(
         world.World.Features.Select(FeatureContract.From).ToArray(),
         world.World.Locations.Select(LocationContract.From).ToArray(),
         world.World.SourceMaps.Select(SourceMapContract.From).ToArray(),
-        world.World.SpatialTiling);
+        world.World.SpatialTiling,
+        world.World.MapAppearance);
 }
 
 public sealed record LocationMutationRequest(

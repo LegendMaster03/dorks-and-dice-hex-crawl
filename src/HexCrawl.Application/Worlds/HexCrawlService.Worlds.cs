@@ -53,6 +53,19 @@ public sealed partial class HexCrawlService
         return await SaveWorldAsync(updated, expectedVersion, cancellationToken);
     }
 
+    public async Task<StoredOverworld> UpdateMapAppearanceAsync(
+        Guid overworldId, string ownerUserId, MapAppearance appearance, long expectedVersion,
+        CancellationToken cancellationToken = default)
+    {
+        var current = await GetOverworldAsync(overworldId, ownerUserId, cancellationToken);
+        RequireVersion(expectedVersion, current.Version);
+        var updated = current with
+        {
+            World = current.World with { MapAppearance = appearance.NormalizeAndValidate() }
+        };
+        return await SaveWorldAsync(updated, expectedVersion, cancellationToken);
+    }
+
     public async Task<StoredOverworld> DeleteOverworldAsync(
         Guid overworldId,
         string ownerUserId,

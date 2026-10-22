@@ -1,5 +1,6 @@
 import { sourceMapAssetUrl } from "./api";
 import { RasterImageCache } from "./raster-image-cache";
+import { mapCategoryColor } from "./map-appearance";
 import { traceTilePolygon } from "./tile-polygon-canvas";
 import type { DemoWorld, MapRegistrationTransform, SpatialFeature, WorldPoint, WorldCellGeometry } from "./types";
 
@@ -20,6 +21,7 @@ export class CanvasMapRenderer {
     public selectedWorldCell: WorldCellGeometry | null = null;
     public currentWorldCell: WorldCellGeometry | null = null;
     public visibleWorldCells: WorldCellGeometry[] = [];
+    public terrainByCell = new Map<string, string>();
     public expeditionPosition: WorldPoint | null = null;
     public discoveredSubjectIds = new Set<string>();
     public hiddenSourceMapIds = new Set<string>();
@@ -61,7 +63,8 @@ export class CanvasMapRenderer {
             this.drawReviewOverlay(ctx, width, height);
             this.drawRegions(ctx, world, width, height);
             this.drawGrid(ctx, world, width, height);
-            this.drawLinesAndPoints(ctx, world.features, width, height);
+            this.drawRegionLabels(ctx, world, width, height);
+            this.drawLinesAndPoints(ctx, world, width, height);
             this.drawLocations(ctx, world, width, height);
             this.drawSelection(ctx, world, width, height);
         }
@@ -239,6 +242,14 @@ export class CanvasMapRenderer {
             // coordinates or shape-specific prototype rendering is involved.
             if (cell.id.tilingId !== world.tiling.id || cell.polygon.length < 3) continue;
             traceTilePolygon(ctx, cell.polygon, point => this.toScreen(point, width, height));
+            const terrain = this.terrainByCell.get(JSON.stringify(cell.id));
+            const color = terrain ? mapCategoryColor(world.mapAppearance, terrain, "terrain") : null;
+            if (color) {
+                ctx.globalAlpha = 0.48;
+                ctx.fillStyle = color;
+                ctx.fill();
+                ctx.globalAlpha = 1;
+            }
             ctx.stroke();
         }
         ctx.restore();
@@ -250,8 +261,11 @@ export class CanvasMapRenderer {
             ctx.beginPath();
             points.forEach((point, index) => index === 0 ? ctx.moveTo(point.x, point.y) : ctx.lineTo(point.x, point.y));
             ctx.closePath();
-            ctx.fillStyle = feature.category === "forest" ? "rgba(79, 118, 77, .22)" : "rgba(118, 106, 77, .18)";
+            ctx.fillStyle = mapCategoryColor(world.mapAppearance, feature.category, "feature")
+                ?? (feature.category === "forest" ? "#4F764D" : "#766A4D");
+            ctx.globalAlpha = 0.22;
             ctx.fill();
+            ctx.globalAlpha = 1;
             if (this.discoveredSubjectIds.has(feature.id)) {
                 ctx.strokeStyle = "#2f6b3b";
                 ctx.lineWidth = 3;
@@ -260,13 +274,23 @@ export class CanvasMapRenderer {
         }
     }
 
-    private drawLinesAndPoints(ctx: CanvasRenderingContext2D, features: SpatialFeature[], width: number, height: number): void {
-        for (const feature of features) {
+    private drawRegionLabels(ctx: CanvasRenderingContext2D, world: DemoWorld, width: number, height: number): void {
+        for (const feature of world.features) {
+            if (feature.kind !== "Region" || !feature.boundary?.length) continue;
+            const points = feature.boundary.map(point => this.toScreen(point, width, height));
+            const center = polygonLabelPoint(points);
+            if (center) this.drawFeatureLabel(ctx, feature.name, center.x, center.y);
+        }
+    }
+
+    private drawLinesAndPoints(ctx: CanvasRenderingContext2D, world: DemoWorld, width: number, height: number): void {
+        for (const feature of world.features) {
             if (feature.kind === "Line" && feature.path?.length) {
                 const points = feature.path.map(point => this.toScreen(point, width, height));
                 ctx.beginPath();
                 points.forEach((point, index) => index === 0 ? ctx.moveTo(point.x, point.y) : ctx.lineTo(point.x, point.y));
-                ctx.strokeStyle = feature.category === "river" ? "#4479a1" : "#775f41";
+                ctx.strokeStyle = mapCategoryColor(world.mapAppearance, feature.category, "feature")
+                    ?? (feature.category === "river" ? "#4479a1" : "#775f41");
                 ctx.lineWidth = feature.category === "river" ? 4 : 3;
                 ctx.stroke();
                 if (this.discoveredSubjectIds.has(feature.id)) {
@@ -274,11 +298,13 @@ export class CanvasMapRenderer {
                     ctx.lineWidth += 3;
                     ctx.stroke();
                 }
+                const labelAt = midpointOnPath(points);
+                if (labelAt) this.drawFeatureLabel(ctx, feature.name, labelAt.x, labelAt.y - 10);
             } else if (feature.kind === "Point" && feature.position) {
                 const point = this.toScreen(feature.position, width, height);
                 ctx.beginPath();
                 ctx.arc(point.x, point.y, 5, 0, Math.PI * 2);
-                ctx.fillStyle = "#4b3d32";
+                ctx.fillStyle = mapCategoryColor(world.mapAppearance, feature.category, "feature") ?? "#4b3d32";
                 ctx.fill();
                 if (this.discoveredSubjectIds.has(feature.id)) {
                     ctx.beginPath();
@@ -287,8 +313,23 @@ export class CanvasMapRenderer {
                     ctx.lineWidth = 2;
                     ctx.stroke();
                 }
+                this.drawFeatureLabel(ctx, feature.name, point.x + 10, point.y);
             }
         }
+    }
+
+    private drawFeatureLabel(ctx: CanvasRenderingContext2D, name: string, x: number, y: number): void {
+        ctx.save();
+        ctx.font = "600 12px system-ui, sans-serif";
+        ctx.textAlign = "left";
+        ctx.textBaseline = "middle";
+        ctx.lineWidth = 3;
+        ctx.lineJoin = "round";
+        ctx.strokeStyle = "rgba(255,255,255,.94)";
+        ctx.fillStyle = "#20251f";
+        ctx.strokeText(name, x, y);
+        ctx.fillText(name, x, y);
+        ctx.restore();
     }
 
     private drawLocations(ctx: CanvasRenderingContext2D, world: DemoWorld, width: number, height: number): void {
@@ -308,8 +349,7 @@ export class CanvasMapRenderer {
                 ctx.lineWidth = 3;
                 ctx.stroke();
             }
-            ctx.fillStyle = "#1f2420";
-            ctx.fillText(location.name, point.x + 10, point.y);
+            this.drawFeatureLabel(ctx, location.name, point.x + 10, point.y);
         }
     }
 
@@ -415,4 +455,32 @@ function pointInPolygon(point: WorldPoint, polygon: readonly WorldPoint[]): bool
         if (intersects) inside = !inside;
     }
     return inside;
+}
+
+function midpointOnPath(points: readonly WorldPoint[]): WorldPoint | null {
+    if (points.length === 0) return null;
+    if (points.length === 1) return points[0];
+    const lengths = points.slice(1).map((p, index) => distance(p, points[index]));
+    const halfway = lengths.reduce((a, b) => a + b, 0) / 2;
+    let walked = 0;
+    for (let i = 0; i < lengths.length; i++) {
+        if (walked + lengths[i] >= halfway) {
+            const t = lengths[i] === 0 ? 0 : (halfway - walked) / lengths[i];
+            return {
+                x: points[i].x + (points[i + 1].x - points[i].x) * t,
+                y: points[i].y + (points[i + 1].y - points[i].y) * t
+            };
+        }
+        walked += lengths[i];
+    }
+    return points[points.length - 1];
+}
+
+function polygonLabelPoint(points: readonly WorldPoint[]): WorldPoint | null {
+    if (!points.length) return null;
+    const center = {
+        x: points.reduce((sum, p) => sum + p.x, 0) / points.length,
+        y: points.reduce((sum, p) => sum + p.y, 0) / points.length
+    };
+    return pointInPolygon(center, points) ? center : points[0];
 }

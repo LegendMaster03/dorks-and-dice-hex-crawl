@@ -63,6 +63,8 @@ export type DistanceUnit = {
 
 export type DistanceValue = { value: number; unit: DistanceUnit };
 
+import type { MapAppearance } from "./map-appearance";
+
 export type SpatialFeature = {
     id: string;
     name: string;
@@ -163,6 +165,7 @@ export type Overworld = {
     features: SpatialFeature[];
     locations: Location[];
     sourceMaps: SourceMapRepresentation[];
+    mapAppearance?: MapAppearance;
 };
 
 export type DemoWorld = Overworld;

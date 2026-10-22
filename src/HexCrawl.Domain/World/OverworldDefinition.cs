@@ -36,6 +36,7 @@ public sealed record OverworldDefinition
     public IReadOnlyList<Location> Locations { get; init; } = [];
     public IReadOnlyList<SourceMapRepresentation> SourceMaps { get; init; } = [];
     public IReadOnlyList<EnvironmentAnnotation> EnvironmentAnnotations { get; init; } = [];
+    public MapAppearance MapAppearance { get; init; } = new();
 
     public void ValidateEnvironmentAnnotations()
     {

@@ -31,6 +31,7 @@ public sealed class WorldModule : IHexCrawlModule
         api.MapGet("/overworlds/{overworldId:guid}/cells/containing", GetContainingCellsAsync);
         api.MapGet("/overworlds/{overworldId:guid}/cells/resolve", ResolveCellAsync);
         api.MapPut("/overworlds/{overworldId:guid}/name", RenameOverworldAsync);
+        api.MapPut("/overworlds/{overworldId:guid}/appearance", UpdateMapAppearanceAsync);
         api.MapDelete("/overworlds/{overworldId:guid}", DeleteOverworldAsync);
 
         api.MapPost("/overworlds/{overworldId:guid}/locations", CreateLocationAsync);
@@ -393,6 +394,16 @@ public sealed class WorldModule : IHexCrawlModule
         HttpContext context, HexCrawlService service, CancellationToken cancellationToken) =>
         Results.Ok(OverworldContract.From(await service.RenameOverworldAsync(
             overworldId, UserId(context), request.Name, request.ExpectedVersion,
+            cancellationToken)));
+
+    private sealed record UpdateMapAppearanceRequest(
+        HexCrawl.Domain.World.MapAppearance Appearance, long ExpectedVersion);
+
+    private static async Task<IResult> UpdateMapAppearanceAsync(
+        Guid overworldId, UpdateMapAppearanceRequest request,
+        HttpContext context, HexCrawlService service, CancellationToken cancellationToken) =>
+        Results.Ok(OverworldContract.From(await service.UpdateMapAppearanceAsync(
+            overworldId, UserId(context), request.Appearance, request.ExpectedVersion,
             cancellationToken)));
 
     private static async Task<IResult> DeleteOverworldAsync(

@@ -2,6 +2,7 @@ import { CanvasMapRenderer } from "./canvas-renderer";
 import type { HexCrawlApi } from "./api";
 import { RenderLifecycle } from "./render-lifecycle";
 import { resolveLatestWorldCellSelection } from "./map-selection-policy";
+import type { EnvironmentAnnotation } from "./environment-types";
 import type { Overworld, WorldPoint, WorldCellGeometry } from "./types";
 import { Viewport } from "./viewport";
 
@@ -163,6 +164,53 @@ export class MapSurface {
 
     public setCellSelectionHandler(handler: ((cell: WorldCellGeometry | null) => void) | null): void {
         this.cellSelectionHandler = handler;
+    }
+
+    /** Apply existing authoritative cell terrain facts; never duplicate their semantics in styles. */
+    public setTerrainAnnotations(annotations: readonly EnvironmentAnnotation[]): void {
+        const categories = new Map<string, Set<string>>();
+        for (const annotation of annotations) {
+            if (annotation.scope.kind !== "Cell" || !annotation.scope.cell) continue;
+            const key = JSON.stringify(annotation.scope.cell);
+            for (const fact of annotation.facts) {
+                if (fact.dimension.trim().toLowerCase() !== "terrain"
+                    || fact.valueKind !== "Tag" || !fact.tag?.trim()) continue;
+                if (!categories.has(key)) categories.set(key, new Set());
+                categories.get(key)!.add(fact.tag.trim().toLowerCase());
+            }
+        }
+        // Conflicting terrain declarations receive no arbitrary visual preference.
+        this.renderer.terrainByCell = new Map([...categories]
+            .filter(([, values]) => values.size === 1)
+            .map(([key, values]) => [key, [...values][0]]));
+        this.requestRender();
+    }
+
+    /** Capture the current authoritative map viewport with a readable PNG background. */
+    public async exportViewportPng(name: string, background: "light" | "dark" | "transparent"): Promise<void> {
+        if (this.disposed) throw new Error("The map editor is no longer active.");
+        this.renderer.render();
+        const target = document.createElement("canvas");
+        target.width = this.canvas.width;
+        target.height = this.canvas.height;
+        const context = target.getContext("2d");
+        if (!context) throw new Error("The browser does not support exporting this map.");
+        if (background !== "transparent") {
+            context.fillStyle = background === "light" ? "#FFFFFF" : "#202020";
+            context.fillRect(0, 0, target.width, target.height);
+        }
+        context.drawImage(this.canvas, 0, 0);
+        const blob = await new Promise<Blob | null>(resolve => target.toBlob(resolve, "image/png"));
+        if (!blob) throw new Error("The browser could not encode the map PNG.");
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.download = `${name.replace(/[^a-z0-9-_]+/gi, "-").slice(0, 70) || "map"}.png`;
+        link.href = url;
+        document.body.append(link);
+        try { link.click(); } finally {
+            link.remove();
+            window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+        }
     }
 
     private loadVisibleCells(): void {

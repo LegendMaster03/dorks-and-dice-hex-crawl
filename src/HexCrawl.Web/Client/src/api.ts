@@ -240,6 +240,14 @@ export class HexCrawlApi {
             { name, expectedVersion }, "Rename overworld");
     }
 
+    public updateMapAppearance(
+        id: string,
+        appearance: import("./map-appearance").MapAppearance,
+        expectedVersion: number): Promise<Overworld> {
+        return this.sendJson("PUT", `/api/overworlds/${encodeURIComponent(id)}/appearance`,
+            { appearance, expectedVersion }, "Update map appearance");
+    }
+
     public getWorldEnvironment(id: string): Promise<WorldEnvironment> {
         return this.getJson(`/api/overworlds/${encodeURIComponent(id)}/environment`, "World environment");
     }
