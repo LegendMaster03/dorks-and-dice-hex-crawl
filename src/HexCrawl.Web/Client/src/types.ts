@@ -63,6 +63,8 @@ export type DistanceUnit = {
 
 export type DistanceValue = { value: number; unit: DistanceUnit };
 
+import type { MapAppearance } from "./map-appearance";
+
 export type SpatialFeature = {
     id: string;
     name: string;
@@ -135,6 +137,20 @@ export type SourceMapList = {
     sourceMaps: SourceMapDetail[];
 };
 
+export type ExpeditionPlayerMapView = PlayerMapPreview & {
+    expeditionVersion: number;
+    knownCells: WorldCellId[];
+    partyPosition: WorldPoint | null;
+};
+
+export type PlayerMapPreview = {
+    world: Overworld;
+    terrainAnnotations: import("./environment-types").EnvironmentAnnotation[];
+    featureLabelIds: string[];
+    locationLabelIds: string[];
+    showGrid: boolean;
+};
+
 export type OverworldSummary = {
     id: string;
     name: string;
@@ -152,6 +168,16 @@ export type PeriodicWorldTiling = {
     playableBounds?: { width: number; height: number; minU: number; minV: number } | null;
 };
 
+export type PlayerMapDisclosure = {
+    visibleFeatureIds: string[];
+    visibleLocationIds: string[];
+    visibleFeatureLabelIds: string[];
+    visibleLocationLabelIds: string[];
+    visibleSourceMapIds: string[];
+    showTerrain: boolean;
+    showGrid: boolean;
+};
+
 export type Overworld = {
     id: string;
     name: string;
@@ -163,6 +189,8 @@ export type Overworld = {
     features: SpatialFeature[];
     locations: Location[];
     sourceMaps: SourceMapRepresentation[];
+    mapAppearance?: MapAppearance;
+    playerMapDisclosure?: PlayerMapDisclosure;
 };
 
 export type DemoWorld = Overworld;

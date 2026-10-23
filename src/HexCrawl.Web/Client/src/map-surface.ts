@@ -2,7 +2,8 @@ import { CanvasMapRenderer } from "./canvas-renderer";
 import type { HexCrawlApi } from "./api";
 import { RenderLifecycle } from "./render-lifecycle";
 import { resolveLatestWorldCellSelection } from "./map-selection-policy";
-import type { Overworld, WorldPoint, WorldCellGeometry } from "./types";
+import type { EnvironmentAnnotation } from "./environment-types";
+import type { Overworld, WorldPoint, WorldCellGeometry, PlayerMapPreview } from "./types";
 import { Viewport } from "./viewport";
 
 export class MapSurface {
@@ -165,6 +166,168 @@ export class MapSurface {
         this.cellSelectionHandler = handler;
     }
 
+    /** Apply existing authoritative cell terrain facts; never duplicate their semantics in styles. */
+    public setTerrainAnnotations(annotations: readonly EnvironmentAnnotation[]): void {
+        this.renderer.terrainByCell = terrainForDisplay(annotations);
+        this.requestRender();
+    }
+
+    /** Export the currently visible map, including all loaded image layers. */
+    public async exportViewportPng(
+        name: string, background: "light" | "dark" | "transparent",
+        preview?: PlayerMapPreview): Promise<void> {
+        if (this.disposed) throw new Error("The map editor is no longer active.");
+        const world = preview?.world ?? this.getWorld();
+        if (!world || !this.api) throw new Error("A saved map is required for export.");
+        const width = this.canvas.clientWidth;
+        const height = this.canvas.clientHeight;
+        if (!(width > 0 && height > 0))
+            throw new Error("The map canvas has no visible area to export.");
+        // Freeze presentation state before the first asynchronous operation.
+        // Export never borrows the live canvas or its temporary authoring overlays.
+        const canvas = document.createElement("canvas");
+        const ratio = Math.max(1, window.devicePixelRatio || 1);
+        canvas.width = Math.max(1, Math.floor(width * ratio));
+        canvas.height = Math.max(1, Math.floor(height * ratio));
+        const viewport = new Viewport();
+        viewport.center = { ...this.viewport.center };
+        viewport.zoom = this.viewport.zoom;
+        const corners = [
+            viewport.screenToWorld(0, 0, width, height),
+            viewport.screenToWorld(width, height, width, height)
+        ];
+        viewport.zoom *= canvas.width / width;
+        const renderer = new CanvasMapRenderer(canvas, viewport, () => world, () => {}, true);
+        this.renderer.copySourceMapPlacementsTo(renderer);
+        renderer.terrainByCell = preview ? terrainForDisplay(preview.terrainAnnotations)
+            : new Map(this.renderer.terrainByCell);
+        renderer.hiddenSourceMapIds = preview ? new Set() : new Set(this.renderer.hiddenSourceMapIds);
+        renderer.showGrid = preview?.showGrid ?? this.renderer.showGrid;
+        renderer.showLabels = this.renderer.showLabels;
+        renderer.backgroundTheme = background;
+        if (preview)
+            renderer.labelAllowedSubjectIds = new Set([...preview.featureLabelIds, ...preview.locationLabelIds]);
+        const ensureCurrent = (): void => {
+            if (this.disposed || this.getWorld()?.id !== world.id || this.getWorld()?.version !== world.version)
+                throw new Error("The map changed during export. Reload and try again.");
+        };
+        try {
+            renderer.visibleWorldCells = await this.api.listVisibleCells(world.id, {
+                minX: corners[0].x, minY: corners[0].y,
+                maxX: corners[1].x, maxY: corners[1].y
+            }, world.version);
+            ensureCurrent();
+            await renderer.waitForSourceMaps();
+            ensureCurrent();
+            renderer.render();
+            await this.downloadPng(canvas, preview ? name + "-players" : name, background);
+        } finally {
+            renderer.dispose();
+        }
+    }
+
+    /** Export a bounded world independently of current pan, zoom, or monitor size. */
+    public async exportFullMapPng(
+        name: string, background: "light" | "dark" | "transparent",
+        maxDimension: 1600 | 2400 | 3200, includeGrid: boolean, includeLabels: boolean,
+        preview?: PlayerMapPreview): Promise<void> {
+        const world = preview?.world ?? this.getWorld();
+        if (this.disposed || !world || !this.api)
+            throw new Error("The map editor is no longer active.");
+        if (!world.tiling.playableBounds)
+            throw new Error("This world has no finite map bounds. Export the visible area instead.");
+        const hiddenSourceMapIds = preview ? new Set<string>() : new Set(this.renderer.hiddenSourceMapIds);
+        const terrain = preview ? terrainForDisplay(preview.terrainAnnotations)
+            : new Map(this.renderer.terrainByCell);
+        const unaligned = world.sourceMaps.filter(map =>
+            !hiddenSourceMapIds.has(map.id)
+            && map.alignment?.kind !== "Affine");
+        if (unaligned.length)
+            throw new Error(`Align or hide these source images before full-map export: ${unaligned.map(map => map.name).join(", ")}.`);
+
+        const cells: WorldCellGeometry[] = [];
+        let bounds: { minX: number; minY: number; maxX: number; maxY: number } | null = null;
+        let total = 0;
+        do {
+            const page = await this.api.getBoundedExportCells(world.id, world.version, cells.length);
+            if (page.tilingId !== world.tiling.id || page.tilingRevision !== world.tiling.revision
+                || page.offset !== cells.length || !page.bounds || (cells.length && total !== page.totalCells))
+                throw new Error("The map geometry changed during export. Reload and try again.");
+            total = page.totalCells;
+            bounds = page.bounds;
+            if (!page.cells.length || total > 20000 || cells.length + page.cells.length > total)
+                throw new Error("The map exporter received incomplete geometry.");
+            cells.push(...page.cells);
+        } while (cells.length < total);
+
+        if (!bounds || ![bounds.minX, bounds.minY, bounds.maxX, bounds.maxY].every(Number.isFinite))
+            throw new Error("The map has no finite export envelope.");
+        const dx = bounds.maxX - bounds.minX;
+        const dy = bounds.maxY - bounds.minY;
+        if (!(dx > 0 && dy > 0)) throw new Error("The map export envelope is empty.");
+        const pad = 0.035;
+        const aspect = dx / dy;
+        const imageWidth = Math.max(1, Math.round(maxDimension * Math.min(1, aspect)));
+        const imageHeight = Math.max(1, Math.round(maxDimension / Math.max(1, aspect)));
+        const viewport = new Viewport();
+        viewport.center = { x: (bounds.minX + bounds.maxX) / 2, y: (bounds.minY + bounds.maxY) / 2 };
+        viewport.zoom = Math.min(imageWidth / (dx * (1 + 2 * pad)),
+            imageHeight / (dy * (1 + 2 * pad)));
+        if (!Number.isFinite(viewport.zoom) || viewport.zoom <= 0)
+            throw new Error("The map geometry exceeds the exportable coordinate range.");
+
+        const canvas = document.createElement("canvas");
+        canvas.width = imageWidth;
+        canvas.height = imageHeight;
+        const renderer = new CanvasMapRenderer(canvas, viewport, () => world, () => {}, true);
+        renderer.visibleWorldCells = cells;
+        renderer.terrainByCell = terrain;
+        renderer.hiddenSourceMapIds = hiddenSourceMapIds;
+        renderer.showGrid = includeGrid && (preview?.showGrid ?? true);
+        renderer.showLabels = includeLabels;
+        renderer.backgroundTheme = background;
+        if (preview)
+            renderer.labelAllowedSubjectIds = new Set([
+                ...preview.featureLabelIds, ...preview.locationLabelIds
+            ]);
+        try {
+            await renderer.waitForSourceMaps();
+            if (this.disposed || this.getWorld()?.version !== world.version)
+                throw new Error("The map changed during export. Reload and try again.");
+            renderer.render();
+            await this.downloadPng(canvas, preview ? name + "-players" : name, background);
+        } finally {
+            renderer.dispose();
+        }
+    }
+
+    private async downloadPng(
+        source: HTMLCanvasElement, name: string,
+        background: "light" | "dark" | "transparent"): Promise<void> {
+        const target = document.createElement("canvas");
+        target.width = source.width;
+        target.height = source.height;
+        if (!target.width || !target.height) throw new Error("The map has no drawable area.");
+        const context = target.getContext("2d");
+        if (!context) throw new Error("The browser does not support exporting this map.");
+        if (background !== "transparent") {
+            context.fillStyle = background === "light" ? "#FFFFFF" : "#202020";
+            context.fillRect(0, 0, target.width, target.height);
+        }
+        context.drawImage(source, 0, 0);
+        const blob = await new Promise<Blob | null>(resolve => target.toBlob(resolve, "image/png"));
+        if (!blob) throw new Error("The browser could not encode the map PNG.");
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.download = `${name.replace(/[^a-z0-9-_]+/gi, "-").slice(0, 70) || "map"}.png`;
+        link.href = url;
+        document.body.append(link);
+        try { link.click(); } finally {
+            link.remove();
+            window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+        }
+    }
+
     private loadVisibleCells(): void {
         const world = this.getWorld();
         if (!world?.tiling || !this.api) return;
@@ -197,7 +360,12 @@ export class MapSurface {
         }
         if (cached?.worldKey === worldKey
             && extent.minX >= cached.bounds.minX && extent.maxX <= cached.bounds.maxX
-            && extent.minY >= cached.bounds.minY && extent.maxY <= cached.bounds.maxY) return;
+            && extent.minY >= cached.bounds.minY && extent.maxY <= cached.bounds.maxY) {
+            this.cellRequestGeneration++;
+            this.pendingCellsKey = null;
+            this.requestedCellsKey = null;
+            return;
+        }
         const padX = Math.max((extent.maxX - extent.minX) * .25, 0);
         const padY = Math.max((extent.maxY - extent.minY) * .25, 0);
         const bounds = {
@@ -207,17 +375,19 @@ export class MapSurface {
         if (Object.values(bounds).some(value => !Number.isFinite(value))) return;
         const queryKey = `${worldKey}:${Object.values(bounds).join(":")}`;
         if (queryKey === this.pendingCellsKey || queryKey === this.requestedCellsKey) return;
-        this.renderer.visibleWorldCells = [];
+        this.requestedCellsKey = null;
         this.pendingCellsKey = queryKey;
         const generation = ++this.cellRequestGeneration;
         void this.api.listVisibleCells(world.id, bounds).then(cells => {
             if (this.disposed || generation !== this.cellRequestGeneration) return;
             this.loadedCells = { worldKey, bounds };
             this.renderer.visibleWorldCells = cells;
+            this.accessibilityStatus.className = "hc-sr-only";
             this.accessibilityStatus.textContent = `${cells.length} cells available in the visible map area.`;
             this.requestRender();
         }).catch(() => {
             if (this.disposed || generation !== this.cellRequestGeneration) return;
+            this.accessibilityStatus.className = "hc-hint";
             this.accessibilityStatus.textContent =
                 "Cell boundaries are unavailable at this zoom. Zoom in or retry the map.";
             // Do not retry the same overflowing viewport on every animation frame.
@@ -242,6 +412,7 @@ export class MapSurface {
     }
 
     public resetView(): void {
+        this.requestedCellsKey = null;
         const world = this.getWorld();
         this.viewport.center = world?.tiling
             ? { ...world.tiling.origin }
@@ -372,4 +543,21 @@ export class MapSurface {
         }
         this.canvas.setAttribute("aria-label", parts.join(". "));
     }
+}
+/** Conflicting terrain tags remain uncolored rather than guessing at DM facts. */
+function terrainForDisplay(annotations: readonly EnvironmentAnnotation[]): Map<string, string> {
+    const categories = new Map<string, Set<string>>();
+    for (const annotation of annotations) {
+        if (annotation.scope.kind !== "Cell" || !annotation.scope.cell) continue;
+        const key = JSON.stringify(annotation.scope.cell);
+        for (const fact of annotation.facts) {
+            if (fact.dimension.trim().toLowerCase() !== "terrain"
+                || fact.valueKind !== "Tag" || !fact.tag?.trim()) continue;
+            if (!categories.has(key)) categories.set(key, new Set());
+            categories.get(key)!.add(fact.tag.trim().toLowerCase());
+        }
+    }
+    return new Map([...categories]
+        .filter(([, values]) => values.size === 1)
+        .map(([key, values]) => [key, [...values][0]]));
 }

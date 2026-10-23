@@ -1,6 +1,7 @@
 
 import type { HexCrawlApi } from "../../api";
 import { MapSurface } from "../../map-surface";
+import { toolRelativeHref } from "../../tool-route";
 import { blockInitiativeHandoffHref } from "../../encounter-handoff";
 import type {
     CellTraversalContext, CellProcedureResolutionHelperResult, CellWatchRequest, ExpeditionDetail, Overworld,
@@ -73,6 +74,7 @@ export async function renderPeriodicExpeditionWorkbench(
                     <button type="button" data-world>World authoring</button>
                     <button type="button" data-ruleset>Ruleset reference</button>
                     <button type="button" data-reload>Reload expedition</button>
+                    <button type="button" data-player-display>Open player map</button>
                     <span data-guidance-controls></span>
                 </nav>
             </header>
@@ -376,6 +378,15 @@ export async function renderPeriodicExpeditionWorkbench(
         if (world) navigate(`/worlds/${world.id}`);
     });
     required<HTMLButtonElement>("[data-reload]").addEventListener("click", () => void refresh());
+    required<HTMLButtonElement>("[data-player-display]").hidden = world === null;
+    required<HTMLButtonElement>("[data-player-display]").addEventListener("click", () => {
+        if (!world) return;
+        // Keep the GM workbench available while the player display refreshes
+        // in a separate tab or window.
+        const route = `/expeditions/${encodeURIComponent(runtime.id)}/player-map`;
+        window.open(toolRelativeHref(toolContext?.toolBasePath ?? "/", route),
+            "_blank", "noopener,noreferrer");
+    });
     const setInspectedGeometry = (geometry: WorldCellGeometry | null): void => {
         inspectedGeometry = geometry;
         inspectedTilingRevision = geometry ? world?.tiling?.revision ?? null : null;
@@ -536,6 +547,7 @@ export async function renderPeriodicExpeditionWorkbench(
             journeyAttention = null;
             world = nextWorld;
             required<HTMLButtonElement>("[data-world]").hidden = world === null;
+            required<HTMLButtonElement>("[data-player-display]").hidden = world === null;
             topology = nextTopology;
             selectedExit = topology.selectedExitInterfaceIndex;
             selectedVertex = selectedVertexFor(topology,

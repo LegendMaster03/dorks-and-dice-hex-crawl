@@ -38,6 +38,7 @@ public sealed class ExpeditionModule : IHexCrawlModule
         api.MapGet("/overworlds/{overworldId:guid}/expeditions", ListExpeditionsAsync);
         api.MapPost("/overworlds/{overworldId:guid}/cell-expeditions", StartCellExpeditionAsync);
         api.MapGet("/expeditions/{expeditionId:guid}", GetExpeditionAsync);
+        api.MapGet("/expeditions/{expeditionId:guid}/player-map", GetPlayerMapAsync);
         api.MapGet("/expeditions/{expeditionId:guid}/cell-topology", GetCellTopologyAsync);
         api.MapPost("/expeditions/{expeditionId:guid}/cells/advance", AdvanceCellWatchAsync);
         api.MapPost("/expeditions/{expeditionId:guid}/cells/resolution-helper", ResolveCellProcedureInputsAsync);
@@ -137,6 +138,41 @@ public sealed class ExpeditionModule : IHexCrawlModule
         var owner = UserId(context);
         var expedition = await service.GetExpeditionAsync(expeditionId, owner, cancellationToken);
         return Results.Ok(await ContractAsync(expedition, owner, service, cancellationToken));
+    }
+
+    /// <summary>
+    /// Owner-authenticated read-only player presentation. Never return the
+    /// original world, knowledge entry metadata, runtime history, or GM assets.
+    /// </summary>
+    private static async Task<IResult> GetPlayerMapAsync(
+        Guid expeditionId, HttpContext context,
+        HexCrawlService service, CancellationToken cancellationToken)
+    {
+        var owner = UserId(context);
+        var expedition = await service.GetExpeditionAsync(expeditionId, owner, cancellationToken);
+        if (expedition.Context.OverworldId is not { } overworldId)
+            throw new NotSupportedException("Player-map presentation requires an authored world.");
+        var saved = await service.GetOverworldAsync(overworldId, owner, cancellationToken);
+        var projected = ExpeditionPlayerMapProjection.Create(
+            saved.World, expedition.RequireKnowledge());
+        // A party marker is disclosed only if its current position is known
+        // through the selected policy or already-entered knowledge.
+        var position = expedition.Runtime is CellExpeditionState cell
+            && (projected.KnownCells.Contains(cell.Traversal.CurrentCell)
+                || expedition.Knowledge?.PresentationPolicy?.TerrainMode
+                    == HexCrawl.Domain.Presentation.TerrainPresentationMode.AlwaysVisible)
+            ? cell.Traversal.Position : (HexCrawl.Domain.Spatial.WorldPoint?)null;
+        return Results.Ok(new
+        {
+            world = OverworldContract.From(saved with { World = projected.World }),
+            terrainAnnotations = projected.World.EnvironmentAnnotations,
+            featureLabelIds = projected.FeatureLabels,
+            locationLabelIds = projected.LocationLabels,
+            showGrid = projected.ShowGrid,
+            knownCells = projected.KnownCells,
+            partyPosition = position,
+            expeditionVersion = expedition.Version
+        });
     }
 
     private static async Task<IResult> GetCellTopologyAsync(

@@ -28,9 +28,13 @@ public sealed class WorldModule : IHexCrawlModule
         api.MapGet("/overworlds/{overworldId:guid}/cell-procedures/compatibility", AssessCellProcedureAsync);
         api.MapGet("/overworlds/{overworldId:guid}", GetOverworldAsync);
         api.MapGet("/overworlds/{overworldId:guid}/cells/viewport", GetVisibleCellsAsync);
+        api.MapGet("/overworlds/{overworldId:guid}/cells/export", GetBoundedExportCellsAsync);
         api.MapGet("/overworlds/{overworldId:guid}/cells/containing", GetContainingCellsAsync);
         api.MapGet("/overworlds/{overworldId:guid}/cells/resolve", ResolveCellAsync);
         api.MapPut("/overworlds/{overworldId:guid}/name", RenameOverworldAsync);
+        api.MapPut("/overworlds/{overworldId:guid}/appearance", UpdateMapAppearanceAsync);
+        api.MapPut("/overworlds/{overworldId:guid}/player-map-disclosure", UpdatePlayerMapDisclosureAsync);
+        api.MapGet("/overworlds/{overworldId:guid}/player-map-preview", GetPlayerMapPreviewAsync);
         api.MapDelete("/overworlds/{overworldId:guid}", DeleteOverworldAsync);
 
         api.MapPost("/overworlds/{overworldId:guid}/locations", CreateLocationAsync);
@@ -319,6 +323,7 @@ public sealed class WorldModule : IHexCrawlModule
         double minY,
         double maxX,
         double maxY,
+        long? expectedVersion,
         HttpContext context,
         HexCrawlService service,
         CancellationToken cancellationToken)
@@ -326,6 +331,8 @@ public sealed class WorldModule : IHexCrawlModule
         var bounds = new HexCrawl.Domain.Spatial.WorldBounds(minX, minY, maxX, maxY);
         bounds.Validate();
         var world = await service.GetOverworldAsync(overworldId, UserId(context), cancellationToken);
+        if (expectedVersion is { } pinned && pinned != world.Version)
+            throw new HexCrawlConcurrencyException("The map changed during export. Reload and try again.");
         // Clamp the search *before* candidate enumeration. A large viewport
         // cannot make an otherwise small bounded map exceed the enumeration cap.
         if (world.World.SpatialTiling.PlayableEnvelope() is { } envelope)
@@ -342,6 +349,52 @@ public sealed class WorldModule : IHexCrawlModule
         // Hard cap on candidate enumeration, not merely on response length.
         return Results.Ok(world.World.SpatialTiling.Intersecting(bounds, limit: 2500)
             .Where(world.World.SpatialTiling.IsPlayable).ToArray());
+    }
+
+    // Full-map geometry is derived from the same verified tiling as the live viewport.
+    // Pagination never infers tile shape, and enforces a finite work budget.
+    private static async Task<IResult> GetBoundedExportCellsAsync(
+        Guid overworldId, long expectedVersion, int offset, int limit,
+        HttpContext context, HexCrawlService service, CancellationToken cancellationToken)
+    {
+        var stored = await service.GetOverworldAsync(overworldId, UserId(context), cancellationToken);
+        if (stored.Version != expectedVersion)
+            throw new HexCrawlConcurrencyException("The map changed during export. Reload and try again.");
+        var tiling = stored.World.SpatialTiling;
+        if (tiling.PlayableBounds is not { } bounds)
+            throw new ArgumentException("A full-map export requires finite map bounds. Export the visible area instead.");
+        const int maxCells = 20000;
+        const int pageSize = 500;
+        var motif = tiling.Topology.MotifCells;
+        var count = checked((long)bounds.Width * bounds.Height * motif.Count);
+        if (count <= 0 || count > maxCells)
+            throw new ArgumentException($"Full-map export supports at most {maxCells} cells. Export a visible area instead.");
+        if (offset < 0 || offset > count || limit is < 1 or > pageSize)
+            throw new ArgumentOutOfRangeException(nameof(offset), "Invalid export page parameters.");
+
+        var cells = new List<HexCrawl.Domain.Spatial.WorldCellGeometry>();
+        for (long i = offset; i < Math.Min(count, (long)offset + limit); i++)
+        {
+            var index = (int)(i % motif.Count);
+            var tileIndex = i / motif.Count;
+            var v = tileIndex % bounds.Height;
+            var u = tileIndex / bounds.Height;
+            var address = new HexCrawl.Domain.Spatial.PeriodicCellAddress(
+                motif[index].Id,
+                new HexCrawl.Domain.Spatial.LatticeDisplacement(
+                    bounds.MinU + u, bounds.MinV + v));
+            cells.Add(tiling.Resolve(address));
+        }
+        return Results.Ok(new
+        {
+            bounds = tiling.PlayableEnvelope(),
+            totalCells = (int)count,
+            offset,
+            worldVersion = stored.Version,
+            tilingId = tiling.Id,
+            tilingRevision = tiling.Revision,
+            cells
+        });
     }
 
     private static async Task<IResult> GetContainingCellsAsync(
@@ -394,6 +447,42 @@ public sealed class WorldModule : IHexCrawlModule
         Results.Ok(OverworldContract.From(await service.RenameOverworldAsync(
             overworldId, UserId(context), request.Name, request.ExpectedVersion,
             cancellationToken)));
+
+    private sealed record UpdateMapAppearanceRequest(
+        HexCrawl.Domain.World.MapAppearance Appearance, long ExpectedVersion);
+
+    private static async Task<IResult> UpdateMapAppearanceAsync(
+        Guid overworldId, UpdateMapAppearanceRequest request,
+        HttpContext context, HexCrawlService service, CancellationToken cancellationToken) =>
+        Results.Ok(OverworldContract.From(await service.UpdateMapAppearanceAsync(
+            overworldId, UserId(context), request.Appearance, request.ExpectedVersion,
+            cancellationToken)));
+
+    private sealed record PlayerMapDisclosureRequest(
+        HexCrawl.Domain.World.PlayerMapDisclosure Disclosure, long ExpectedVersion);
+
+    private static async Task<IResult> UpdatePlayerMapDisclosureAsync(
+        Guid overworldId, PlayerMapDisclosureRequest request,
+        HttpContext context, HexCrawlService service, CancellationToken cancellationToken) =>
+        Results.Ok(OverworldContract.From(await service.UpdatePlayerMapDisclosureAsync(
+            overworldId, UserId(context), request.Disclosure, request.ExpectedVersion, cancellationToken)));
+
+    // Owner-only export preview, deliberately not a player-facing map API.
+    private static async Task<IResult> GetPlayerMapPreviewAsync(
+        Guid overworldId, HttpContext context,
+        HexCrawlService service, CancellationToken cancellationToken)
+    {
+        var preview = await service.GetPlayerMapPreviewAsync(
+            overworldId, UserId(context), cancellationToken);
+        return Results.Ok(new
+        {
+            world = OverworldContract.From(preview.Stored with { World = preview.Preview }),
+            terrainAnnotations = preview.Preview.EnvironmentAnnotations,
+            featureLabelIds = preview.FeatureLabels,
+            locationLabelIds = preview.LocationLabels,
+            showGrid = preview.Stored.World.PlayerMapDisclosure.ShowGrid
+        });
+    }
 
     private static async Task<IResult> DeleteOverworldAsync(
         Guid overworldId,

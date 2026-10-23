@@ -102,7 +102,8 @@ function injectProcedureComposerShortcut(
     rootElement: HTMLElement,
     routeKind: string,
     navigate: (route: string, replace?: boolean) => void): void {
-    if (routeKind === "procedures" || routeKind === "procedure") return;
+    if (routeKind === "procedures" || routeKind === "procedure"
+        || routeKind === "player-map") return;
     const header = rootElement.querySelector<HTMLElement>(".hc-page-header");
     if (!header || header.querySelector("[data-procedure-composer-shortcut]")) return;
 

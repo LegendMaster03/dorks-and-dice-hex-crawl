@@ -149,7 +149,7 @@ test("reference map image loading retries transient failures instead of staying 
     assert.match(cache, /entry\.attempts \+= 1/);
     assert.match(cache, /entry\.attempts < MaximumLoadAttempts/);
     assert.match(cache, /entry\.retryTimer = window\.setTimeout/);
-    assert.match(cache, /void this\.load\(url, entry, onReady\)/);
+    assert.match(cache, /void this\.load\(url, entry\)/);
     assert.match(cache, /window\.clearTimeout\(entry\.retryTimer\)/);
     assert.match(cache, /console\.warn\(`Reference map image could not be loaded after/);
 });

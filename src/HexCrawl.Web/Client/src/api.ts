@@ -28,7 +28,10 @@ import type {
     StartStandaloneCrawlSessionInput,
     ToolHostContext,
     UpdateExpeditionPartyRequest,
-    WorldPoint
+    WorldPoint,
+    PlayerMapDisclosure,
+    PlayerMapPreview,
+    ExpeditionPlayerMapView
 } from "./types";
 import type {
     EnvironmentWorkbench,
@@ -183,16 +186,35 @@ export class HexCrawlApi {
 
     public listVisibleCells(
         worldId: string,
-        bounds: { minX: number; minY: number; maxX: number; maxY: number }): Promise<WorldCellGeometry[]> {
+        bounds: { minX: number; minY: number; maxX: number; maxY: number },
+        expectedVersion?: number): Promise<WorldCellGeometry[]> {
         const params = new URLSearchParams({
             minX: String(bounds.minX),
             minY: String(bounds.minY),
             maxX: String(bounds.maxX),
             maxY: String(bounds.maxY)
         });
+        if (expectedVersion !== undefined) params.set("expectedVersion", String(expectedVersion));
         return this.getJson(
             `/api/overworlds/${encodeURIComponent(worldId)}/cells/viewport?${params}`,
             "Visible world cells");
+    }
+
+    public getBoundedExportCells(worldId: string, expectedVersion: number, offset: number, limit = 500): Promise<{
+        bounds: { minX: number; minY: number; maxX: number; maxY: number };
+        totalCells: number;
+        offset: number;
+        worldVersion: number;
+        tilingId: string;
+        tilingRevision: number;
+        cells: WorldCellGeometry[];
+    }> {
+        const params = new URLSearchParams({
+            expectedVersion: String(expectedVersion), offset: String(offset), limit: String(limit)
+        });
+        return this.getJson(
+            `/api/overworlds/${encodeURIComponent(worldId)}/cells/export?${params}`,
+            "Full map geometry");
     }
 
     public resolveWorldCell(worldId: string, cell: WorldCellId): Promise<WorldCellGeometry> {
@@ -238,6 +260,30 @@ export class HexCrawlApi {
     public renameOverworld(id: string, name: string, expectedVersion: number): Promise<Overworld> {
         return this.sendJson("PUT", `/api/overworlds/${encodeURIComponent(id)}/name`,
             { name, expectedVersion }, "Rename overworld");
+    }
+
+    public updateMapAppearance(
+        id: string,
+        appearance: import("./map-appearance").MapAppearance,
+        expectedVersion: number): Promise<Overworld> {
+        return this.sendJson("PUT", `/api/overworlds/${encodeURIComponent(id)}/appearance`,
+            { appearance, expectedVersion }, "Update map appearance");
+    }
+
+    public updatePlayerMapDisclosure(
+        id: string, disclosure: PlayerMapDisclosure, expectedVersion: number): Promise<Overworld> {
+        return this.sendJson("PUT", `/api/overworlds/${encodeURIComponent(id)}/player-map-disclosure`,
+            { disclosure, expectedVersion }, "Update player map visibility");
+    }
+
+    public getExpeditionPlayerMap(id: string): Promise<ExpeditionPlayerMapView> {
+        return this.getJson(`/api/expeditions/${encodeURIComponent(id)}/player-map`,
+            "Expedition player map");
+    }
+
+    public getPlayerMapPreview(id: string): Promise<PlayerMapPreview> {
+        return this.getJson(`/api/overworlds/${encodeURIComponent(id)}/player-map-preview`,
+            "Player map preview");
     }
 
     public getWorldEnvironment(id: string): Promise<WorldEnvironment> {
