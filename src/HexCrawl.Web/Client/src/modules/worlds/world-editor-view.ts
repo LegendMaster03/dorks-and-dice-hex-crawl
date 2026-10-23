@@ -166,7 +166,10 @@ export async function renderWorldEditor(
                 showUiError(error, value);
             }
         } finally {
-            if (form && !disposed) setFormPending(form, false);
+            if (form && !disposed) {
+                setFormPending(form, false);
+                if (form === featureForm) updateDraftLabel();
+            }
         }
     };
 
@@ -471,7 +474,7 @@ export async function renderWorldEditor(
                         ? "Vertices must define a nonzero-length line or enclosed polygon area."
                         : "Choose Author geometry on map and click additional positions.");
         const saveButton = required<HTMLButtonElement>(featureForm, 'button[type="submit"]');
-        saveButton.disabled = !geometryReady;
+        saveButton.disabled = featureForm.dataset.pending === "true" || !geometryReady;
         const pointChanged = point && (!selectedFeature || selectedFeature.kind !== "Point"
             || selectedFeature.position?.x !== point.x || selectedFeature.position?.y !== point.y);
         mapSurface.renderer.authoringGeometry = kind === "Point" && pointChanged
@@ -990,6 +993,7 @@ export async function renderWorldEditor(
     const disposeExpeditionSetup = await enhanceExpeditionSetup(root, api, worldId, navigate);
 
     updatePointFieldVisibility();
+    updateDraftLabel();
     applyWorld(world);
     return () => {
         disposed = true;

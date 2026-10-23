@@ -183,65 +183,44 @@ export class MapSurface {
         const height = this.canvas.clientHeight;
         if (!(width > 0 && height > 0))
             throw new Error("The map canvas has no visible area to export.");
-        const corners = [
-            this.viewport.screenToWorld(0, 0, width, height),
-            this.viewport.screenToWorld(width, 0, width, height),
-            this.viewport.screenToWorld(width, height, width, height),
-            this.viewport.screenToWorld(0, height, width, height)
-        ];
-        const cells = await this.api.listVisibleCells(world.id, {
-            minX: Math.min(...corners.map(point => point.x)),
-            minY: Math.min(...corners.map(point => point.y)),
-            maxX: Math.max(...corners.map(point => point.x)),
-            maxY: Math.max(...corners.map(point => point.y))
-        }, world.version);
-        if (this.getWorld()?.version !== world.version)
-            throw new Error("The map changed during export. Reload and try again.");
-        if (!preview) {
-            this.renderer.visibleWorldCells = cells;
-            await this.renderer.waitForSourceMaps();
-            const originalTheme = this.renderer.backgroundTheme;
-            const originalDraft = this.renderer.authoringGeometry;
-            const originalSelection = this.renderer.selectedWorldCell;
-            const originalReview = this.renderer.reviewOverlay;
-            const originalRegistration = this.renderer.registrationPreview;
-            try {
-                this.renderer.backgroundTheme = background;
-                // Export saved cartography, not temporary editing handles or drafts.
-                this.renderer.authoringGeometry = null;
-                this.renderer.selectedWorldCell = null;
-                this.renderer.reviewOverlay = null;
-                this.renderer.registrationPreview = null;
-                this.renderer.render();
-                await this.downloadPng(this.canvas, name, background);
-            } finally {
-                this.renderer.backgroundTheme = originalTheme;
-                this.renderer.authoringGeometry = originalDraft;
-                this.renderer.selectedWorldCell = originalSelection;
-                this.renderer.reviewOverlay = originalReview;
-                this.renderer.registrationPreview = originalRegistration;
-                if (!this.disposed) this.renderer.render();
-            }
-            return;
-        }
+        // Freeze presentation state before the first asynchronous operation.
+        // Export never borrows the live canvas or its temporary authoring overlays.
         const canvas = document.createElement("canvas");
-        canvas.width = this.canvas.width;
-        canvas.height = this.canvas.height;
+        const ratio = Math.max(1, window.devicePixelRatio || 1);
+        canvas.width = Math.max(1, Math.floor(width * ratio));
+        canvas.height = Math.max(1, Math.floor(height * ratio));
         const viewport = new Viewport();
         viewport.center = { ...this.viewport.center };
-        viewport.zoom = this.viewport.zoom * canvas.width / width;
+        viewport.zoom = this.viewport.zoom;
+        const corners = [
+            viewport.screenToWorld(0, 0, width, height),
+            viewport.screenToWorld(width, height, width, height)
+        ];
+        viewport.zoom *= canvas.width / width;
         const renderer = new CanvasMapRenderer(canvas, viewport, () => world, () => {}, true);
-        renderer.visibleWorldCells = cells;
-        renderer.terrainByCell = terrainForDisplay(preview.terrainAnnotations);
-        renderer.showGrid = preview.showGrid;
+        this.renderer.copySourceMapPlacementsTo(renderer);
+        renderer.terrainByCell = preview ? terrainForDisplay(preview.terrainAnnotations)
+            : new Map(this.renderer.terrainByCell);
+        renderer.hiddenSourceMapIds = preview ? new Set() : new Set(this.renderer.hiddenSourceMapIds);
+        renderer.showGrid = preview?.showGrid ?? this.renderer.showGrid;
+        renderer.showLabels = this.renderer.showLabels;
         renderer.backgroundTheme = background;
-        renderer.labelAllowedSubjectIds = new Set([...preview.featureLabelIds, ...preview.locationLabelIds]);
-        try {
-            await renderer.waitForSourceMaps();
-            if (this.disposed || this.getWorld()?.version !== world.version)
+        if (preview)
+            renderer.labelAllowedSubjectIds = new Set([...preview.featureLabelIds, ...preview.locationLabelIds]);
+        const ensureCurrent = (): void => {
+            if (this.disposed || this.getWorld()?.id !== world.id || this.getWorld()?.version !== world.version)
                 throw new Error("The map changed during export. Reload and try again.");
+        };
+        try {
+            renderer.visibleWorldCells = await this.api.listVisibleCells(world.id, {
+                minX: corners[0].x, minY: corners[0].y,
+                maxX: corners[1].x, maxY: corners[1].y
+            }, world.version);
+            ensureCurrent();
+            await renderer.waitForSourceMaps();
+            ensureCurrent();
             renderer.render();
-            await this.downloadPng(canvas, name + "-players", background);
+            await this.downloadPng(canvas, preview ? name + "-players" : name, background);
         } finally {
             renderer.dispose();
         }
@@ -257,8 +236,11 @@ export class MapSurface {
             throw new Error("The map editor is no longer active.");
         if (!world.tiling.playableBounds)
             throw new Error("This world has no finite map bounds. Export the visible area instead.");
+        const hiddenSourceMapIds = preview ? new Set<string>() : new Set(this.renderer.hiddenSourceMapIds);
+        const terrain = preview ? terrainForDisplay(preview.terrainAnnotations)
+            : new Map(this.renderer.terrainByCell);
         const unaligned = world.sourceMaps.filter(map =>
-            !this.renderer.hiddenSourceMapIds.has(map.id)
+            !hiddenSourceMapIds.has(map.id)
             && map.alignment?.kind !== "Affine");
         if (unaligned.length)
             throw new Error(`Align or hide these source images before full-map export: ${unaligned.map(map => map.name).join(", ")}.`);
@@ -299,9 +281,8 @@ export class MapSurface {
         canvas.height = imageHeight;
         const renderer = new CanvasMapRenderer(canvas, viewport, () => world, () => {}, true);
         renderer.visibleWorldCells = cells;
-        renderer.terrainByCell = preview ? terrainForDisplay(preview.terrainAnnotations)
-            : new Map(this.renderer.terrainByCell);
-        renderer.hiddenSourceMapIds = preview ? new Set() : new Set(this.renderer.hiddenSourceMapIds);
+        renderer.terrainByCell = terrain;
+        renderer.hiddenSourceMapIds = hiddenSourceMapIds;
         renderer.showGrid = includeGrid && (preview?.showGrid ?? true);
         renderer.showLabels = includeLabels;
         renderer.backgroundTheme = background;
@@ -379,7 +360,12 @@ export class MapSurface {
         }
         if (cached?.worldKey === worldKey
             && extent.minX >= cached.bounds.minX && extent.maxX <= cached.bounds.maxX
-            && extent.minY >= cached.bounds.minY && extent.maxY <= cached.bounds.maxY) return;
+            && extent.minY >= cached.bounds.minY && extent.maxY <= cached.bounds.maxY) {
+            this.cellRequestGeneration++;
+            this.pendingCellsKey = null;
+            this.requestedCellsKey = null;
+            return;
+        }
         const padX = Math.max((extent.maxX - extent.minX) * .25, 0);
         const padY = Math.max((extent.maxY - extent.minY) * .25, 0);
         const bounds = {
@@ -389,17 +375,19 @@ export class MapSurface {
         if (Object.values(bounds).some(value => !Number.isFinite(value))) return;
         const queryKey = `${worldKey}:${Object.values(bounds).join(":")}`;
         if (queryKey === this.pendingCellsKey || queryKey === this.requestedCellsKey) return;
-        this.renderer.visibleWorldCells = [];
+        this.requestedCellsKey = null;
         this.pendingCellsKey = queryKey;
         const generation = ++this.cellRequestGeneration;
         void this.api.listVisibleCells(world.id, bounds).then(cells => {
             if (this.disposed || generation !== this.cellRequestGeneration) return;
             this.loadedCells = { worldKey, bounds };
             this.renderer.visibleWorldCells = cells;
+            this.accessibilityStatus.className = "hc-sr-only";
             this.accessibilityStatus.textContent = `${cells.length} cells available in the visible map area.`;
             this.requestRender();
         }).catch(() => {
             if (this.disposed || generation !== this.cellRequestGeneration) return;
+            this.accessibilityStatus.className = "hc-hint";
             this.accessibilityStatus.textContent =
                 "Cell boundaries are unavailable at this zoom. Zoom in or retry the map.";
             // Do not retry the same overflowing viewport on every animation frame.
@@ -424,6 +412,7 @@ export class MapSurface {
     }
 
     public resetView(): void {
+        this.requestedCellsKey = null;
         const world = this.getWorld();
         this.viewport.center = world?.tiling
             ? { ...world.tiling.origin }

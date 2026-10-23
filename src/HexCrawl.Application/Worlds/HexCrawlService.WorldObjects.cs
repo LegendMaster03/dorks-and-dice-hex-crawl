@@ -255,6 +255,8 @@ public sealed partial class HexCrawlService
     private static LinearFeature BuildLineFeature(Guid id, string name, string category, IReadOnlyList<WorldPoint> path)
     {
         ValidatePoints(path, "Linear-feature path");
+        if (!path.Skip(1).Any(point => point != path[0]))
+            throw new ArgumentException("Linear features require at least two distinct positions.", nameof(path));
         return new LinearFeature(id, name, category, path.ToArray());
     }
 

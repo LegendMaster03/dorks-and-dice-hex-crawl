@@ -126,18 +126,19 @@ export class CanvasMapRenderer {
         const world = this.getWorld();
         if (!world) return;
         await Promise.all(world.sourceMaps.filter(map => !this.hiddenSourceMapIds.has(map.id))
-            .map(map => new Promise<void>((resolve, reject) => {
-                const url = sourceMapAssetUrl(world.id, map.id);
-                const timeout = window.setTimeout(() =>
-                    reject(new Error(`Map image "${map.name}" did not load for export. Retry after the image is available.`)), 15000);
-                const check = (): void => {
-                    if (this.rasterCache.get(url, check)) {
-                        window.clearTimeout(timeout);
-                        resolve();
-                    }
-                };
-                check();
-            })));
+            .map(async map => {
+                try {
+                    await this.rasterCache.waitUntilReady(sourceMapAssetUrl(world.id, map.id));
+                } catch {
+                    throw new Error(`Map image "${map.name}" did not load for export. Retry after the image is available.`);
+                }
+            }));
+    }
+
+    /** Retain the displayed provisional placement, but never registration previews. */
+    public copySourceMapPlacementsTo(target: CanvasMapRenderer): void {
+        for (const [id, transform] of this.provisionalSourceMapTransforms)
+            target.provisionalSourceMapTransforms.set(id, { ...transform });
     }
 
     public dispose(): void {

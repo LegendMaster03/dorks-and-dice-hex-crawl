@@ -78,9 +78,9 @@ test("dark export changes contrast but never leaves temporary editor visuals in 
     const renderer = read("canvas-renderer.ts");
     const surface = read("map-surface.ts");
     assert.match(renderer, /backgroundTheme === "dark"/);
-    assert.match(surface, /this\.renderer\.authoringGeometry = null/);
-    assert.match(surface, /this\.renderer\.registrationPreview = null/);
-    assert.match(surface, /this\.renderer\.backgroundTheme = originalTheme/);
+    assert.doesNotMatch(surface, /this\.renderer\.authoringGeometry = null/);
+    assert.match(surface, /copySourceMapPlacementsTo/);
+    assert.match(surface, /renderer\.dispose\(\)/);
     assert.match(surface, /renderer\.backgroundTheme = background/);
 });
 
@@ -89,7 +89,7 @@ test("geometry authoring displays unsaved draft vertices and disables incomplete
     const view = read("modules/worlds/world-editor-view.ts");
     assert.match(renderer, /drawAuthoringGeometry\(ctx, width, height\)/);
     assert.match(view, /mapSurface\.renderer\.authoringGeometry/);
-    assert.match(view, /saveButton\.disabled = !geometryReady/);
+    assert.match(view, /saveButton\.disabled = .* !geometryReady/);
     assert.match(view, /if \(kind !== "Point"\) draft = \[\]/);
 });
 

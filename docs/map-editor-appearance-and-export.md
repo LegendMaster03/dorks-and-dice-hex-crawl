@@ -43,6 +43,18 @@ their saved affine registrations (or that the layer be hidden), because a
 provisional viewport-centered placement is not a reliable global position.
 Export does not silently omit missing images or incomplete cell batches.
 
+Viewport exports capture the viewport, dimensions, terrain, and image visibility
+before asynchronous geometry/image loading, and render on an isolated canvas.
+Panning or resizing the editor does not change an in-progress export; changing
+the saved world while it loads produces a stale-world error. Temporary geometry,
+selection, and registration previews are never copied into that renderer.
+Image readiness supports multiple waiters, terminal failure, retry, and disposal.
+
+Viewport cell requests retain the previous successful geometry until a replacement
+succeeds. Enumeration/network failures display a zoom/retry message and do not
+invalidate that geometry. Returning to the cached viewport ignores late responses
+for a different viewport; resetting the view permits a failed query to be retried.
+
 The renderer uses the same topology and world-space geometry as the live map;
 no rule-system-specific hex/square drawing engine is introduced.
 
