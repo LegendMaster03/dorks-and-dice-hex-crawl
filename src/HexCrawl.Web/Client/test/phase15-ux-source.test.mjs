@@ -1083,9 +1083,8 @@ test("generic exploration keeps the established compass in the map viewport", ()
     const journey = fs.readFileSync(
         path.join(sourceDir, "modules/expeditions/journey-panel.ts"), "utf8");
 
-    // The travel card remains the first content in the table rail.
-    // Stage help already exists in the journey panel, not above navigation.
-    assert.match(expedition, /<aside class="hc-panel hc-sidebar hc-table-rail" aria-label="At the table">\s*<h2>At the table<\/h2>\s*<section class="hc-current-travel"/);
+    // Travel information is available in a map tool instead of a scrolling rail.
+    assert.match(expedition, /data-overview>\s*<section class="hc-current-travel"/);
     assert.match(expedition, /<div class="hc-map-frame"><div class="hc-map-host" data-map><\/div><div data-cell-navigator aria-label="Map travel compass"><\/div><\/div>/);
     assert.doesNotMatch(expedition, /data-exploration-flow|data-exploration-stages/);
     assert.match(journey, /this\.startView\(state\),\s*this\.processesView\(state\),\s*this\.eventsView\(state\),\s*this\.historyView\(state\)/);
@@ -1116,10 +1115,10 @@ test("spatial travel compass overlays the upper-left map frame instead of the ta
         path.join(sourceDir, "modules/expeditions/periodic-expedition-workbench.ts"), "utf8");
     const styles = fs.readFileSync(path.join(sourceDir, "phase15-styles.ts"), "utf8");
     const mapStart = periodic.indexOf('<div class="hc-map-frame">');
-    const railStart = periodic.indexOf('<aside class="hc-panel hc-sidebar hc-table-rail"');
-    assert.ok(mapStart >= 0 && railStart > mapStart);
-    const mapMarkup = periodic.slice(mapStart, railStart);
-    const railMarkup = periodic.slice(railStart, periodic.indexOf('</aside>', railStart));
+    const stagingStart = periodic.indexOf('<div data-map-tool-staging hidden>');
+    assert.ok(mapStart >= 0 && stagingStart > mapStart);
+    const mapMarkup = periodic.slice(mapStart, stagingStart);
+    const railMarkup = periodic.slice(stagingStart, periodic.indexOf('<div data-travel-staging', stagingStart));
     assert.match(mapMarkup, /<div class="hc-map-frame"><div class="hc-map-host" data-map><\/div><div data-cell-navigator aria-label="Map travel compass"><\/div><\/div>/);
     assert.doesNotMatch(railMarkup, /data-cell-navigator/);
     assert.match(periodic, /required<HTMLElement>\("\[data-cell-navigator\]"\)\.replaceChildren\(navigation\)/);

@@ -204,8 +204,8 @@ test("Phase 15 is the shared action, summary, drawer and map-first UI for V2 cel
     assert.match(periodic, /hc-phase15-runtime-summary/);
     assert.match(periodic, /hc-stat-action-grid/);
     assert.match(periodic, /hc-panel hc-map-panel/);
-    assert.match(periodic, /hc-panel hc-sidebar hc-table-rail/);
-    assert.match(periodic, /openWorkspaceDrawer\(root, "Travel \/ watch"/);
+    assert.match(periodic, /aria-label="GM map tools"/);
+    assert.match(periodic, /openExpeditionMapPanel\(root, "Travel \/ watch"/);
     assert.match(periodic, /travelDock\.append\(travelContent\)/);
     assert.match(periodic, /data-gameplay-panels/);
     assert.match(periodic, /new MapSurface\(/);

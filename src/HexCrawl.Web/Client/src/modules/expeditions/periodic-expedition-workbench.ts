@@ -12,7 +12,8 @@ import { currentPeriodicCellAdjacency, sameWorldCell } from "./current-cell-topo
 import { renderCurrentCellNavigator } from "./cell-navigator";
 import { adjacencyForIntent } from "./spatial-adjacency";
 import { guidancePreferenceButton } from "../../ui/guidance";
-import { openWorkspaceDrawer, statAction, textElement, type WorkspaceDrawer } from "../../ui/workspace";
+import { statAction, textElement, type WorkspaceDrawer } from "../../ui/workspace";
+import { openExpeditionMapPanel } from "./expedition-map-panel";
 import { renderPhase15NextAction } from "./phase15-next-action";
 import { nextCellExpeditionAction } from "./phase15-cell-action";
 import { navigationResolutionDue } from "./expedition-workflow";
@@ -20,7 +21,7 @@ import type { ExpeditionJourneyState } from "../../journey-types";
 import type { ExpeditionEffectState } from "../../effect-types";
 import type { SurvivalResources } from "../../survival-types";
 import { currentCellInspectionHint, polygonContainsSubject, uniquelyAdjacentInterface } from "./phase20-cell-ui-policy";
-import { discoveredSubjectIds } from "../../runtime-view";
+import { discoveredSubjectIds, formatRuntimeEventMessage } from "../../runtime-view";
 import { encounterLocationId } from "./keyed-location-encounter";
 import { mountPeriodicGameplayPanels } from "./periodic-gameplay-panels";
 import { publishExpeditionRuntimeChanged } from "./expedition-runtime-events";
@@ -86,41 +87,36 @@ export async function renderPeriodicExpeditionWorkbench(
             <div class="hc-workspace-grid">
                 <div class="hc-panel hc-map-panel" aria-label="Expedition map">
                     <h2 data-map-title>Expedition map</h2>
+                    <nav class="hc-expedition-map-toolbar" aria-label="GM map tools">
+                        <button type="button" data-gm-overview>Overview</button>
+                        <button type="button" data-gm-travel>Travel</button>
+                        <button type="button" data-gm-cell>Selected cell</button>
+                        <button type="button" data-gm-party>Party</button>
+                        <button type="button" data-gm-environment>Environment</button>
+                        <button type="button" data-gm-survival>Resources</button>
+                        <button type="button" data-gm-effects>Effects</button>
+                        <button type="button" data-gm-journey>Journey</button>
+                        <button type="button" data-gm-history>History</button>
+                        <button type="button" data-gm-reposition>Teleport party to selected cell</button>
+                    </nav>
                     <div class="hc-map-frame"><div class="hc-map-host" data-map></div><div data-cell-navigator aria-label="Map travel compass"></div></div>
                     <p class="hc-hint" data-inspection>Click a uniquely adjacent cell to set travel intent; distant or ambiguous cells are inspection-only. Clicking never moves the party.</p>
-                    <section class="hc-stack" data-cell-details aria-label="Selected cell and player knowledge"></section>
                 </div>
-                <aside class="hc-panel hc-sidebar hc-table-rail" aria-label="At the table">
-                    <h2>At the table</h2>
+            </div>
+            <div data-map-tool-staging hidden>
+                <section class="hc-stack" data-cell-details aria-label="Selected cell and player knowledge"></section>
+                <section class="hc-stack" data-overview>
                     <section class="hc-current-travel" aria-label="Current travel">
                         <h3>Current travel</h3><p data-status></p><p data-actual></p>
                         <p class="hc-hint" data-course>Choose a boundary to set intended travel.</p>
                         <button type="button" data-open-travel>Resolve travel / watch</button>
                     </section>
                     <details><summary>Party and movement summary</summary><div data-party></div><div data-movement></div></details>
-                    <details data-gameplay-disclosure>
-                        <summary>Party and gameplay</summary>
-                        <section class="hc-stack hc-gameplay-controls" data-gameplay-panels
-                            aria-label="Shared party and gameplay editors">
-                            <p class="hc-hint">The existing party, environment, journey, effects and survival editors remain available.</p>
-                        </section>
-                    </details>
-                    <details data-history-disclosure><summary>Journey events</summary><ol data-history></ol></details>
-                </aside>
+                </section>
+                <section class="hc-stack hc-gameplay-controls" data-gameplay-panels
+                    aria-label="Shared party and gameplay editors"></section>
+                <ol data-history aria-label="Journey events"></ol>
             </div>
-            <section class="hc-gm-tools">
-                <details><summary>GM Tools</summary>
-                    <div class="hc-button-row">
-                        <button type="button" data-gm-travel>Travel and navigation</button>
-                        <button type="button" data-gm-party>Party and travel order</button>
-                        <button type="button" data-gm-environment>Environment</button>
-                        <button type="button" data-gm-survival>Survival and resources</button>
-                        <button type="button" data-gm-journey>Journey and challenges</button>
-                        <button type="button" data-gm-history>Expedition history</button>
-                        <button type="button" data-gm-reposition>Teleport party to selected cell</button>
-                    </div>
-                </details>
-            </section>
             <div data-travel-staging hidden>
                 <section data-travel-content class="hc-focused-watch-workspace">
                     <h2>Travel and watch resolution</h2>
@@ -206,6 +202,10 @@ export async function renderPeriodicExpeditionWorkbench(
     const travelDock = required<HTMLElement>("[data-travel-staging]");
     let travelDrawer: WorkspaceDrawer | null = null;
     let historyDrawer: WorkspaceDrawer | null = null;
+    let gameplayDrawer: WorkspaceDrawer | null = null;
+    let gameplaySelector: string | null = null;
+    let inspectionDrawer: WorkspaceDrawer | null = null;
+    let repositionDrawer: WorkspaceDrawer | null = null;
     const captureReturnFocus = (): (() => HTMLElement | null) => {
         const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
         const statLabel = opener?.querySelector(".hc-stat-action-label")?.textContent;
@@ -223,7 +223,7 @@ export async function renderPeriodicExpeditionWorkbench(
     };
     const openTravelDrawer = (focus?: "encounter" | "course" | "lost" | "navigation"): void => {
         if (!travelDrawer) {
-            travelDrawer = openWorkspaceDrawer(root, "Travel / watch",
+            travelDrawer = openExpeditionMapPanel(root, "Travel / watch",
                 body => { body.append(travelContent); },
                 captureReturnFocus(),
                 () => {
@@ -248,11 +248,23 @@ export async function renderPeriodicExpeditionWorkbench(
     required<HTMLButtonElement>("[data-gm-travel]").addEventListener("click",
         () => openTravelDrawer());
     const openGameplayPanel = (selector: string, actionLabel?: string): void => {
-        const disclosure = required<HTMLDetailsElement>("[data-gameplay-disclosure]");
-        disclosure.open = true;
+        const host = required<HTMLElement>("[data-gameplay-panels]");
+        if (!gameplayDrawer || gameplaySelector !== selector) {
+            gameplayDrawer = openExpeditionMapPanel(root, "GM tools", body => {
+                // Move the host, not an individual editor: controllers keep
+                // their DOM references and unfinished inputs when switching.
+                body.append(host);
+            }, captureReturnFocus(), () => {
+                required<HTMLElement>("[data-map-tool-staging]").append(host);
+                gameplayDrawer = null;
+                gameplaySelector = null;
+            });
+            gameplaySelector = selector;
+        }
         const panel = required<HTMLDetailsElement>(selector);
+        for (const child of host.children) (child as HTMLElement).hidden = child !== panel;
+        gameplayDrawer.element.querySelector("h2")!.textContent = panel.querySelector("summary")!.textContent;
         panel.open = true;
-        panel.scrollIntoView({ block: "nearest" });
         const controls = Array.from(panel.querySelectorAll<HTMLButtonElement>("button"));
         const target = actionLabel
             ? controls.find(button => button.textContent?.trim() === actionLabel) : null;
@@ -264,14 +276,28 @@ export async function renderPeriodicExpeditionWorkbench(
         openGameplayPanel(".hc-environment-panel"));
     required<HTMLButtonElement>("[data-gm-survival]").addEventListener("click", () =>
         openGameplayPanel("[data-survival-resources-panel]"));
+    required<HTMLButtonElement>("[data-gm-effects]").addEventListener("click", () =>
+        openGameplayPanel("[data-effects-panel]"));
     required<HTMLButtonElement>("[data-gm-journey]").addEventListener("click", () =>
         openGameplayPanel("[data-journey-panel]"));
+    const openInspection = (selector: string, title: string): void => {
+        const content = required<HTMLElement>(selector);
+        inspectionDrawer = openExpeditionMapPanel(root, title,
+            body => { body.append(content); }, captureReturnFocus(), () => {
+                required<HTMLElement>("[data-map-tool-staging]").append(content);
+                inspectionDrawer = null;
+            });
+    };
+    required<HTMLButtonElement>("[data-gm-overview]").addEventListener("click", () =>
+        openInspection("[data-overview]", "Expedition overview"));
+    required<HTMLButtonElement>("[data-gm-cell]").addEventListener("click", () =>
+        openInspection("[data-cell-details]", "Selected cell and player knowledge"));
     const openHistory = (): void => {
-        const disclosure = required<HTMLDetailsElement>("[data-history-disclosure]");
+        const dock = required<HTMLElement>("[data-map-tool-staging]");
         const history = required<HTMLOListElement>("[data-history]");
-        if (!historyDrawer) historyDrawer = openWorkspaceDrawer(root, "Expedition history",
+        if (!historyDrawer) historyDrawer = openExpeditionMapPanel(root, "Expedition history",
             body => { body.append(history); }, captureReturnFocus(), () => {
-                disclosure.append(history);
+                dock.append(history);
                 historyDrawer = null;
             });
         historyDrawer.element.querySelector<HTMLElement>("button")?.focus();
@@ -285,7 +311,7 @@ export async function renderPeriodicExpeditionWorkbench(
     const openRepositionDrawer = (): void => {
         if (!canReposition() || !inspectedGeometry) return;
         const target = inspectedGeometry;
-        openWorkspaceDrawer(root, "Teleport party", (body, close) => {
+        repositionDrawer = openExpeditionMapPanel(root, "Teleport party", (body, close) => {
             body.append(textElement("p",
                 "This moves the party to the selected authoritative cell without spending travel time. It is not a movement or discovery resolution."));
             body.append(textElement("p",
@@ -315,7 +341,7 @@ export async function renderPeriodicExpeditionWorkbench(
                 });
             });
             body.append(form);
-        });
+        }, captureReturnFocus(), () => { repositionDrawer = null; });
     };
     required<HTMLButtonElement>("[data-gm-reposition]").addEventListener("click", openRepositionDrawer);
     required<HTMLButtonElement>("[data-home]").addEventListener("click", () => navigate("/"));
@@ -490,6 +516,17 @@ export async function renderPeriodicExpeditionWorkbench(
             effectsAttention = effects;
             attentionStatus = failed ? "error" : "ready";
             render();
+        },
+        (nextWorld, environment) => {
+            if (disposed || !world || !nextWorld || !environment
+                || nextWorld.id !== world.id || nextWorld.version < world.version) return;
+            if (environment.version !== nextWorld.version) {
+                showUiError(error, new Error("The world changed while loading terrain. Reload the expedition to refresh the map."));
+                return;
+            }
+            world = nextWorld;
+            map.setTerrainAnnotations(environment.annotations);
+            map.requestRender();
         }
     );
 
@@ -815,7 +852,7 @@ export async function renderPeriodicExpeditionWorkbench(
             textElement("p", `Time: day ${state.currentDay}, ${state.completedWatches} completed watches.`));
         if (runtime.history.length > 0) {
             guide.append(textElement("p",
-                `Last recorded event: ${runtime.history[runtime.history.length - 1].message}`));
+                `Last recorded event: ${formatRuntimeEventMessage(runtime.history[runtime.history.length - 1].message)}`));
         }
         const activate = (): void => {
             if (action.kind === "procedure") {
@@ -901,8 +938,12 @@ export async function renderPeriodicExpeditionWorkbench(
         const panel = required<HTMLElement>("[data-cell-details]");
         panel.replaceChildren();
         required<HTMLButtonElement>("[data-gm-reposition]").disabled = !canReposition();
-        if (!inspectedGeometry || !world) return;
+        if (!inspectedGeometry || !world) {
+            panel.append(textElement("p", "Select a cell on the map to inspect its locations and player knowledge.", "hc-muted"));
+            return;
+        }
         const selected = inspectedGeometry;
+        panel.append(textElement("p", `Cell ${selected.id.address.motifCellId} (${selected.id.address.translation.u}, ${selected.id.address.translation.v})`));
         const row = document.createElement("div");
         row.className = "hc-button-row";
         const teleport = document.createElement("button");
@@ -1222,7 +1263,7 @@ export async function renderPeriodicExpeditionWorkbench(
         history.replaceChildren();
         for (const entry of runtime.history.slice(-30).reverse()) {
             const li = document.createElement("li");
-            li.textContent = entry.message;
+            li.textContent = formatRuntimeEventMessage(entry.message);
             history.append(li);
         }
 
@@ -1234,6 +1275,9 @@ export async function renderPeriodicExpeditionWorkbench(
         refreshGeneration++;
         travelDrawer?.close();
         historyDrawer?.close();
+        gameplayDrawer?.close();
+        inspectionDrawer?.close();
+        repositionDrawer?.close();
         gameplay.dispose();
         map.dispose();
         root.classList.remove("hc-phase15");
