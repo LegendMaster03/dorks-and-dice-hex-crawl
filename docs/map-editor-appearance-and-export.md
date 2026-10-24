@@ -133,6 +133,37 @@ save both fields and restore them on restart. The SQL schema and map assets
 remain unchanged; no destructive migration or database reset is required.
 HTTP integration tests explicitly cover persistence across a new host instance.
 
+## Shared map tools
+
+The map maker and spatial expedition workbench use the same nonmodal map-tool
+layout and lifecycle in `Client/src/ui/map-tool-panel.ts`. Toolbar buttons open
+one editor over the map; the uncovered map remains available for pan, zoom,
+selection, and geometry placement. Narrow screens use a bottom panel with its
+own scrolling region. Close or Escape returns focus to the opening control.
+
+Existing editor hosts move into the panel instead of being rebuilt. Switching
+tools preserves unfinished geometry, form fields, reference-image file inputs,
+registration controls, and export settings. Selecting a cell opens its tools
+when no other editor is active; existing cell shortcuts open the location or
+feature editor. Viewport state remains owned by the existing map surface.
+
+Acceptance checks for this layout:
+
+- Switch between Features, Appearance, Reference maps, and Export PNG with
+  unfinished changes; return to each tool and verify its inputs remain intact.
+- Pan and zoom the uncovered map while a panel is open, then place geometry
+  using the existing authoring action.
+- Select a cell and use its location and feature editing shortcuts.
+- Close with the button and Escape; verify focus returns and reopening works.
+- On desktop and narrow screens, verify panel contents scroll independently,
+  toolbar buttons remain usable, and the map stays visible.
+- Navigate away with a panel open, then return and verify no old panel remains.
+
+Automated DOM interaction tests cover state retention, map interaction, panel
+replacement, focus return, cell shortcuts, export arguments, and disposal.
+Live browser acceptance of this layout remains outstanding until this branch
+is available in a preview or the tester/development deployment.
+
 ## Regression coverage
 
 - Browser tests cover palette defaults and overrides, the shared encoder,
