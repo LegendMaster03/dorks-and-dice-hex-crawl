@@ -13,7 +13,7 @@ import { renderCurrentCellNavigator } from "./cell-navigator";
 import { adjacencyForIntent } from "./spatial-adjacency";
 import { guidancePreferenceButton } from "../../ui/guidance";
 import { statAction, textElement, type WorkspaceDrawer } from "../../ui/workspace";
-import { openExpeditionMapPanel } from "./expedition-map-panel";
+import { createMapToolHost, openMapToolPanel } from "../../ui/map-tool-panel";
 import { renderPhase15NextAction } from "./phase15-next-action";
 import { nextCellExpeditionAction } from "./phase15-cell-action";
 import { navigationResolutionDue } from "./expedition-workflow";
@@ -67,7 +67,7 @@ export async function renderPeriodicExpeditionWorkbench(
     let attentionStatus: "loading" | "ready" | "error" = "loading";
 
     root.innerHTML = `
-        <section class="hc-page hc-workspace hc-expedition hc-periodic-expedition hc-phase15-expedition">
+        <section class="hc-page hc-workspace hc-expedition hc-periodic-expedition hc-phase15-expedition hc-map-tool-workspace">
             <header class="hc-page-header">
                 <div><h1 data-title></h1><p data-context-label></p></div>
                 <nav class="hc-button-row">
@@ -79,7 +79,6 @@ export async function renderPeriodicExpeditionWorkbench(
                     <span data-guidance-controls></span>
                 </nav>
             </header>
-            <div data-error class="hc-error" role="alert" hidden></div>
             <div data-phase15-action></div>
             <section class="hc-phase15-runtime-summary">
                 <div class="hc-stat-action-grid" data-phase15-stats></div>
@@ -87,7 +86,8 @@ export async function renderPeriodicExpeditionWorkbench(
             <div class="hc-workspace-grid">
                 <div class="hc-panel hc-map-panel" aria-label="Expedition map">
                     <h2 data-map-title>Expedition map</h2>
-                    <nav class="hc-expedition-map-toolbar" aria-label="GM map tools">
+                    <nav class="hc-map-tool-toolbar hc-expedition-map-toolbar" aria-label="GM map tools">
+                        <div data-error class="hc-error" role="alert" hidden></div>
                         <button type="button" data-gm-overview>Overview</button>
                         <button type="button" data-gm-travel>Travel</button>
                         <button type="button" data-gm-cell>Selected cell</button>
@@ -202,8 +202,6 @@ export async function renderPeriodicExpeditionWorkbench(
     const travelDock = required<HTMLElement>("[data-travel-staging]");
     let travelDrawer: WorkspaceDrawer | null = null;
     let historyDrawer: WorkspaceDrawer | null = null;
-    let gameplayDrawer: WorkspaceDrawer | null = null;
-    let gameplaySelector: string | null = null;
     let inspectionDrawer: WorkspaceDrawer | null = null;
     let repositionDrawer: WorkspaceDrawer | null = null;
     const captureReturnFocus = (): (() => HTMLElement | null) => {
@@ -221,9 +219,12 @@ export async function renderPeriodicExpeditionWorkbench(
             return null;
         };
     };
+    const gameplayTools = createMapToolHost(root,
+        required<HTMLElement>("[data-gameplay-panels]"),
+        required<HTMLElement>("[data-map-tool-staging]"), captureReturnFocus);
     const openTravelDrawer = (focus?: "encounter" | "course" | "lost" | "navigation"): void => {
         if (!travelDrawer) {
-            travelDrawer = openExpeditionMapPanel(root, "Travel / watch",
+            travelDrawer = openMapToolPanel(root, "Travel / watch",
                 body => { body.append(travelContent); },
                 captureReturnFocus(),
                 () => {
@@ -248,23 +249,8 @@ export async function renderPeriodicExpeditionWorkbench(
     required<HTMLButtonElement>("[data-gm-travel]").addEventListener("click",
         () => openTravelDrawer());
     const openGameplayPanel = (selector: string, actionLabel?: string): void => {
-        const host = required<HTMLElement>("[data-gameplay-panels]");
-        if (!gameplayDrawer || gameplaySelector !== selector) {
-            gameplayDrawer = openExpeditionMapPanel(root, "GM tools", body => {
-                // Move the host, not an individual editor: controllers keep
-                // their DOM references and unfinished inputs when switching.
-                body.append(host);
-            }, captureReturnFocus(), () => {
-                required<HTMLElement>("[data-map-tool-staging]").append(host);
-                gameplayDrawer = null;
-                gameplaySelector = null;
-            });
-            gameplaySelector = selector;
-        }
         const panel = required<HTMLDetailsElement>(selector);
-        for (const child of host.children) (child as HTMLElement).hidden = child !== panel;
-        gameplayDrawer.element.querySelector("h2")!.textContent = panel.querySelector("summary")!.textContent;
-        panel.open = true;
+        gameplayTools.open(panel);
         const controls = Array.from(panel.querySelectorAll<HTMLButtonElement>("button"));
         const target = actionLabel
             ? controls.find(button => button.textContent?.trim() === actionLabel) : null;
@@ -282,7 +268,7 @@ export async function renderPeriodicExpeditionWorkbench(
         openGameplayPanel("[data-journey-panel]"));
     const openInspection = (selector: string, title: string): void => {
         const content = required<HTMLElement>(selector);
-        inspectionDrawer = openExpeditionMapPanel(root, title,
+        inspectionDrawer = openMapToolPanel(root, title,
             body => { body.append(content); }, captureReturnFocus(), () => {
                 required<HTMLElement>("[data-map-tool-staging]").append(content);
                 inspectionDrawer = null;
@@ -295,7 +281,7 @@ export async function renderPeriodicExpeditionWorkbench(
     const openHistory = (): void => {
         const dock = required<HTMLElement>("[data-map-tool-staging]");
         const history = required<HTMLOListElement>("[data-history]");
-        if (!historyDrawer) historyDrawer = openExpeditionMapPanel(root, "Expedition history",
+        if (!historyDrawer) historyDrawer = openMapToolPanel(root, "Expedition history",
             body => { body.append(history); }, captureReturnFocus(), () => {
                 dock.append(history);
                 historyDrawer = null;
@@ -311,7 +297,7 @@ export async function renderPeriodicExpeditionWorkbench(
     const openRepositionDrawer = (): void => {
         if (!canReposition() || !inspectedGeometry) return;
         const target = inspectedGeometry;
-        repositionDrawer = openExpeditionMapPanel(root, "Teleport party", (body, close) => {
+        repositionDrawer = openMapToolPanel(root, "Teleport party", (body, close) => {
             body.append(textElement("p",
                 "This moves the party to the selected authoritative cell without spending travel time. It is not a movement or discovery resolution."));
             body.append(textElement("p",
@@ -1275,7 +1261,7 @@ export async function renderPeriodicExpeditionWorkbench(
         refreshGeneration++;
         travelDrawer?.close();
         historyDrawer?.close();
-        gameplayDrawer?.close();
+        gameplayTools.close();
         inspectionDrawer?.close();
         repositionDrawer?.close();
         gameplay.dispose();

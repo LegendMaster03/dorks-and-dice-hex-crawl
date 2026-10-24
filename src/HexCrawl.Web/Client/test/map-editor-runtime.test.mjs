@@ -197,10 +197,10 @@ test("failed wider cell query retains geometry; returning to cached bounds ignor
     assert.equal(surface.renderer.visibleWorldCells, geometry);
 });
 
-test("feature Save respects geometry readiness initially and after success/failure/reset", async t => {
+async function editorFixture(t, initialWorld = world()) {
     const dom = new JSDOM('<div id="root"></div>', { url: "https://fixture.invalid/" });
     const keys = ["window", "document", "HTMLElement", "HTMLCanvasElement", "HTMLFormElement", "HTMLDetailsElement",
-        "HTMLInputElement", "HTMLSelectElement", "HTMLButtonElement", "localStorage", "ResizeObserver", "requestAnimationFrame"];
+        "HTMLInputElement", "HTMLSelectElement", "HTMLButtonElement", "CustomEvent", "localStorage", "ResizeObserver", "requestAnimationFrame"];
     const previous = new Map(keys.map(key => [key, globalThis[key]]));
     for (const key of keys) globalThis[key] = key === "window" ? dom.window : dom.window[key];
     globalThis.ResizeObserver = class { observe() {} disconnect() {} };
@@ -208,20 +208,27 @@ test("feature Save respects geometry readiness initially and after success/failu
     let surface;
     t.mock.method(MapSurface.prototype, "requestRender", function () { surface = this; });
     t.mock.method(globalThis, "fetch", async () => ({ ok: true, json: async () => [] }));
-    t.after(() => { for (const [key, value] of previous) globalThis[key] = value; dom.window.close(); });
-    let current = world(), fail = false;
-    const api = { getOverworld: async () => current, getWorldEnvironment: async () => ({ annotations: [], version: 1 }),
+    let dispose = () => {};
+    let disposed = false;
+    const cleanup = () => { if (!disposed) { disposed = true; dispose(); } };
+    t.after(() => { cleanup(); for (const [key, value] of previous) globalThis[key] = value; dom.window.close(); });
+    const state = { current: initialWorld, fail: false };
+    const api = { getOverworld: async () => state.current, getWorldEnvironment: async () => ({ annotations: [], version: 1 }),
         listExpeditions: async () => [], listSourceMaps: async () => ({ sourceMaps: [] }), getProcedurePresets: async () => [],
         getPresentationProfiles: async () => [{ key: "exploration-map", name: "Exploration Map", automationMode: "Automatic",
             markEnteredCellKnown: true, playerGrid: "Visible", terrainMode: "HiddenUntilKnown" }],
         createFeature: async (_id, payload) => {
-            if (fail) throw new Error("Save failed");
-            current = { ...current, version: 2, features: [{ ...payload, id: "created" }] };
-            return current;
+            if (state.fail) throw new Error("Save failed");
+            state.current = { ...state.current, version: 2, features: [{ ...payload, id: "created" }] };
+            return state.current;
         } };
     const root = dom.window.document.getElementById("root");
-    const dispose = await renderWorldEditor(root, api, "world", () => {});
-    t.after(dispose);
+    dispose = await renderWorldEditor(root, api, "world", () => {});
+    return { root, surface, api, state, dom, dispose: cleanup };
+}
+
+test("feature Save respects geometry readiness initially and after success/failure/reset", async t => {
+    const { root, surface, state, dom } = await editorFixture(t);
     const form = root.querySelector("[data-feature-form]"), save = form.querySelector('button[type="submit"]');
     const set = (name, value) => { const field = form.elements.namedItem(name); field.value = value; field.dispatchEvent(new dom.window.Event("input")); };
     assert.equal(save.disabled, true);
@@ -237,12 +244,98 @@ test("feature Save respects geometry readiness initially and after success/failu
     assert.equal(save.disabled, true);
     surface.onWorldClick({ x: 1, y: 1 });
     set("name", "Road"); set("category", "road");
-    fail = true;
+    state.fail = true;
     form.dispatchEvent(new dom.window.Event("submit", { cancelable: true }));
     assert.equal(save.disabled, true);
     await tick();
     assert.equal(save.disabled, false); // Valid geometry remains retryable after failure.
-    assert.equal(current.features[0].name, "Camp");
+    assert.equal(state.current.features[0].name, "Camp");
     root.querySelector("[data-clear-geometry]").click();
     assert.equal(save.disabled, true);
+});
+
+test("map maker shares nonmodal tools and preserves drafts, geometry, file inputs, and viewport", async t => {
+    const { root, surface, dom, dispose } = await editorFixture(t);
+    const open = key => {
+        const button = root.querySelector(`[data-world-tool-button="${key}"]`);
+        button.focus(); button.click();
+    };
+    const form = root.querySelector("[data-feature-form]");
+    const sourceFiles = root.querySelector('[data-source-map-upload] input[type="file"]');
+    const registration = root.querySelector('[data-registration-panel]');
+    open("features");
+    form.elements.namedItem("name").value = "Unfinished road";
+    form.elements.namedItem("category").value = "road";
+    form.elements.namedItem("kind").value = "Line";
+    form.elements.namedItem("kind").dispatchEvent(new dom.window.Event("change"));
+    root.querySelector('[data-author-geometry]').click();
+    surface.onWorldClick({x:0,y:0}); surface.onWorldClick({x:1,y:1});
+    const draftText = root.querySelector('[data-draft]').textContent;
+    open("appearance");
+    root.querySelector('[data-palette-form] input[name="category"]').value = "Unfinished palette";
+    const dialog = root.querySelector('[role="dialog"]');
+    assert.equal(dialog.getAttribute('aria-modal'), 'false');
+    assert.equal(dialog.classList.contains('hc-map-tool-panel'), true);
+    assert.ok(root.querySelector('.hc-map-tool-frame').contains(dialog));
+    assert.equal(dialog.contains(surface.canvas), false);
+    const center = {...surface.viewport.center};
+    surface.canvas.dispatchEvent(new dom.window.KeyboardEvent("keydown", {key:"ArrowRight", bubbles:true}));
+    const panned = {...surface.viewport.center};
+    assert.notDeepEqual(panned, center);
+    open("sources");
+    Object.defineProperty(sourceFiles, 'files', { configurable:true,
+        value:[new dom.window.File(['fixture'], 'pending-map.png', {type:'image/png'})] });
+    sourceFiles.dispatchEvent(new dom.window.Event('change'));
+    open("features");
+    assert.equal(root.querySelector('[data-feature-form]'), form);
+    assert.equal(form.elements.namedItem('name').value, 'Unfinished road');
+    assert.equal(root.querySelector('[data-draft]').textContent, draftText);
+    assert.equal(form.querySelector('button[type="submit"]').disabled, false);
+    open("appearance");
+    assert.equal(root.querySelector('[data-palette-form] input[name="category"]').value, 'Unfinished palette');
+    open("sources");
+    assert.equal(root.querySelector('[data-source-map-upload] input[type="file"]'), sourceFiles);
+    assert.equal(sourceFiles.files[0].name, 'pending-map.png');
+    assert.equal(root.querySelector('[data-registration-panel]'), registration);
+    assert.deepEqual(surface.viewport.center, panned);
+    assert.equal(root.querySelectorAll('[role="dialog"]').length, 1);
+    root.querySelector('[role="dialog"]').dispatchEvent(new dom.window.KeyboardEvent('keydown', {key:'Escape',bubbles:true}));
+    assert.equal(root.querySelector('[role="dialog"]'), null);
+    assert.equal(document.activeElement, root.querySelector('[data-world-tool-button="sources"]'));
+    open("features");
+    assert.equal(form.elements.namedItem('name').value, 'Unfinished road');
+    dispose();
+    assert.equal(root.querySelector('[role="dialog"]'), null);
+    assert.ok(root.querySelector('[data-world-tool-dock]').contains(form));
+});
+
+test("selected-cell shortcuts open the existing editors and export keeps its settings", async t => {
+    const initial = world();
+    initial.features = [{id:'camp',name:'Camp',category:'camp',kind:'Point',position:{x:0,y:0}}];
+    const { root, surface, dom } = await editorFixture(t, initial);
+    const open = key => root.querySelector(`[data-world-tool-button="${key}"]`).click();
+    const cell = {id:{tilingId:'tiling',address:{motifCellId:'square',translation:{u:0,v:0}}},
+        center:{x:0,y:0},polygon:[{x:-1,y:-1},{x:1,y:-1},{x:1,y:1},{x:-1,y:1}]};
+    surface.canvas.focus();
+    surface.cellSelectionHandler(cell);
+    assert.equal(root.querySelector('[role="dialog"] h2').textContent, 'Selected cell');
+    assert.equal(document.activeElement, surface.canvas);
+    const edit = [...root.querySelectorAll('[data-selected-cell-panel] button')].find(b=>b.textContent==='Edit feature');
+    edit.click();
+    assert.equal(root.querySelector('[role="dialog"] h2').textContent, 'Spatial features');
+    assert.equal(root.querySelector('[data-feature-form] input[name="name"]').value, 'Camp');
+    open('export');
+    const form = root.querySelector('[data-export-form]');
+    const set = (name,value) => {const field=form.elements.namedItem(name);field.value=value;field.dispatchEvent(new dom.window.Event('change'));};
+    set('scope','full'); set('resolution','3200'); set('background','transparent');
+    form.elements.namedItem('grid').checked=false;
+    open('world'); open('export');
+    assert.equal(form.elements.namedItem('scope').value, 'full');
+    assert.equal(form.elements.namedItem('resolution').value, '3200');
+    const exports=[];
+    t.mock.method(surface, 'exportFullMapPng', async (...args)=>exports.push(args));
+    form.dispatchEvent(new dom.window.Event('submit',{cancelable:true}));
+    await tick();
+    assert.deepEqual(exports[0].slice(0,5), ['Fixture','transparent',3200,false,true]);
+    assert.equal(document.querySelectorAll('#hex-crawl-map-tool-styles').length, 1);
 });

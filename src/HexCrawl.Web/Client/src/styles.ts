@@ -223,7 +223,6 @@ export function ensureStyles(): void {
         .hc-map-host { min-height: 560px; height: 68vh; overflow: hidden; border: 1px solid var(--hc-map-border); border-radius: .55rem; background: var(--hc-map-bg); }
         .hc-map-canvas { display: block; width: 100%; height: 100%; min-height: 560px; touch-action: none; }
         .hc-sidebar { display: grid; gap: .6rem; max-height: none; overflow: visible; padding-right: 0; }
-        .hc-world-editor .hc-map-panel { position: sticky; top: .75rem; }
         .hc-sidebar details { box-shadow: none; }
         .hc-sidebar details summary { cursor: pointer; font-weight: 700; }
         .hc-inline { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: .5rem; }
@@ -418,7 +417,6 @@ export function ensureStyles(): void {
             .hc-columns, .hc-workspace-grid, .hc-tracker-grid, .hc-assistant-grid, .hc-home-three-column-grid { grid-template-columns: 1fr; }
             .hc-home-main-grid > :first-child { grid-column: auto; }
             .hc-sidebar { max-height: none; overflow: visible; }
-            .hc-world-editor .hc-map-panel { position: static; }
             .hc-map-host, .hc-map-canvas { min-height: 400px; height: 55vh; }
             .hc-party-member-row { grid-template-columns: 1fr; }
             .hc-party-member-row > .hc-danger-action { justify-self: start; }

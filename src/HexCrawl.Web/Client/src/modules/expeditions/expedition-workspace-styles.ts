@@ -1,4 +1,7 @@
+import { ensureMapToolStyles } from "../../ui/map-tool-panel";
+
 export function ensureExpeditionWorkspaceStyles(): void {
+    ensureMapToolStyles();
     if (document.getElementById("hex-crawl-expedition-workspace-styles")) return;
     const style = document.createElement("style");
     style.id = "hex-crawl-expedition-workspace-styles";
@@ -31,37 +34,7 @@ export function ensureExpeditionWorkspaceStyles(): void {
             font-weight:700;
         }
         .hc-gm-tools { padding:.75rem 0 .25rem; }
-        /* Spatial sessions keep their editors in nonmodal map tools. The
-           uncovered map and toolbar remain operable while a tool is open. */
-        .hc-phase15 .hc-periodic-expedition.hc-page > .hc-workspace-grid {
-            display:grid; grid-template-columns:minmax(0,1fr);
-        }
-        .hc-phase15 .hc-periodic-expedition .hc-map-panel {
-            display:flex; flex-direction:column; min-width:0;
-        }
-        .hc-periodic-expedition .hc-expedition-map-toolbar {
-            display:flex; flex-wrap:wrap; gap:.4rem;
-            position:sticky; top:.25rem; z-index:12;
-            padding:.5rem; border-radius:.6rem;
-            background:var(--hc-surface); border:1px solid var(--hc-border);
-        }
-        .hc-phase15 .hc-periodic-expedition .hc-map-host {
-            height:clamp(25rem,70vh,60rem); min-height:0;
-        }
-        .hc-phase15 .hc-expedition-map-tool {
-            position:absolute; top:auto; bottom:.75rem; right:.75rem; left:auto;
-            width:min(30rem,44vw); height:min(38rem,calc(100% - 1.5rem)); max-height:calc(100% - 1.5rem);
-        }
-        .hc-expedition-map-tool .hc-focus-workspace-body {
-            overflow:auto; overscroll-behavior:contain;
-        }
-        .hc-expedition-map-tool [data-gameplay-panels] > [hidden] { display:none !important; }
         @media (max-width:760px) {
-            .hc-phase15 .hc-expedition-map-tool {
-                inset:auto .5rem .5rem; width:auto;
-                height:min(48dvh,calc(100% - 1rem)); max-height:calc(100% - 1rem);
-            }
-            .hc-phase15 .hc-periodic-expedition .hc-map-host { height:64dvh; min-height:20rem; }
             .hc-phase15 .hc-periodic-expedition .hc-map-panel > h2 { order:0; }
             .hc-phase15 .hc-periodic-expedition .hc-expedition-map-toolbar { order:1; }
         }

@@ -145,13 +145,14 @@ test("home dashboard sections share the same three-column grid", () => {
     assert.match(styles, /\.hc-home-main-grid > :first-child \{ grid-column: auto; \}/);
 });
 
-test("world editor removes nested control scrolling without changing narrow-layout flow", () => {
+test("world editor uses the shared map tool layout rather than a scrolling sidebar", () => {
     const view = read("modules/worlds/world-editor-view.ts");
     const styles = read("styles.ts");
     assert.match(view, /hc-world-editor/);
     assert.match(styles, /\.hc-sidebar \{ display: grid; gap: \.6rem; max-height: none; overflow: visible;/);
-    assert.match(styles, /\.hc-world-editor \.hc-map-panel \{ position: sticky; top: \.75rem; \}/);
-    assert.match(styles, /@media \(max-width: 820px\)[\s\S]*\.hc-world-editor \.hc-map-panel \{ position: static; \}/);
+    assert.match(view, /hc-map-tool-workspace/);
+    assert.match(view, /createMapToolHost\(/);
+    assert.doesNotMatch(styles, /\.hc-world-editor \.hc-map-panel \{ position: sticky;/);
 });
 
 test("interactive canvas exposes accessible keyboard controls and authoritative cell position", () => {

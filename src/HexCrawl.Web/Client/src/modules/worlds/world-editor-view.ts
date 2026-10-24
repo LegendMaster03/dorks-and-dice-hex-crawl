@@ -8,6 +8,7 @@ import type { Location, Overworld, SpatialFeature, WorldPoint, WorldCellGeometry
 import { clearUiError, showUiError } from "../../ui-error";
 import { input, numeric, required, select } from "../../ui/dom";
 import { applyGuidedExperience, guidancePreferenceButton } from "../../ui/guidance";
+import { createMapToolHost, ensureMapToolStyles } from "../../ui/map-tool-panel";
 import {
     addEnvironmentFact,
     featureHasEnvironmentRules,
@@ -39,18 +40,34 @@ export async function renderWorldEditor(
     let sourceMapWorkspace: SourceMapWorkspace | null = null;
 
     applyGuidedExperience(root);
+    ensureMapToolStyles();
     root.innerHTML = `
-        <section class="hc-page hc-workspace hc-world-editor">
+        <section class="hc-page hc-workspace hc-world-editor hc-map-tool-workspace">
             <header class="hc-page-header">
                 <div><span class="hc-sheet-kicker">Map preparation</span><h1 data-title></h1><p>World map editor · source maps, locations, and features.</p></div>
                 <nav class="hc-button-row"><button type="button" data-worlds>All overworlds</button><button type="button" data-reset-view>Reset map view</button><span data-guidance-controls></span></nav>
             </header>
-            <div class="hc-error" data-error hidden role="alert"></div>
             <div class="hc-workspace-grid">
                 <section class="hc-map-panel" aria-label="Overworld map">
-                    <div class="hc-map-host" data-map></div>
+                    <nav class="hc-map-tool-toolbar" aria-label="Map maker tools" data-map-tools-toolbar>
+                        <div class="hc-error" data-error hidden role="alert"></div>
+                        <button type="button" data-world-tool-button="cell" aria-haspopup="dialog">Selected cell</button>
+                        <button type="button" data-world-tool-button="locations" aria-haspopup="dialog">Locations</button>
+                        <button type="button" data-world-tool-button="features" aria-haspopup="dialog">Features</button>
+                        <button type="button" data-world-tool-button="appearance" aria-haspopup="dialog">Appearance</button>
+                        <button type="button" data-world-tool-button="visibility" aria-haspopup="dialog">Player visibility</button>
+                        <button type="button" data-world-tool-button="sources" aria-haspopup="dialog">Reference maps</button>
+                        <button type="button" data-world-tool-button="export" aria-haspopup="dialog">Export PNG</button>
+                        <button type="button" data-world-tool-button="expeditions" aria-haspopup="dialog">Expeditions</button>
+                        <button type="button" data-world-tool-button="world" aria-haspopup="dialog">World name</button>
+                    </nav>
+                    <div class="hc-map-tool-frame"><div class="hc-map-host" data-map></div></div>
                     <p class="hc-hint" data-map-hint>Click to select or author map content; drag to pan; wheel to zoom. The focused map also supports keyboard pan, zoom, and center-point selection.</p>
-                    <details><summary>Export map as PNG</summary>
+
+                </section>
+                <div data-world-tool-dock hidden>
+                <aside class="hc-sidebar" aria-label="Overworld authoring controls" data-world-tools>
+                    <details data-world-tool="export"><summary>Export map as PNG</summary>
                         <form class="hc-form" data-export-form>
                             <label>Audience <select name="audience"><option value="gm">GM (all authored details)</option><option value="player">Players (only released details)</option></select></label>
                             <label>Export area <select name="scope">
@@ -65,20 +82,18 @@ export async function renderWorldEditor(
                             <p class="hc-hint">Player exports contain only objects explicitly released below, but selected source images may already contain baked secrets. Review the PNG before sharing. Full-map exports require finite boundaries.</p>
                         </form>
                     </details>
-                </section>
-                <aside class="hc-sidebar" aria-label="Overworld authoring controls">
-                    <details open class="hc-selected-cell-panel" data-selected-cell-panel><summary>Selected cell</summary>
+                    <details open class="hc-selected-cell-panel" data-selected-cell-panel data-world-tool="cell"><summary>Selected cell</summary>
                         <div class="hc-form" data-selected-cell-empty>
                             <p class="hc-hint">Select a map cell to edit terrain, locations, routes, features, and explicit environment rules in tabletop terms.</p>
                         </div>
                     </details>
 
-                    <details><summary>World name</summary><form class="hc-form" data-world-form>
+                    <details data-world-tool="world"><summary>World name</summary><form class="hc-form" data-world-form>
                         <label>Name <input name="name" required></label>
                         <button type="submit" class="hc-primary-action">Save world name</button>
                     </form></details>
 
-                    <details><summary>Map appearance</summary>
+                    <details data-world-tool="appearance"><summary>Map appearance</summary>
                         <p class="hc-hint">Category colors are visual preferences only. Terrain and feature rules are unchanged.</p>
                         <div data-map-palette></div>
                         <form class="hc-form" data-palette-form>
@@ -88,12 +103,11 @@ export async function renderWorldEditor(
                             <button type="submit">Set category color</button>
                         </form>
                     </details>
-                    <details><summary>Player map visibility</summary>
+                    <details data-world-tool="visibility"><summary>Player map visibility</summary>
                         <p class="hc-hint">All features, locations, labels, terrain colors, and source images are excluded by default. Release only the details players may see. These controls affect static player map exports, not expedition discovery mechanics.</p>
                         <div data-player-map-disclosure></div>
                     </details>
-                    <details data-advanced-world-objects><summary>Advanced world objects</summary>
-                    <details><summary>Locations</summary>
+                    <details data-world-tool="locations"><summary>Locations</summary>
                         <div data-location-list></div>
                         <form class="hc-form" data-location-form>
                             <input name="id" type="hidden">
@@ -106,7 +120,7 @@ export async function renderWorldEditor(
                         </form>
                     </details>
 
-                    <details><summary>Spatial features</summary>
+                    <details data-world-tool="features"><summary>Spatial features</summary>
                         <datalist id="hc-feature-categories"><option value="forest"><option value="swamp"><option value="mountain"><option value="grassland"><option value="desert"><option value="road"><option value="trail"><option value="river"><option value="border"></datalist>
                         <div data-feature-list></div>
                         <form class="hc-form" data-feature-form>
@@ -120,12 +134,12 @@ export async function renderWorldEditor(
                         </form>
                     </details>
 
-                    </details>
-                    <details><summary>Expeditions using this world</summary><div data-expedition-list></div>
+                    <details data-world-tool="expeditions"><summary>Expeditions using this world</summary><div data-expedition-list></div>
                         <form class="hc-form" data-expedition-form></form>
                     </details>
-                    <details><summary>Source-map metadata</summary><p data-source-maps></p></details>
+                    <details data-world-tool="sources"><summary>Source-map metadata</summary><p data-source-maps></p></details>
                 </aside>
+                </div>
             </div>
         </section>`;
 
@@ -142,7 +156,13 @@ export async function renderWorldEditor(
      const draftLabel = required<HTMLElement>(root, "[data-draft]");
     required<HTMLElement>(root, "[data-guidance-controls]").append(guidancePreferenceButton(root));
     const selectedCellEmpty = required<HTMLElement>(root, "[data-selected-cell-empty]");
-    const advancedWorldObjects = required<HTMLDetailsElement>(root, "[data-advanced-world-objects]");
+    const toolHost = required<HTMLElement>(root, "[data-world-tools]");
+    const tools = createMapToolHost(root, toolHost, required(root, "[data-world-tool-dock]"));
+    const openTool = (key: string): void => tools.open(
+        required<HTMLDetailsElement>(toolHost, `[data-world-tool="${key}"]`));
+    for (const button of root.querySelectorAll<HTMLButtonElement>("[data-world-tool-button]")) {
+        button.addEventListener("click", () => openTool(button.dataset.worldToolButton!));
+    }
     const run = async (form: HTMLFormElement | null, action: () => Promise<void>): Promise<void> => {
         if (form?.dataset.pending === "true") return;
         clearUiError(error);
@@ -560,9 +580,7 @@ export async function renderWorldEditor(
             edit.textContent = "Edit location";
             edit.addEventListener("click", () => {
                 loadLocation(location);
-                advancedWorldObjects.open = true;
-                const section = locationForm.closest("details");
-                if (section) section.open = true;
+                openTool("locations");
                 input(locationForm, "name").focus();
             });
             row.append(description, edit);
@@ -578,9 +596,7 @@ export async function renderWorldEditor(
             edit.textContent = "Edit feature";
             edit.addEventListener("click", () => {
                 loadFeature(feature);
-                advancedWorldObjects.open = true;
-                const section = featureForm.closest("details");
-                if (section) section.open = true;
+                openTool("features");
                 input(featureForm, "name").focus();
             });
             row.append(description, edit);
@@ -772,9 +788,7 @@ export async function renderWorldEditor(
             newLocation();
             input(locationForm, "x").value = String(cell.center.x);
             input(locationForm, "y").value = String(cell.center.y);
-            advancedWorldObjects.open = true;
-            const section = locationForm.closest("details");
-            if (section) section.open = true;
+            openTool("locations");
             input(locationForm, "name").focus();
         });
         panel.append(addLocation);
@@ -785,6 +799,10 @@ export async function renderWorldEditor(
     mapSurface.setCellSelectionHandler(cell => {
         selectedPeriodicCell = cell;
         renderPeriodicCell();
+        if (cell && !placement && !tools.active()) {
+            openTool("cell");
+            mapSurface.canvas.focus({ preventScroll: true });
+        }
         if (cell) root.dispatchEvent(
             new CustomEvent("hex-crawl:world-cell-selected", { detail: cell.id }));
     });
@@ -997,6 +1015,7 @@ export async function renderWorldEditor(
     applyWorld(world);
     return () => {
         disposed = true;
+        tools.close();
         sourceMapWorkspace?.dispose();
         disposeExpeditionSetup();
         mapSurface.dispose();
