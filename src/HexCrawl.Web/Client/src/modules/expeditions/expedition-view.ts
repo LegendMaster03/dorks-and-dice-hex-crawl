@@ -5,7 +5,7 @@ import type { ExpeditionEffectState } from "../../effect-types";
 import { JourneyApi } from "../../journey-api";
 import type { ExpeditionJourneyState } from "../../journey-types";
 import { ensurePhase15Styles } from "../../phase15-styles";
-import { formatDistance, formatHours } from "../../runtime-view";
+import { formatDistance, formatHours, formatRuntimeEventMessage } from "../../runtime-view";
 import { SurvivalResourcesApi } from "../../survival-api";
 import type { SurvivalResources } from "../../survival-types";
 import { canonicalExpeditionRoute } from "../../tool-route";
@@ -678,7 +678,7 @@ export async function renderExpedition(
                 list.className = "hc-history";
                 for (const event of [...runtime.history].reverse().slice(0, 80)) {
                     const item = document.createElement("li");
-                    item.textContent = `${formatHours(event.expeditionElapsedHours)} · ${event.message}`;
+                    item.textContent = `${formatHours(event.expeditionElapsedHours)} · ${formatRuntimeEventMessage(event.message)}`;
                     list.append(item);
                 }
                 body.append(list);

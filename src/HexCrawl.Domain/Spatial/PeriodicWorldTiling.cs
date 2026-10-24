@@ -6,7 +6,12 @@ using System.Text.Json.Serialization;
 namespace HexCrawl.Domain.Spatial;
 
 /// <summary>An address is meaningful only in the indicated stable tiling identity.</summary>
-public readonly record struct WorldCellId(Guid TilingId, PeriodicCellAddress Address);
+public readonly record struct WorldCellId(Guid TilingId, PeriodicCellAddress Address)
+{
+    // Display the complete motif/lattice address, not the record's diagnostic
+    // expansion. The qualified identity remains unchanged in serialized data.
+    public override string ToString() => Address.ToString();
+}
 
 public readonly record struct WorldBounds(double MinX, double MinY, double MaxX, double MaxY)
 {

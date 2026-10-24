@@ -42,6 +42,48 @@ Structural or currently non-executable generic procedures remain valid API data.
 
 Top-level assistant routes remain setup-and-entry surfaces. They do not own a second procedure model and do not calculate authoritative runtime behavior in the browser.
 
+## Spatial map controls
+
+The generalized expedition workbench keeps a full-width map and a compact GM
+toolbar. Overview, Travel, Selected cell, Party, Environment, Resources, Effects,
+Journey, History, and Teleport open one nonmodal tool at a time inside the map
+frame. Tools scroll internally; the toolbar and uncovered map remain usable.
+On narrow screens the tool occupies the lower portion of the map. Close or
+Escape dismisses the tool and returns focus to its opener.
+
+Gameplay editors are mounted once and moved with their host, so switching tools
+does not discard unfinished form inputs. This does not override each editor's
+existing behavior when saved state is explicitly refreshed. Selecting cells and
+changing travel intent still uses the authoritative generic cell geometry.
+
+The GM map receives the saved world's terrain annotations through the shared
+environment loader, initially and after environment edits or expedition reload.
+The matching world version supplies the palette. Stale responses are ignored;
+inconsistent world/environment versions produce reload feedback. These are
+display-only colors and do not change terrain mechanics or player visibility.
+
+New cell event text uses compact motif/lattice addresses. Old saved events that
+contain diagnostic `WorldCellId` expansions are formatted for display without
+rewriting their audit history or changing qualified cell identities.
+
+### Follow-up acceptance
+
+- Confirm the same saved terrain fill and palette in world authoring and the GM
+  expedition map; change and remove a terrain fact, then reload the expedition.
+- Open each tool, scroll its contents, and pan/zoom the uncovered map. Switch
+  away from an unfinished edit and back; check that the input remains intact.
+- Inspect another cell while its tool is open; verify the selected-cell details
+  update without replacing the panel or resetting the map viewport.
+- Verify the tools at desktop and narrow viewport widths, including Close,
+  Escape, focus return, and pending-encounter/travel gates.
+- Inspect both new and previously saved teleport/boundary events. Mixed-tiling
+  motif identifiers must remain distinguishable without displaying record dumps.
+
+Branch verification: 336 frontend tests and 224 domain tests passed; TypeScript,
+Vite, and the full Release .NET solution build passed. Branch browser visual
+acceptance remains outstanding because Cloud Browser blocks local file previews;
+these changes have not been deployed as part of this correction.
+
 ## State ownership
 
 ### World truth

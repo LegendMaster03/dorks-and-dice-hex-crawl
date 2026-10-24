@@ -6,6 +6,8 @@ import type { ExpeditionDetail, ToolHostContext } from "../../types";
 import type { ExpeditionJourneyState } from "../../journey-types";
 import type { ExpeditionEffectState } from "../../effect-types";
 import type { SurvivalResources } from "../../survival-types";
+import type { WorldEnvironment } from "../../environment-types";
+import type { Overworld } from "../../types";
 import { ExpeditionEffectsPanel } from "./effects-panel";
 import { ExpeditionEnvironmentPanel } from "./environment-panel";
 import { ExpeditionJourneyPanel } from "./journey-panel";
@@ -30,7 +32,8 @@ export function mountPeriodicGameplayPanels(
     reportError: (error: unknown) => void,
     onAttention: (journey: ExpeditionJourneyState | null,
         survival: SurvivalResources | null, effects: ExpeditionEffectState | null,
-        failed: boolean) => void
+        failed: boolean) => void,
+    onWorldLoaded?: (world: Overworld | null, environment: WorldEnvironment | null) => void
 ): { sync: () => void; dispose: () => void } {
     const partyPanel = document.createElement("details");
     partyPanel.className = "hc-party-editor-panel";
@@ -47,7 +50,7 @@ export function mountPeriodicGameplayPanels(
     const party = new ExpeditionPartySheetController(
         host, api, getRuntime, applyRuntime, mutate);
     const environment = new ExpeditionEnvironmentPanel(
-        host, api, getRuntime, applyRuntime, mutate);
+        host, api, getRuntime, applyRuntime, mutate, onWorldLoaded);
     const journey = new ExpeditionJourneyPanel(
         host, new JourneyApi(toolContext), expeditionId, getRuntime, mutate);
     const effects = new ExpeditionEffectsPanel(

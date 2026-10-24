@@ -2218,6 +2218,7 @@ if (stateName === "course-change-reload") {
     }
 } else if (stateName === "movement-composition" || stateName === "nonspatial-movement-composition") {
     if (stateName === "movement-composition") {
+        root.querySelector("[data-gm-overview]")?.click();
         const disclosure = root.querySelector("[data-movement]")?.closest("details");
         if (disclosure) disclosure.open = true;
     } else {
@@ -2237,6 +2238,7 @@ if (stateName === "course-change-reload") {
     || stateName === "forced-travel-party-scope"
     || stateName === "forced-travel-mount"
     || stateName === "forced-travel-vehicle") {
+    root.querySelector("[data-gm-survival]")?.click();
     const gameplay = root.querySelector("[data-gameplay-disclosure]");
     if (gameplay) gameplay.open = true;
     await waitForRootText("Current requirement");
@@ -2274,6 +2276,7 @@ if (stateName === "more-options-open") {
     findButton("Resolve journey event")?.click();
     await waitForRootText("Pending journey event");
 } else if (stateName === "effects-workspace" || stateName === "effects-journey-source" || stateName === "readability-workspace" || stateName === "guided-pending-consequence") {
+    root.querySelector("[data-gm-effects]")?.click();
     const gameplay = root.querySelector("[data-gameplay-disclosure]");
     if (gameplay) gameplay.open = true;
     else findButtonContaining("Resources & effects")?.click();
@@ -2402,9 +2405,12 @@ const metrics = {
     paceTextInputs: root.querySelectorAll('input[name="pace"][type="text"]').length,
     paceSelects: root.querySelectorAll(".hc-current-travel-pace-editor select").length,
     paceOptionCount: root.querySelectorAll('[data-travel-form] select[name="pace"] option').length,
-    gmToolsOpen: Boolean(root.querySelector(".hc-gm-tools details[open]")),
+    gmToolsOpen: Boolean(root.querySelector(".hc-gm-tools details[open]"))
+        || isVisible(root.querySelector('[aria-label="GM map tools"]')),
     partyActivitiesRailButtons: buttons.filter(button => isVisible(button) && button.textContent?.includes("Party & activities")).length,
-    partySetupVisible: rootText.includes("No party members assigned.") && Boolean(root.querySelector("[data-gameplay-disclosure]")),
+    partySetupVisible: rootText.includes("No party members assigned.")
+        && (Boolean(root.querySelector("[data-gameplay-disclosure]"))
+            || isVisible(root.querySelector("[data-gm-party]"))),
     primaryAction: root.querySelector(".hc-current-action-primary")?.textContent?.trim() || null,
     guidedNextActionWhyVisible: Array.from(root.querySelectorAll("summary"))
         .some(summary => summary.textContent?.trim() === "Why is this next?"),

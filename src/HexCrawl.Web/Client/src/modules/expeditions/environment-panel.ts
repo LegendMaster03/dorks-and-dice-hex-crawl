@@ -27,7 +27,8 @@ export class ExpeditionEnvironmentPanel {
         private readonly api: HexCrawlApi,
         private readonly getRuntime: () => ExpeditionDetail,
         private readonly onRuntimeChanged: (next: ExpeditionDetail) => void,
-        private readonly mutate: (control: HTMLButtonElement | null, action: () => Promise<void>) => Promise<void>) {
+        private readonly mutate: (control: HTMLButtonElement | null, action: () => Promise<void>) => Promise<void>,
+        private readonly onWorldLoaded?: (world: Overworld | null, environment: WorldEnvironment | null) => void) {
         const host = root.matches("[data-gameplay-panels]")
             ? root
             : root.querySelector<HTMLElement>(".hc-sidebar")
@@ -71,6 +72,7 @@ export class ExpeditionEnvironmentPanel {
             this.workbench = workbench;
             this.world = world;
             this.worldEnvironment = worldEnvironment;
+            this.onWorldLoaded?.(world, worldEnvironment);
             this.render();
         } catch (error) {
             if (this.disposed || token !== this.refreshToken) return;
