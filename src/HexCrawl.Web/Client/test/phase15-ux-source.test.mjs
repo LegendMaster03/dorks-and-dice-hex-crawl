@@ -534,6 +534,8 @@ test("rendered review retains forced travel in the shared gameplay panel and nav
     assert.match(capture, /forcedTravelPrimaryDomainFacing/);
     assert.match(capture, /forcedTravelNamedTargetVisible/);
     assert.match(fixture, /root\.querySelector\("\[data-gameplay-disclosure\]"\)/);
+    assert.match(fixture, /root\.querySelector\("\[data-gm-survival\]"\)\?\.click\(\)/);
+    assert.match(fixture, /root\.querySelector\("\[data-gm-effects\]"\)\?\.click\(\)/);
     assert.match(fixture, /focusedEdge:/);
 });
 
