@@ -19,6 +19,8 @@ import {
     tagFact
 } from "./selected-cell-authoring";
 
+// World geometry and environmental facts are server-owned snapshots. Local
+// selection and feature drafts are UI state until an explicit authoring request.
 export async function renderWorldEditor(
     root: HTMLElement,
     api: HexCrawlApi,
@@ -163,6 +165,8 @@ export async function renderWorldEditor(
     for (const button of root.querySelectorAll<HTMLButtonElement>("[data-world-tool-button]")) {
         button.addEventListener("click", () => openTool(button.dataset.worldToolButton!));
     }
+    // Serialize each form's submission. A version conflict reloads authoritative
+    // state for review rather than silently retrying an outdated edit.
     const run = async (form: HTMLFormElement | null, action: () => Promise<void>): Promise<void> => {
         if (form?.dataset.pending === "true") return;
         clearUiError(error);
@@ -528,6 +532,8 @@ export async function renderWorldEditor(
         }
     };
 
+    // Cell identity includes tiling, motif cell, and periodic translation;
+    // world coordinates alone are not a stable address across tilings.
     const sameQualifiedCell = (left: WorldCellId | null | undefined, right: WorldCellId): boolean =>
         !!left && left.tilingId === right.tilingId
         && left.address.motifCellId === right.address.motifCellId
