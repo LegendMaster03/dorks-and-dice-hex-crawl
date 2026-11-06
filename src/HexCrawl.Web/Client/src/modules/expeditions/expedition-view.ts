@@ -78,6 +78,8 @@ export async function renderExpedition(
         cleanup?.();
     };
 
+    // Survival, effects, and journey projections are fetched independently of
+    // the expedition snapshot and must be refreshed after an accepted mutation.
     const refreshAuxiliary = async (): Promise<void> => {
         [survival, effects, journey] = await Promise.all([
             safeLoad(() => survivalApi.get(expeditionId)),
@@ -96,6 +98,8 @@ export async function renderExpedition(
         publishExpeditionRuntimeChanged(root, runtime);
     };
 
+    // After mutations, read back the authoritative expedition and its related
+    // projections before rendering; do not infer accepted state from local input.
     const mutate = async (action: () => Promise<void>): Promise<void> => {
         const error = root.querySelector<HTMLElement>("[data-error]");
         if (error) clearUiError(error);
