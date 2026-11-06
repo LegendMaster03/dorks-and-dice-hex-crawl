@@ -1,5 +1,7 @@
 # Phase 19 — independent WorkChat review handoff
 
+**Document status:** Historical independent QA assignment for the Phase 19 review checkpoint. Branch references, release gates, and outstanding tests below describe that checkpoint; current status must be established from later acceptance and deployment records. This checklist records review requirements, not implementation authorship.
+
 **Repository:** `LegendMaster03/dorks-and-dice-hex-crawl`  
 **Review branch:** `feature/tile-crawl-phase-19` (check the current exact head before tests)  
 **Baseline main:** `134147fa42302f2fcd6bda76508bd6ad326ce1e5`  

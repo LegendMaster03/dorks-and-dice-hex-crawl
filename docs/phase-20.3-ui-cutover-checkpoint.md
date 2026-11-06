@@ -1,5 +1,7 @@
 # Phase 20.3 — UI cutover work checkpoint
 
+**Document status:** Historical engineering checkpoint, not a current release or deployment authorization. Branch, verification, and outstanding-work statements are preserved as contemporaneous evidence; later Phase 20.4 decisions supersede those gates.
+
 **Repository and branch:** `LegendMaster03/dorks-and-dice-hex-crawl`, `feature/tile-crawl-phase-20.2-application-persistence`  
 **Self-reviewed Phase 15-first implementation code head:** `1a65b136c625a8bd26ef15d8b60eb0baa6d35140`  
 **Verification:** prior Phase 15-first baseline passed [CI 38207311309](https://github.com/LegendMaster03/dorks-and-dice-hex-crawl/actions/runs/38207311309) at `019f5863`. Further code-level review fixes are committed; verify successful CI for the current final documentation-inclusive head before dev deployment. CI's frontend, .NET, container and PostgreSQL checks do **not** run the signed-in Phase 15 browser acceptance matrix.  
@@ -30,7 +32,7 @@ The owner rejected reconstructing Phase 15 piecemeal inside a separate geometric
 
 ## Pre-dev-deployment self-review and cleanup
 
-The owner will manage the dev/testing deployment **after** this code review; there has been no merge or deployment by the implementing agent. The requested review found and corrected:
+At this checkpoint, the project owner retained authority over merge and dev/testing deployment; neither action occurred as part of this implementation review. The review found and corrected:
 
 - **Missing Phase 15 GM actions:** the V2 page now supports teleporting to a selected *server-qualified* cell via `/cells/reposition` and manual reveal/discovery of authored point features or locations in that cell via `/discover`. Teleport is disabled during an active watch or pending encounter; the server additionally guards pending travel-budget charges. The map renderer projects player knowledge from the saved expedition.
 - **Map geometry mismatch:** grid-world expedition picking now submits the user's **actual clicked world point** to the server's cell lookup, not the center of an inferred axial hex. It fails closed if the point cannot be uniquely assigned. Exact selected polygons are rendered on existing hex-grid worlds as well as other supported tilings. On a uniquely adjacent selected cell, the corresponding authoritative atomic interface becomes intended travel; ambiguous/distant cells remain inspection-only. Tiling revision changes invalidate stale selected geometry.
