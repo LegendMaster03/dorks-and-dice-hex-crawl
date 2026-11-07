@@ -1,5 +1,7 @@
 # Hex Crawl architecture
 
+> **Historical architecture baseline:** This document combines enduring subsystem boundaries with the Phase 1–15 hex-only design. Phase 20 replaced the axial spatial runtime with one generalized periodic-cell engine. References below to the active `AbstractHex` context, procedure schema v1.2, PostgreSQL schema 10, or hex-only movement describe earlier checkpoints and are **not current contracts**. The current source uses `CrawlSessionContextKind.MaplessSpatial` and `PostgresSchemaMigrator.CurrentVersion = 12`. For the generalized implementation see [modular architecture](modular-architecture.md), [Tile Crawl transition](tile-crawl-development-plan.md), and [Phase 20.4 source checkpoint](phase-20.4-code-removal-checkpoint.md). This historical record is not deployment or migration authorization.
+
 ## Boundaries
 
 Hex Crawl keeps world truth, crawl/session state, environment context, player knowledge, presentation policy, and procedure configuration as independent state axes.
@@ -15,7 +17,9 @@ Hex Crawl keeps world truth, crawl/session state, environment context, player kn
 
 Named systems exist only as removable creation-time presets. Runtime behavior depends on materialized generic module/mechanic snapshots, never on preset identity.
 
-## Pre-release compatibility policy
+## Pre-release compatibility policy (historical Phase 15)
+
+The policy below records an earlier incremental-compatibility decision. Later Phase 20 cutover decisions supersede it where they conflict; consult [the Tile Crawl development plan](tile-crawl-development-plan.md) before drawing release or data-migration conclusions.
 
 Hex Crawl remains pre-release, but **human testing began after Phase 15**. The earlier disposable-development-data policy no longer governs ongoing releases.
 
@@ -40,12 +44,7 @@ The active operational release gates and data policy are in `docs/tile-crawl-dev
 
 Applying a preset materializes a standalone `CampaignProcedure` containing complete selected module/mechanic snapshots, parameters, a procedure-schema version, and the ruleset's canonical Delaney-Dress symbol. `ProcedureOriginMetadata` is optional provenance only.
 
-The current procedure schema is **v1.2**. Built-in presets use the hexagonal
-Delaney-Dress symbol `<1:1,1,1:6,3>` as their sole tiling identity.
-The existing hexagonal runtime is unchanged and does not yet support other
-spatial topologies. Older procedure revisions and expedition snapshots are
-upgraded to v1.2 when loaded, and PostgreSQL schema migration 9 rewrites
-the stored JSON from the previous notation to the new field.
+At the Phase 15 checkpoint, procedure schema **v1.2** used the hexagonal Delaney-Dress symbol `<1:1,1,1:6,3>` and the original hex-only runtime. Those procedure and migration statements are historical. Current spatial execution resolves the selected periodic tiling and qualified cells, including nonhexagonal shapes; the active schema/version requirements must be read from current code and the Phase 20 migration records.
 
 
 The deterministic runtime path is:
@@ -62,9 +61,7 @@ Phase 12 preset recipes declare their complete generic `journey.process` / `jour
 
 ## Continuous overworld and semantic geometry
 
-An `OverworldDefinition` is one continuous world coordinate space. The hex grid is mathematical; creating a world does not pre-populate stored hex rows.
-
-The grid supports pointy-top/flat-top orientation, axial coordinates, configurable origin/rotation, world-space radius, and configurable physical center distance/unit.
+An `OverworldDefinition` is one continuous world coordinate space. At the earlier checkpoint its implicit hex grid used pointy-top/flat-top orientation, axial addresses, configurable origin/rotation, and physical scale. Current Tile Crawl uses an accepted periodic polygonal tiling and resolves cells by qualified motif-cell/translation addresses; it does not create a separate hex-only runtime for those presets.
 
 Point, line, and region features are stored as world-space semantic geometry. Categories are strings so terrain, roads, rivers, borders, and campaign-specific semantics remain extensible without coupling world truth to a raster or edition.
 
@@ -83,7 +80,7 @@ Ownership is deliberately split:
 
 `EnvironmentContextResolver` computes an effective context above deterministic runtime. Static world/hex/feature facts have precedence 0, expedition-current facts precedence 1, and DM overrides precedence 2. Lower-precedence facts remain visible for provenance but are not effective for the same dimension. Equally authoritative compatible tag facts may coexist; incompatible value kinds or disagreeing scalar measurements produce explicit conflicts and require adjudication.
 
-For world-bound sessions, only annotations applicable to the current hex and intersecting spatial features are considered. Moving to another hex recomputes world truth rather than copying static facts into expedition state. Abstract-hex and non-spatial sessions can use expedition-current facts without an overworld.
+For world-bound sessions, only annotations applicable to the current authoritative cell and intersecting spatial features are considered. Movement recomputes applicable world truth rather than copying static facts into expedition state. Abstract-hex and non-spatial sessions can use expedition-current facts without an overworld.
 
 `EnvironmentProcedureEvaluator` reads the expedition's pinned `CampaignProcedure` and maps effective environment facts to Phase 8 movement inputs. It does not dispatch on preset identity or current catalog defaults. Unknown values remain valid environment truth even when the pinned procedure can not interpret them.
 
@@ -121,11 +118,11 @@ See `docs/journey-processes.md`.
 
 ## Session contexts
 
-The three current context forms are deliberately distinct:
+The three current context kinds are deliberately distinct:
 
-- `WorldBound` stores a real Overworld ID and may persist player knowledge/presentation state.
-- `AbstractHex` stores its own name, orientation, and physical crawl scale without an Overworld.
-- `NonSpatial` stores procedure/time/history state without spatial fields.
+- `WorldBound` references an authored Overworld and may persist player knowledge/presentation state.
+- `MaplessSpatial` owns a name and a validated `PeriodicWorldTiling` without an authored Overworld.
+- `NonSpatial` stores a named session without a spatial tiling.
 
 The deterministic runtime receives only the context data actually required for the active behavior.
 
@@ -133,7 +130,7 @@ The deterministic runtime receives only the context data actually required for t
 
 PostgreSQL remains behind `IHexCrawlStore`; application/domain code has no Npgsql dependency.
 
-The current application PostgreSQL schema is version **10**, with procedure schema 1.3 (see `PostgresSchemaMigrator.CurrentVersion`). New databases initialize at schema 10; unsupported older or future schema versions fail without modifying stored user data. Historical 8→9 and 9→10 upgrade code has been retired after the tester-database cutover. Restore of an older backup requires the archived, tested migration implementation. Do not reset tester databases to resolve unsupported schema versions.
+The current source sets `PostgresSchemaMigrator.CurrentVersion` to **12**. New databases initialize at that schema; the migrator contains an explicit, transactional schema-11→12 upgrade and rejects unsupported versions without replacing persisted user data. Version 10 and its earlier upgrade path belong to the historical Phase 15 architecture; do not rely on those instructions for a current database cutover. Actual development data migrations remain subject to separate authorization and backup/reconciliation procedures.
 
 The `overworlds` table stores the complete `OverworldDefinition` in `world_json`, including static environment annotations.
 
