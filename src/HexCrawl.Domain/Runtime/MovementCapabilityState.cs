@@ -15,6 +15,7 @@ public enum MovementCapabilityContributorKind
     DmOverride
 }
 
+/// <summary>Typed numeric operations; symbolic limits remain unresolved for adjudication.</summary>
 public enum MovementCapabilityOperation
 {
     Base,
@@ -27,6 +28,7 @@ public enum MovementCapabilityOperation
     SymbolicLimit
 }
 
+/// <summary>Movement may apply to the party, participant, or named movement unit.</summary>
 public enum MovementCapabilityScope
 {
     Party,
@@ -106,6 +108,7 @@ public sealed record MovementCapabilityContributor
         {
             throw new InvalidOperationException("A participant movement contributor requires a participant id.");
         }
+        // DM overrides replace the final quantity; they are not additive modifiers.
         if (Kind == MovementCapabilityContributorKind.DmOverride && Operation != MovementCapabilityOperation.Replace)
         {
             throw new InvalidOperationException("A DM movement override must use replacement semantics.");
@@ -122,6 +125,7 @@ public sealed record MovementCapabilityContributor
                 throw new InvalidOperationException("Movement contributor replacement assignment references a party member that does not exist.");
             }
         }
+        // Only conveyances may replace the movement of their assigned passengers.
         if (ReplacesParticipantIds.Count > 0
             && Kind is not MovementCapabilityContributorKind.Mount
             and not MovementCapabilityContributorKind.Vehicle)

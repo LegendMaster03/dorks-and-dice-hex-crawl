@@ -1,5 +1,6 @@
 namespace HexCrawl.Domain.Runtime;
 
+/// <summary>Counted, abstract, supply-die, and external resources have distinct value contracts.</summary>
 public enum ExpeditionResourceInventoryModel
 {
     Counted,
@@ -8,6 +9,7 @@ public enum ExpeditionResourceInventoryModel
     ExternalManual
 }
 
+/// <summary>Expedition resource with one inventory model, an explicit target, and retained provenance.</summary>
 public sealed record ExpeditionResource
 {
     public required Guid Id { get; init; }
@@ -21,6 +23,7 @@ public sealed record ExpeditionResource
     public IReadOnlyList<ExpeditionConsequenceProvenance> Provenance { get; init; } = [];
     public string? Note { get; init; }
 
+    // Depletion is locally determined only for counted quantities and supply dice.
     public bool IsDepleted => InventoryModel switch
     {
         ExpeditionResourceInventoryModel.Counted => Quantity <= 0,
@@ -122,6 +125,7 @@ public sealed record ExpeditionResourceAuditRecord(
     }
 }
 
+/// <summary>Retains resource values and the independent audit trail of changes.</summary>
 public sealed record ExpeditionResourceState
 {
     public IReadOnlyList<ExpeditionResource> Resources { get; init; } = [];
@@ -202,6 +206,7 @@ public sealed record ForcedTravelResolutionRecord(
     }
 }
 
+/// <summary>Tracks forced-travel usage, occurrence identities, and pending checks across saves.</summary>
 public sealed record ForcedTravelState
 {
     public double AmountSinceReset { get; init; }
@@ -244,6 +249,7 @@ public sealed record ForcedTravelState
     }
 }
 
+/// <summary>Associates exposure progress with a target, unit, and unique source occurrences.</summary>
 public sealed record ExpeditionExposureProgress
 {
     public required Guid Id { get; init; }
@@ -279,6 +285,7 @@ public sealed record ExpeditionExposureProgress
     }
 }
 
+/// <summary>Resolved camp and optional rest trigger; recovery requires a separate operation.</summary>
 public sealed record ExpeditionCampState
 {
     public required Guid ResolutionId { get; init; }
@@ -314,6 +321,7 @@ public sealed record ExpeditionCampState
     }
 }
 
+/// <summary>Survival state held separately from resources and consequence application.</summary>
 public sealed record ExpeditionSurvivalState
 {
     public ForcedTravelState ForcedTravel { get; init; } = ForcedTravelState.Empty;

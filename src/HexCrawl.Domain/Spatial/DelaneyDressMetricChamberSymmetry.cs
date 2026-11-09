@@ -15,6 +15,7 @@ public sealed record MetricChamberSymmetryResult(
     int? SourceChambers = null, int? QuotientChambers = null,
     double? MaximumResidual = null, string? Evidence = null);
 
+/// <summary>Validates geometric chamber symmetries and their integral lattice action.</summary>
 public static class DelaneyDressMetricChamberSymmetry
 {
     private readonly record struct Flag(
@@ -165,6 +166,7 @@ public static class DelaneyDressMetricChamberSymmetry
         string BuildSymbol(int[][] relations, int[] faces, int[] vertices, int size) =>
             $"<{size}:{string.Join(",", relations.Select(r => Compressed(r, size)))}:"
             + $"{OrbitLabels(relations, 0, faces, size)},{OrbitLabels(relations, 1, vertices, size)}>";
+        // Independently reconstruct the translation chamber symbol from the polygons.
         var derived = DelaneyDressTopology.Inspect(BuildSymbol(maps, m01, m12, n), 2048);
         if (derived.Status != DelaneyDressStatus.Euclidean
             || derived.Symbol!.Canonical != topology.TranslationDsSymbol)
@@ -196,6 +198,7 @@ public static class DelaneyDressMetricChamberSymmetry
             return Unsupported("The barycentric reference flag has a zero-length side.");
         var u = Mul(d, 1 / edgeLength);
         var v = Normal(u);
+        // A valid permutation requires a rigid lift and unimodular lattice basis.
         int metricAutomorphisms = 0;
         double maximumResidual = 0;
         for (int root = 1; root <= n; root++)
@@ -330,6 +333,7 @@ public static class DelaneyDressMetricChamberSymmetry
             .ToArray();
         int[] q01 = representatives.Select((old, i) => i == 0 ? 0 : m01[old]).ToArray();
         int[] q12 = representatives.Select((old, i) => i == 0 ? 0 : m12[old]).ToArray();
+        // Do not report symmetry reduction until the quotient independently validates.
         var quotient = DelaneyDressTopology.Inspect(
             BuildSymbol(quotientMaps, q01, q12, count), 2048);
         if (quotient.Status != DelaneyDressStatus.Euclidean

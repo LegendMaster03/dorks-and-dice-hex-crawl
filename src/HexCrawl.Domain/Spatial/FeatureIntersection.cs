@@ -1,5 +1,6 @@
 namespace HexCrawl.Domain.Spatial;
 
+/// <summary>Geometry-only intersections and proximity for authoritative cells and authored features.</summary>
 public static class FeatureIntersection
 {
     /// <summary>The shortest Euclidean distance to a polygon (zero on or inside it).</summary>
@@ -23,6 +24,7 @@ public static class FeatureIntersection
         return best;
     }
 
+    /// <summary>Feature classification and appearance do not affect geometric intersection.</summary>
     public static bool IntersectsPolygon(IReadOnlyList<WorldPoint> polygon, SpatialFeature feature)
     {
         if (polygon.Count < 3)
@@ -102,6 +104,7 @@ public static class FeatureIntersection
         return false;
     }
 
+    // Perimeter counts for hit-testing; traversal separately requires strict interior entry.
     public static bool PointInPolygon(WorldPoint point, IReadOnlyList<WorldPoint> polygon)
     {
         if (polygon.Count < 3)

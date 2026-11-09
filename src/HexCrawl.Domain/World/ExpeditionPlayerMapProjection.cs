@@ -10,6 +10,7 @@ namespace HexCrawl.Domain.World;
 /// </summary>
 public static class ExpeditionPlayerMapProjection
 {
+    /// <summary>Projects known subjects and GM disclosures while filtering cells to the playable tiling.</summary>
     public static (OverworldDefinition World, IReadOnlyList<Guid> FeatureLabels,
         IReadOnlyList<Guid> LocationLabels, bool ShowGrid,
         IReadOnlyList<WorldCellId> KnownCells) Create(

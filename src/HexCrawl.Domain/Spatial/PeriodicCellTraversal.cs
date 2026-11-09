@@ -101,6 +101,7 @@ public sealed record CellTraversalAdvance(
 /// polygon sides with atomic interfaces, and never converts world units into
 /// physical distance without a world calibration.
 /// </summary>
+/// <summary>Computes authoritative polygon crossings and admitted vertex contacts without shape-specific directions.</summary>
 public static class PeriodicCellTraversalGeometry
 {
     private const double RelativeTolerance = 1e-12;
@@ -132,6 +133,7 @@ public static class PeriodicCellTraversalGeometry
             polygon.Max(p => p.Y) - polygon.Min(p => p.Y));
         var worldScale = Math.Max(
             Math.Max(Math.Abs(traversal.Position.X), Math.Abs(traversal.Position.Y)), 1d);
+        // Tolerance tracks both polygon size and distant-coordinate precision.
         var positionTolerance = Math.Max(
             cellScale * RelativeTolerance,
             16 * MachineEpsilon * worldScale);
@@ -314,6 +316,7 @@ public static class PeriodicCellTraversalGeometry
             chosen.Point, chosen.Distance, [chosen.Boundary], null);
     }
 
+    // Require exactly one permitted neighbor entered strictly beyond the shared vertex.
     private static CellCrossingResolution? ResolveVertexContact(
         PeriodicWorldTiling world, PeriodicCellTraversal traversal,
         int vertexIndex, WorldPoint intersection, double distance,

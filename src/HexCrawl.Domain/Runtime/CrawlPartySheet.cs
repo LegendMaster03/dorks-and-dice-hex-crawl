@@ -19,6 +19,7 @@ public sealed record CrawlPartySheet
 
     public static CrawlPartySheet Empty { get; } = new();
 
+    // Validate order, watch, and activity references against the same party roster.
     public void Validate()
     {
         var memberIds = new HashSet<Guid>();
@@ -212,6 +213,7 @@ public enum ParticipantActivityAssignmentScope
 /// Expedition-owned current participant activity state. Activity and role identity are generic
 /// procedure-defined keys; this record deliberately contains no named-system role taxonomy.
 /// </summary>
+/// <summary>Explicit activity and role assignment independent of named-system preset data.</summary>
 public sealed record ParticipantActivityAssignment(
     Guid Id,
     ParticipantActivityAssignmentScope Scope,
@@ -301,6 +303,7 @@ public sealed record ParticipantActivityAssignment(
 /// Familiar Hour / Watch / March reference values from the paper worksheet.
 /// Each value is optional and authoritative only when supplied; no duration or unit is assumed.
 /// </summary>
+/// <summary>Explicit DM movement reference used as fallback or information, never double-counted.</summary>
 public sealed record PartyMovementReference
 {
     public DistanceMeasure? PerHour { get; init; }

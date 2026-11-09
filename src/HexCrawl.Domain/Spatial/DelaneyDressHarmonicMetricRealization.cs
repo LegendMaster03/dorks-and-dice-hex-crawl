@@ -96,6 +96,7 @@ public static class DelaneyDressHarmonicMetricRealization
         return rows.Select(row => row.Equation).ToArray();
     }
 
+    // Fix the translational gauge before solving the otherwise singular Laplacian.
     private static double[]? SolveReducedLaplacian(double[,] full, double[] rhs,
         IReadOnlyList<LinearEquality> equalities, bool useX)
     {
@@ -148,6 +149,7 @@ public static class DelaneyDressHarmonicMetricRealization
         return solution.Take(freeVertices).ToArray();
     }
 
+    // A harmonic candidate is admissible only after independent metric-witness validation.
     public static DelaneyDressHarmonicMetricResult Construct(
         string source, double worldUnitsPerAbstractPeriod, string units,
         double rotationDegrees = 0, int chamberLimit = 1024,
