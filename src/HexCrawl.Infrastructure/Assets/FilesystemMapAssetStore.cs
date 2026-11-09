@@ -3,6 +3,10 @@ using HexCrawl.Application.Assets;
 
 namespace HexCrawl.Infrastructure.Assets;
 
+/// <summary>
+/// Stores map assets under validated opaque keys. Writes stream to a
+/// temporary file before moving into the readable asset directory.
+/// </summary>
 public sealed partial class FilesystemMapAssetStore : IMapAssetStore
 {
     private readonly string _root;
@@ -91,6 +95,8 @@ public sealed partial class FilesystemMapAssetStore : IMapAssetStore
         return Task.FromResult(true);
     }
 
+    // Validate the key's exact shape and canonical resolved path before
+    // reading or deleting a file; no caller-supplied filesystem paths.
     private string Resolve(string assetKey)
     {
         if (string.IsNullOrWhiteSpace(assetKey) || !AssetKeyPattern().IsMatch(assetKey))

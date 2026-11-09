@@ -17,6 +17,8 @@ public sealed partial class HexCrawlService
         _store = store;
     }
 
+    // Centralize optimistic concurrency and owner isolation for all
+    // authored-world mutations across the feature-owned partial classes.
     private async Task<StoredOverworld> SaveWorldAsync(
         StoredOverworld world,
         long expectedVersion,
@@ -31,6 +33,8 @@ public sealed partial class HexCrawlService
         };
     }
 
+    // Save the entire expedition aggregate at a checked version so
+    // independent runtime systems do not overwrite one another.
     private async Task<StoredExpedition> SaveExpeditionAsync(
         StoredExpedition expedition,
         long expectedVersion,

@@ -2,6 +2,10 @@ using HexCrawl.Domain.Spatial;
 
 namespace HexCrawl.Domain.World;
 
+/// <summary>
+/// Authored world aggregate with one authoritative periodic tiling. Raster
+/// source images, semantic features, appearance, and disclosure are separate.
+/// </summary>
 public sealed record OverworldDefinition
 {
     public required Guid Id { get; init; }
@@ -20,6 +24,8 @@ public sealed record OverworldDefinition
         return Features.Where(feature => FeatureIntersection.IntersectsPolygon(polygon, feature)).ToArray();
     }
 
+    // Compose world, exact cell, and intersecting spatial-feature scopes.
+    // A color applied to a map element is not an environment fact.
     public IReadOnlyList<EnvironmentAnnotation> AnnotationsForCell(PeriodicCellAddress address)
     {
         var identity = new WorldCellId(SpatialTiling.Id, address);

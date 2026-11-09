@@ -18,6 +18,8 @@ public sealed partial class HexCrawlService
         await _store.GetOverworldAsync(overworldId, RequireUser(ownerUserId), cancellationToken)
         ?? throw new HexCrawlNotFoundException("Overworld was not found.");
 
+    // World creation accepts validated generic periodic geometry rather
+    // than reconstructing a named grid family from a preset label.
     public async Task<StoredOverworld> CreatePeriodicOverworldAsync(
         string ownerUserId,
         string name,
@@ -66,6 +68,8 @@ public sealed partial class HexCrawlService
         return await SaveWorldAsync(updated, expectedVersion, cancellationToken);
     }
 
+    // Explicit GM disclosure is an independent policy; it does not
+    // rewrite actual expedition knowledge or map features.
     public async Task<StoredOverworld> UpdatePlayerMapDisclosureAsync(
         Guid overworldId, string ownerUserId, PlayerMapDisclosure disclosure, long expectedVersion,
         CancellationToken cancellationToken = default)

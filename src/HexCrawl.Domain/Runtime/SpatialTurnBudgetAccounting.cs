@@ -14,6 +14,10 @@ public sealed record SpatialTurnBudgetDebit(
     DistanceMeasure? ChargedBudget,
     DistanceMeasure? OutstandingBudgetCharge);
 
+/// <summary>
+/// Separates nongeometric turning costs from measured polygon displacement.
+/// The traversal engine receives only the remaining geometric budget.
+/// </summary>
 public static class SpatialTurnBudgetAccounting
 {
     public static SpatialTurnBudgetDebit Debit(

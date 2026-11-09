@@ -69,6 +69,8 @@ public static partial class RasterImageInspector
         }
     }
 
+    // Replay the sniffed signature into the format-specific parser so
+    // validation works on nonseekable upload streams without losing bytes.
     private sealed class PrefixStream(byte[] prefix, Stream remainder) : Stream
     {
         private int _offset;

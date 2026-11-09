@@ -6,6 +6,8 @@ namespace HexCrawl.Application;
 
 public sealed partial class HexCrawlService
 {
+    // Raster representation metadata belongs to the versioned world;
+    // the binary asset is stored separately and identified by asset key.
     public async Task<StoredOverworld> CreateSourceMapAsync(
         Guid overworldId,
         string ownerUserId,
@@ -63,6 +65,8 @@ public sealed partial class HexCrawlService
         return await SaveWorldAsync(updated, command.ExpectedVersion, cancellationToken);
     }
 
+    // Removing a representation must also reconcile player-facing map
+    // disclosure without deleting semantic world geometry.
     public async Task<StoredOverworld> DeleteSourceMapAsync(
         Guid overworldId,
         Guid sourceMapId,

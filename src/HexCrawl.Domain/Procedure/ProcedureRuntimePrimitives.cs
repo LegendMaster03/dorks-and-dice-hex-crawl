@@ -9,18 +9,30 @@ public enum EncounterCheckCadence
     PerDay
 }
 
+/// <summary>
+/// Continuous travel consumes a calibrated distance, while cell-step travel
+/// counts actual authorized boundary crossings rather than nominal lengths.
+/// </summary>
 public enum TravelResolutionMode
 {
     ContinuousDistance,
     CellSteps
 }
 
+/// <summary>
+/// Distinguishes fixed movement from travel that requires an explicitly
+/// resolved amount; neither mode supplies a default physical calibration.
+/// </summary>
 public enum ActualDistanceResolutionMode
 {
     Fixed,
     VariableResolved
 }
 
+/// <summary>
+/// Structured bounded dice expression for server-generated helper results.
+/// Caller-provided roll results still require their declared provenance.
+/// </summary>
 public sealed record DiceRollFormula(int DiceCount, int DieSides, int Modifier = 0)
 {
     public int MinimumTotal => checked(DiceCount + Modifier);

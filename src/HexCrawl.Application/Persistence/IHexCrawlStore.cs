@@ -31,6 +31,10 @@ public sealed record StoredCampaignProcedureRevision(
     public int Revision => Procedure.Revision;
 }
 
+/// <summary>
+/// One persisted expedition aggregate containing the pinned procedure and
+/// all runtime, knowledge, movement, journey, and consequence state.
+/// </summary>
 public sealed record StoredExpedition(
     string Name,
     CrawlSessionRuntimeState Runtime,
@@ -96,6 +100,11 @@ public enum DeleteExpeditionOutcome
 
 public sealed record SaveResult<T>(SaveOutcome Outcome, T? Value);
 
+/// <summary>
+/// Owner-scoped persistence boundary for worlds, procedure revisions, and
+/// expedition aggregates. Versioned saves must report conflicts rather than
+/// replacing changes made by another request.
+/// </summary>
 public interface IHexCrawlStore
 {
     Task InitializeAsync(CancellationToken cancellationToken = default);
