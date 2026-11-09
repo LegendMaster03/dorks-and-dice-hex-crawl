@@ -18,6 +18,8 @@ public sealed record ForcedTravelAccountingResult(
 /// </summary>
 public static class ForcedTravelAccounting
 {
+    // Account the same recorded travel occurrence exactly once after
+    // translating only units justified by the pinned procedure.
     public static ForcedTravelAccountingResult AccountTravelMutation(
         StoredExpedition expedition,
         CrawlSessionRuntimeState before,
@@ -69,6 +71,8 @@ public static class ForcedTravelAccounting
         return new(transition.State, transition.Status, transition.Detail, transition.StateChanged);
     }
 
+    // An unknown relationship between movement units requires adjudication,
+    // not a guessed conversion between watches, miles, or intervals.
     private static double? ResolveAmount(
         HexCrawl.Domain.Procedure.CampaignProcedure procedure,
         TimeSpan elapsed,

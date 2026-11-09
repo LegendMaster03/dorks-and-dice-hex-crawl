@@ -9,6 +9,8 @@ namespace HexCrawl.Application;
 /// </summary>
 public static class ExpeditionEffectMovementProjection
 {
+    // Project active effects on every read without persisting duplicate
+    // movement inputs alongside their authoritative effect state.
     public static IReadOnlyList<MovementCapabilityContributor> Project(StoredExpedition expedition)
     {
         ArgumentNullException.ThrowIfNull(expedition);
@@ -19,6 +21,8 @@ public static class ExpeditionEffectMovementProjection
             .ToArray();
     }
 
+    // Feed the shared composer with a deterministic ordering of projected
+    // inputs; effect movement is not resolved by a separate rules engine.
     public static MovementCapabilityComposition Compose(
         StoredExpedition expedition,
         MovementCompositionInput? input = null)

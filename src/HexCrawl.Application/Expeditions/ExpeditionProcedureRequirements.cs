@@ -3,6 +3,10 @@ using HexCrawl.Domain.Runtime;
 
 namespace HexCrawl.Application;
 
+/// <summary>
+/// Shared facade for procedure-derived due checks and interval resolution;
+/// world-bound and nonspatial sessions use the same generic runtime policies.
+/// </summary>
 public static class ExpeditionProcedureRequirements
 {
     public static bool IsEncounterCheckDue(GenericProcedureRuntime procedure, CrawlSessionRuntimeState state) =>

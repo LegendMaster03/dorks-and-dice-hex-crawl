@@ -37,6 +37,11 @@ public sealed record ParticipantActivityPolicy(
 /// Interprets only the exact materialized party.activities module stored on a CampaignProcedure.
 /// It deliberately does not consult presets, origin metadata, or the current catalog parameter values.
 /// </summary>
+/// <summary>
+/// Interprets pinned party activity contracts and validates assignments.
+/// Scope, activity, and role availability come from materialized mechanics,
+/// not the current preset catalog.
+/// </summary>
 public static class ParticipantActivityPolicyResolver
 {
     public static ParticipantActivityPolicy Resolve(CampaignProcedure procedure)
@@ -89,6 +94,8 @@ public static class ParticipantActivityPolicyResolver
             null);
     }
 
+    // A structurally valid assignment is not necessarily allowed by this
+    // campaign's activity scope and available role/activity keys.
     public static void ValidateAssignments(
         CrawlPartySheet party,
         ParticipantActivityPolicy policy)
@@ -135,6 +142,8 @@ public static class ParticipantActivityPolicyResolver
         }
     }
 
+    // Retain a detached copy of assignments in event/process snapshots
+    // rather than a reference to future editable party state.
     public static IReadOnlyList<ParticipantActivityAssignment> SnapshotAssignments(CrawlPartySheet party)
     {
         ArgumentNullException.ThrowIfNull(party);

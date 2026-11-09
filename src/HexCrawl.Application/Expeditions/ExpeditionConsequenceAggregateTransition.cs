@@ -18,6 +18,8 @@ public sealed record AggregateConsequenceTransitionResult(
 /// </summary>
 public static class ExpeditionConsequenceAggregateTransition
 {
+    // Compute the effect, resource, and time-delay transition together
+    // before the caller saves a single new expedition aggregate version.
     public static AggregateConsequenceTransitionResult Apply(
         StoredExpedition expedition,
         ExpeditionConsequence consequence,
@@ -76,6 +78,8 @@ public static class ExpeditionConsequenceAggregateTransition
         return new(working, status, detail, changed);
     }
 
+    // Advance only the existing runtime clock using explicit resolved time;
+    // a delay is not a separate watch or an implicit navigation result.
     private static AggregateConsequenceTransitionResult ApplyTimeDelay(
         StoredExpedition expedition,
         ExpeditionConsequence consequence)

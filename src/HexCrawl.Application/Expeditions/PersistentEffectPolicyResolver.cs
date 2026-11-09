@@ -30,8 +30,14 @@ public sealed record PersistentEffectPolicy(
 /// Focused Phase 10 projection over the exact effects.expedition module stored on a CampaignProcedure.
 /// Preset identity, origin metadata, and the current catalog are deliberately not execution inputs.
 /// </summary>
+/// <summary>
+/// Extracts supported effect kinds and accumulation/recovery semantics
+/// from the pinned procedure. Unknown mechanics are not treated as neutral.
+/// </summary>
 public static class PersistentEffectPolicyResolver
 {
+    // Report unsupported and missing policy separately so the effects
+    // engine can retain explicit adjudication requirements.
     public static PersistentEffectPolicy Resolve(CampaignProcedure procedure)
     {
         ArgumentNullException.ThrowIfNull(procedure);

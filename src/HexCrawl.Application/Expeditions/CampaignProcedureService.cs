@@ -3,8 +3,14 @@ using HexCrawl.Domain.Procedure;
 
 namespace HexCrawl.Application;
 
+/// <summary>
+/// Persists owner-scoped procedure revisions as immutable materialized rules.
+/// A new revision does not rewrite procedures already pinned to expeditions.
+/// </summary>
 public sealed class CampaignProcedureService(IHexCrawlStore store)
 {
+    // A preset is a recipe for a stored revision, not a mutable dependency
+    // to resolve again during later expedition execution.
     public async Task<StoredCampaignProcedureRevision> CreateFromPresetAsync(
         string ownerUserId,
         string presetKey,
@@ -81,6 +87,8 @@ public sealed class CampaignProcedureService(IHexCrawlStore store)
             cancellationToken);
     }
 
+    // Canonical JSON revisions follow the same version and ownership
+    // controls as revisions produced through structured authoring.
     public async Task<StoredCampaignProcedureRevision> CreateCanonicalRevisionAsync(
         string ownerUserId,
         Guid procedureId,

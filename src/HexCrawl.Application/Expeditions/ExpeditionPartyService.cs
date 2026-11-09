@@ -8,10 +8,17 @@ public sealed record UpdateExpeditionPartyCommand(
     CrawlPartySheet Party,
     bool ReplaceMovementContributors = false);
 
+/// <summary>
+/// Validates expedition party edits against a versioned aggregate. The
+/// movement contributor replacement flag distinguishes full reconciliation
+/// from retaining previously resolved movement inputs.
+/// </summary>
 public sealed class ExpeditionPartyService(
     IHexCrawlStore store,
     HexCrawlService coreService)
 {
+    // Changes to the party must validate referenced movement contributors
+    // and cannot overwrite a newer persisted expedition version.
     public async Task<StoredExpedition> UpdateAsync(
         Guid expeditionId,
         string ownerUserId,

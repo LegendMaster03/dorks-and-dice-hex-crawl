@@ -5,6 +5,10 @@ using HexCrawl.Domain.Procedure;
 
 namespace HexCrawl.Application;
 
+/// <summary>
+/// Deep-copies procedure contracts so changes in mutable collections owned
+/// by a caller or catalog cannot change a previously materialized revision.
+/// </summary>
 internal static class CampaignProcedureSnapshot
 {
     private static readonly JsonSerializerOptions ComparisonJsonOptions = CreateComparisonJsonOptions();
@@ -62,6 +66,8 @@ internal static class CampaignProcedureSnapshot
         return value with { Parameters = CopyStrings(value.Parameters) };
     }
 
+    // Copy every nested module, mechanic, override, and parameter collection;
+    // a record 'with' clone alone would retain references to nested data.
     public static CampaignProcedure Copy(CampaignProcedure value)
     {
         ArgumentNullException.ThrowIfNull(value);
@@ -72,6 +78,8 @@ internal static class CampaignProcedureSnapshot
         };
     }
 
+    // Structural equivalence is about canonical procedure contents, not
+    // dictionary insertion order or JSON formatting differences.
     public static bool Equivalent(CampaignProcedure left, CampaignProcedure right)
     {
         ArgumentNullException.ThrowIfNull(left);

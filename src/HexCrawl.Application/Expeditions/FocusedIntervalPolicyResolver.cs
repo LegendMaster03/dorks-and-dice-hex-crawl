@@ -33,8 +33,14 @@ public sealed record FocusedIntervalPolicy(
 /// It deliberately does not consult origin preset identity, current preset recipes, or current
 /// catalog parameter values.
 /// </summary>
+/// <summary>
+/// Extracts a focused interval duration from the pinned native procedure.
+/// Missing and unsupported handlers remain distinct from a usable duration.
+/// </summary>
 public static class FocusedIntervalPolicyResolver
 {
+    // Never infer a fixed interval from a preset label or fall back to an
+    // arbitrary default when the materialized execution handler is missing.
     public static FocusedIntervalPolicy Resolve(CampaignProcedure procedure)
     {
         ArgumentNullException.ThrowIfNull(procedure);

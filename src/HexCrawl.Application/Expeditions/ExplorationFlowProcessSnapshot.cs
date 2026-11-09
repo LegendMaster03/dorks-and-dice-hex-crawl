@@ -10,6 +10,8 @@ namespace HexCrawl.Application;
 /// </summary>
 internal static class ExplorationFlowProcessSnapshot
 {
+    // Use the same pinned-flow projection for starting a new process and
+    // validating its durable snapshot after persistence or reload.
     public static (JourneyProcessDefinition Definition,
         JourneyProcessExecutionSnapshot Execution) From(CampaignProcedure procedure)
     {
@@ -55,6 +57,8 @@ internal static class ExplorationFlowProcessSnapshot
         return (definition, execution);
     }
 
+    // Current catalog edits must not reinterpret a process created from
+    // a particular materialized CampaignProcedure.
     public static void Validate(
         CampaignProcedure procedure, JourneyProcessInstance process)
     {

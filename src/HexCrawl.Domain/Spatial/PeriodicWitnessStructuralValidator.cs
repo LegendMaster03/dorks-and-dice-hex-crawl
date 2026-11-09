@@ -19,6 +19,8 @@ internal static class PeriodicWitnessStructuralValidator
     }
     private static InvalidOperationException Invalid(string reason) => new(reason);
 
+    // Structural proof precedes any metric realization. Check reciprocal
+    // incidence and the integer lattice cover, not approximate coordinates.
     public static void Validate(PeriodicTopologyWitness witness)
     {
         var cells = witness.MotifCells;
