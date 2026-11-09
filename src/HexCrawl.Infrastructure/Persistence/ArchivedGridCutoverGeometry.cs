@@ -124,6 +124,8 @@ internal static class ArchivedGridCutoverGeometry
         new(-1, 0), new(0, -1), new(1, -1)
     ];
 
+    // Historical axial coordinates are accepted only for this one-time
+    // conversion; runtime cell identity remains motif/lattice-based.
     public static PeriodicCellAddress ToAddress(ArchivedAxialCoordinate hex) =>
         new(MotifId, new LatticeDisplacement(hex.Q, hex.R));
 

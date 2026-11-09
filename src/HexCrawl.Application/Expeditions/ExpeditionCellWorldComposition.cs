@@ -17,6 +17,8 @@ public sealed record CellWorldProjection(
 /// </summary>
 public static class ExpeditionCellWorldComposition
 {
+    // Project events and knowledge only for actual authored world objects
+    // inside the resolved cell polygon. Mapless sessions skip this projection.
     public static CellWorldProjection Apply(
         OverworldDefinition world,
         CellWatchAdvanceResult runtime,

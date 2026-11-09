@@ -38,6 +38,8 @@ public sealed partial class SourceMapApplicationService
     /// identity are preserved; the tiling gets a NEW stable cell identity.
     /// The persistence layer locks the world against concurrent starts.
     /// </summary>
+    // Topology replacement is limited to unused worlds. Once expeditions
+    // reference stable cell identities, correction must not rewrite them.
     public async Task<StoredOverworld> ReplaceUnusedPeriodicWorldAsync(
         Guid overworldId, Guid sourceMapId, string ownerUserId,
         PeriodicWorldTiling replacementTiling, MapRegistrationTransform alignment,
@@ -95,6 +97,8 @@ public sealed partial class SourceMapApplicationService
         };
     }
 
+    // Reject non-finite or degenerate transforms before saving a detected
+    // registration; detector confidence is not a substitute for geometry.
     private static void ValidateAffine(MapRegistrationTransform transform)
     {
         if (transform.Kind != MapRegistrationTransformKind.Affine

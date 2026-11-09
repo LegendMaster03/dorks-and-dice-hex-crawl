@@ -19,6 +19,9 @@ public sealed class SurveyorPeriodicMotifInvestigationClient(
     private const string Path = "v3/periodic-tiling/investigate";
     private const int MaximumResponseBytes = 1_500_000;
 
+    // Discover the service's non-authoritative investigation capability
+    // before uploading raster bytes; the v3 response is research evidence,
+    // not a basis for automatically replacing world topology.
     public async Task<PeriodicMotifInvestigation> InvestigateAsync(
         Stream raster, string mediaType, string? correlationId = null,
         CancellationToken cancellationToken = default)
@@ -84,6 +87,8 @@ public sealed class SurveyorPeriodicMotifInvestigationClient(
                 $"Surveyor returned HTTP {(int)response.StatusCode} during motif investigation.");
     }
 
+    // Bound remote response allocation even when Content-Length is absent
+    // or incorrect; an external analysis service is not trusted input.
     private static async Task<JsonDocument> ReadBoundedJsonAsync(
         HttpResponseMessage response, int limit, CancellationToken token)
     {
@@ -110,6 +115,8 @@ public sealed class SurveyorPeriodicMotifInvestigationClient(
         }
     }
 
+    // Require an explicit safe capability declaration rather than assuming
+    // every Surveyor version supports this investigation contract.
     private static bool AdvertisesSafeInvestigation(JsonElement root)
     {
         if (root.ValueKind != JsonValueKind.Object
@@ -204,6 +211,8 @@ public sealed class SurveyorPeriodicMotifInvestigationClient(
     private static MapAnalysisPoint Point(JsonElement parent)
         => new(Number(parent, "x", -1e9, 1e9), Number(parent, "y", -1e9, 1e9));
 
+    // Parse only the bounded, supported observation schema. Candidate
+    // topology and metric evidence are independently checked downstream.
     private static PeriodicMotifInvestigation Parse(JsonElement root)
     {
         if (!IsString(root, "apiVersion", "v3") || !IsString(root, "capability", Capability)

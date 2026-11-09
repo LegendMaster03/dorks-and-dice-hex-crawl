@@ -44,6 +44,8 @@ public sealed partial class HexCrawlService
     // A generated result id is a reference to the persisted owner-scoped
     // aggregate, not a bearer token and never proof by itself. Verify the
     // complete typed values and their cell-qualified audit event before use.
+    // Verify a server-generated resolution against its current grant and
+    // watch context before accepting AutomaticRoll provenance from a client.
     private static GeneratedProcedureResolution? VerifyCellGeneration(
         StoredExpedition expedition,
         CellExpeditionState state,
@@ -125,6 +127,8 @@ public sealed partial class HexCrawlService
         return state with { History = [.. state.History, .. added] };
     }
 
+    // Course or world changes invalidate outstanding resolutions whose
+    // geometric context is no longer the one originally verified.
     private static IReadOnlyList<GeneratedProcedureResolution> SupersedeCellResolutionGrants(
         StoredExpedition expedition) =>
         expedition.GeneratedProcedureResolutions.Select(item =>
@@ -183,6 +187,10 @@ public sealed partial class HexCrawlService
     /// Execute a generalized world watch through the same owner-scoped,
     /// optimistic-concurrency persistence boundary used by hex expeditions.
     /// The pinned procedure and stored world are reloaded for each mutation.
+    /// </summary>
+    /// <summary>
+    /// Validates the authoritative geometry, provenance, knowledge projection,
+    /// and forced-travel consequences before saving one expedition version.
     /// </summary>
     public async Task<StoredExpedition> AdvanceCellExpeditionAsync(
         Guid expeditionId,
@@ -281,6 +289,8 @@ public sealed partial class HexCrawlService
         return await SaveExpeditionAsync(updated, expectedVersion, cancellationToken);
     }
 
+    // Atomic exit adjudication is a separate versioned operation; it does
+    // not imply a travel step or permit a fabricated adjacent cell.
     public async Task<StoredExpedition> ResolveCellExpeditionCourseAsync(
         Guid expeditionId,
         string ownerUserId,

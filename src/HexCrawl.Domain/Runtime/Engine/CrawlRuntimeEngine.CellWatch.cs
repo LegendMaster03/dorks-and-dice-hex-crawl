@@ -37,6 +37,11 @@ public sealed record CellWatchAdvanceResult(
 /// </summary>
 public sealed partial class CrawlRuntimeEngine
 {
+    /// <summary>
+    /// Advances the existing watch using resolved travel inputs. Encounter,
+    /// navigation, and boundary pauses preserve the unconsumed watch rather
+    /// than silently starting a new interval.
+    /// </summary>
     public CellWatchAdvanceResult AdvanceCellWatch(
         PeriodicWorldTiling world, CampaignProcedure procedure,
         CellExpeditionState expedition, CellWatchTravelPlan plan,
@@ -83,6 +88,8 @@ public sealed partial class CrawlRuntimeEngine
             state = state with { ActiveWatch = active };
         }
 
+        // Only an absent active watch starts a new interval. Resuming an
+        // interrupted watch retains its encounter and elapsed-time state.
         if (active is null)
         {
             var start = PrepareWatchStart(runtime, state, state.CompletedWatches, inputs.Encounter);
@@ -182,6 +189,8 @@ public sealed partial class CrawlRuntimeEngine
         var segmentDuration = window.Duration;
         var encounterAtEnd = window.EncounterAtEnd;
 
+        // A mid-watch encounter limits the segment's travel budget; neither
+        // step counts nor physical distance can be charged for the full watch.
         var fraction = Math.Clamp(segmentDuration.Ticks / (double)callDuration.Ticks, 0, 1);
         ResolvedTravelAmount segmentTravel;
         if (runtime.Movement.TravelResolution == TravelResolutionMode.CellSteps)
@@ -445,6 +454,8 @@ public sealed partial class CrawlRuntimeEngine
         }, null, active.Remaining, events);
     }
 
+    // Suppressing a check does not automatically cure a lost expedition.
+    // Reorientation is an explicit decision with its own event and history.
     private static CellExpeditionState ResolveCellNavigation(
         ProcedureNavigationRuntime policy, CellExpeditionState state,
         CellWatchTravelPlan plan, ResolvedCellNavigation? resolved,

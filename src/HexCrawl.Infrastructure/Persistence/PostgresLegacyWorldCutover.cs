@@ -161,6 +161,8 @@ internal static class PostgresLegacyWorldCutover
         }
     }
 
+    // Preserve original row identity and fail the transaction if archived
+    // axial geometry contradicts a separately retained periodic tiling.
     private static string ConvertSnapshot(Guid identity, string json)
     {
         if (JsonNode.Parse(json) is not JsonObject root)

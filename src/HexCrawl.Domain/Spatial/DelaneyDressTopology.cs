@@ -36,6 +36,11 @@ public static class DelaneyDressTopology
         @"^\s*<\s*(?:(\d+\.\d+)\s*:\s*)?(\d+)\s*:\s*([^:]+)\s*:\s*([^:]+)\s*>\s*$",
         RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
+    /// <summary>
+    /// Parses and validates finite chamber involutions and orbit labels.
+    /// Zero combinatorial curvature establishes Euclidean type, not an
+    /// independently verified polygonal metric embedding.
+    /// </summary>
     public static DelaneyDressInspection Inspect(string? text, int chamberLimit = 256)
     {
         try
@@ -210,6 +215,10 @@ public static class DelaneyDressTopology
         return best!;
     }
 
+    /// <summary>
+    /// Proves a chamber projection by preserving labels and all three
+    /// involutions; a matching chamber count alone is insufficient.
+    /// </summary>
     public static int[]? ProjectChambers(DelaneyDressSymbol cover, DelaneyDressSymbol quotient)
     {
         if (cover.ChamberCount < quotient.ChamberCount) return null;
@@ -242,6 +251,10 @@ public static class DelaneyDressTopology
             && double.IsFinite(b.Min) && double.IsFinite(b.Max) && b.Min <= b.Max
             && (a.Max < b.Min || b.Max < a.Min)));
 
+    /// <summary>
+    /// Returns proof levels conservatively. Without a verified common cover,
+    /// similarly shaped Euclidean symbols remain inconclusive.
+    /// </summary>
     public static TilingComparison Compare(
         string left, string right, string? commonCover = null,
         IEnumerable<TilingMetricConstraint>? leftMetric = null,

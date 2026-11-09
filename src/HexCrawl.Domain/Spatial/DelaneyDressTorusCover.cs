@@ -55,6 +55,8 @@ public static class DelaneyDressTorusCover
     }
     private readonly record struct PendingBoundary(int EdgeId, int TargetFace, LatticeDisplacement Shift);
 
+    // Build an unbranched combinatorial translation cover before assigning
+    // lattice offsets; topology does not imply a usable metric realization.
     public static DelaneyDressCoverResult Construct(string source, int chamberLimit = 1024)
     {
         static DelaneyDressCoverResult Unsupported(string reason) => new(DelaneyDressCoverStatus.Unsupported, null, reason);
@@ -276,6 +278,8 @@ public static class DelaneyDressTorusCover
         return new(DelaneyDressCoverStatus.Constructed, witness);
     }
 
+    // Orbit membership is defined by pairs of D-symbol involutions, not
+    // by labels or visual polygon adjacency from an uploaded image.
     private static Partition SplitOrbits(int[][] maps, int first, int second, int n)
     {
         var which = Enumerable.Repeat(-1, n + 1).ToArray();
