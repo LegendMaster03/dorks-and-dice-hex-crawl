@@ -6,6 +6,10 @@ using static HexCrawl.Application.CrawlProcedureCatalog;
 
 namespace HexCrawl.Application.Presets;
 
+/// <summary>
+/// Square-zone exploration with vertex movement; variable crossing time and threats remain DM-resolved.
+/// This preset supplies declarative data to shared executable modules.
+/// </summary>
 internal static class MutantYearZeroPreset
 {
     internal static CrawlProcedurePresetDefinition Create() =>

@@ -4,6 +4,10 @@ using static HexCrawl.Application.CrawlProcedureCatalog;
 
 namespace HexCrawl.Application.Presets;
 
+/// <summary>
+/// Minimal continuous-distance baseline without automated navigation or encounter checks.
+/// This preset supplies declarative data to shared executable modules.
+/// </summary>
 internal static class SimpleFixedDistancePreset
 {
     internal static CrawlProcedurePresetDefinition Create() =>

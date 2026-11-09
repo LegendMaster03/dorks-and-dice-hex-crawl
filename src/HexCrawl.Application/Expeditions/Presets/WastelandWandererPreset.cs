@@ -6,6 +6,10 @@ using static HexCrawl.Application.CrawlProcedureCatalog;
 
 namespace HexCrawl.Application.Presets;
 
+/// <summary>
+/// Finite centered 5-by-5 square map with travel, encounter, action, and journal stages.
+/// This preset supplies declarative data to shared executable modules.
+/// </summary>
 internal static class WastelandWandererPreset
 {
     internal static CrawlProcedurePresetDefinition Create() =>

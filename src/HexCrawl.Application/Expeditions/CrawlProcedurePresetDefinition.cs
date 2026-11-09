@@ -7,6 +7,10 @@ public sealed record ProcedureOriginMetadata(
     string? PresetDisplayName = null,
     int? PresetRevision = null);
 
+/// <summary>
+/// Source attribution and documentation paired with a generic procedure
+/// recipe. Materialization produces the ruleset snapshot used in play.
+/// </summary>
 public sealed record CrawlProcedurePresetDefinition(
     string PresetKey,
     string DisplayName,

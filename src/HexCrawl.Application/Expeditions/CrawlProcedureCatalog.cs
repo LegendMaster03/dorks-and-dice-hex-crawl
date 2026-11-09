@@ -3,6 +3,10 @@ using HexCrawl.Application.Presets;
 
 namespace HexCrawl.Application;
 
+/// <summary>
+/// Registry of optional starting recipes. Keys identify authored selections,
+/// while expeditions execute independently pinned materialized procedures.
+/// </summary>
 public static class CrawlProcedureCatalog
 {
     public const string BxPresetKey = "bx";

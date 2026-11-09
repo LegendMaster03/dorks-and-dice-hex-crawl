@@ -3,6 +3,10 @@ using static HexCrawl.Application.CrawlProcedureCatalog;
 
 namespace HexCrawl.Application.Presets;
 
+/// <summary>
+/// Preserves Old-School Essentials source attribution while intentionally reusing the B/X recipe.
+/// This preset supplies declarative data to shared executable modules.
+/// </summary>
 internal static class OseClassicFantasyPreset
 {
     internal static CrawlProcedurePresetDefinition Create(CrawlProcedurePresetDefinition bx) =>

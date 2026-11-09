@@ -5,6 +5,10 @@ using static HexCrawl.Application.CrawlProcedureCatalog;
 
 namespace HexCrawl.Application.Presets;
 
+/// <summary>
+/// Cardinal-only square-sector travel with optional scouting and no inferred encounter outcomes.
+/// This preset supplies declarative data to shared executable modules.
+/// </summary>
 internal static class WalkingDeadUniversePreset
 {
     internal static CrawlProcedurePresetDefinition Create() =>

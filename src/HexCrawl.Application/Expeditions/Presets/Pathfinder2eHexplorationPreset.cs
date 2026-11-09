@@ -4,6 +4,10 @@ using static HexCrawl.Application.CrawlProcedureCatalog;
 
 namespace HexCrawl.Application.Presets;
 
+/// <summary>
+/// Daily Hexploration with activity budgets, terrain costs, camping, and subsistence.
+/// This preset supplies declarative data to shared executable modules.
+/// </summary>
 internal static class Pathfinder2eHexplorationPreset
 {
     internal static CrawlProcedurePresetDefinition Create() =>

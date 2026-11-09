@@ -4,6 +4,10 @@ using static HexCrawl.Application.CrawlProcedureCatalog;
 
 namespace HexCrawl.Application.Presets;
 
+/// <summary>
+/// Minimal whole-cell baseline without partial progress or automated encounters.
+/// This preset supplies declarative data to shared executable modules.
+/// </summary>
 internal static class SimpleHexStepPreset
 {
     internal static CrawlProcedurePresetDefinition Create() =>

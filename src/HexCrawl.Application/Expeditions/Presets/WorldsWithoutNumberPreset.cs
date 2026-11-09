@@ -4,6 +4,10 @@ using static HexCrawl.Application.CrawlProcedureCatalog;
 
 namespace HexCrawl.Application.Presets;
 
+/// <summary>
+/// Ten-hour expedition day with terrain, encounters, supply, foraging, and camping.
+/// This preset supplies declarative data to shared executable modules.
+/// </summary>
 internal static class WorldsWithoutNumberPreset
 {
     internal static CrawlProcedurePresetDefinition Create() =>
