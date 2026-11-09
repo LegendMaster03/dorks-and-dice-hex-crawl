@@ -2,7 +2,6 @@ export type ExpeditionAssistant = "travel" | "navigation" | "encounters";
 
 /** All supported routes have typed, parsed identities; unknown paths are not silently treated as a session. */
 export type ToolRoute =
-export type ToolRoute =
     | { kind: "home" }
     | { kind: "procedures" }
     | { kind: "procedure"; procedureId: string }
