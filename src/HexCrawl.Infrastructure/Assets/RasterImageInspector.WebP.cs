@@ -49,8 +49,8 @@ public static partial class RasterImageInspector
             }
 
             // The primary chunk must establish an image format; ancillary
-        // metadata cannot substitute for a valid image header.
-        if (firstChunk && chunkType is not WebPVp8X and not WebPVp8 and not WebPVp8L)
+            // metadata cannot substitute for a valid image header.
+            if (firstChunk && chunkType is not WebPVp8X and not WebPVp8 and not WebPVp8L)
             {
                 throw new InvalidDataException("WebP image uses an unsupported or malformed primary chunk.");
             }
