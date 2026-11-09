@@ -21,6 +21,11 @@ type Mutate = (control: HTMLButtonElement | null, action: () => Promise<void>) =
  * environment, journey, effects, and survival editors. Each editor mounts
  * within the explicitly provided gameplay host, independently of tile shape.
  */
+/**
+ * Mounts one set of party, survival, effects, journey, and environment panels
+ * for the generalized spatial workbench. These panels share its mutation
+ * owner and do not start independent expedition runtimes.
+ */
 export function mountPeriodicGameplayPanels(
     host: HTMLElement,
     api: HexCrawlApi,
@@ -60,6 +65,8 @@ export function mountPeriodicGameplayPanels(
 
     let disposed = false;
     let syncGeneration = 0;
+    // A successful watch mutation invalidates dependent projections;
+    // refresh their read models together before presenting new decisions.
     const sync = (): void => {
         if (disposed) return;
         party.sync(getRuntime());
@@ -80,6 +87,7 @@ export function mountPeriodicGameplayPanels(
                 results.some(result => result.status === "rejected"));
         });
     };
+    // Release panel subscriptions when the workbench route is replaced.
     const dispose = (): void => {
         disposed = true;
         syncGeneration++;

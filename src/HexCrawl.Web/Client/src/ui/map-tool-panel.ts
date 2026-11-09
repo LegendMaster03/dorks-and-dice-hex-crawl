@@ -56,6 +56,7 @@ export function ensureMapToolStyles(): void {
 }
 
 /** Shared nonmodal tools anchored to the map, with the existing drawer lifecycle. */
+/** Moves an existing workspace panel into the map overlay and returns it on close. */
 export function openMapToolPanel(
     root: HTMLElement,
     title: string,
@@ -72,6 +73,7 @@ export function openMapToolPanel(
 }
 
 /** Move persistent editor hosts as a unit; switching tools never rebuilds forms. */
+/** Shares overlay and focus restoration behavior between map authoring and play. */
 export function createMapToolHost(
     root: HTMLElement, host: HTMLElement, dock: HTMLElement,
     getReturnFocus?: () => HTMLElement | (() => HTMLElement | null) | null

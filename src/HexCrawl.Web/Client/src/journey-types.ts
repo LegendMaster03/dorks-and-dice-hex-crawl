@@ -72,6 +72,7 @@ export type JourneyStageDefinition = {
     roleKeys: string[];
 };
 
+/** Authored process stages and choices, retained with the running process. */
 export type JourneyProcessDefinition = {
     processKey: string;
     displayName: string;
@@ -85,6 +86,10 @@ export type JourneyProcessDefinition = {
     note: string | null;
 };
 
+/**
+ * Pinned execution rules for an instance; a later ruleset revision must not
+ * reinterpret stages, progress, or outcome transitions.
+ */
 export type JourneyProcessExecutionSnapshot = {
     stageModel: string;
     stageTransitionModel: JourneyStageTransitionModel;
@@ -131,6 +136,7 @@ export type JourneyPendingAction = {
     detail: string | null;
 };
 
+/** Historical and current process state, including pending actions and the pinned definition. */
 export type JourneyProcessInstance = {
     id: string;
     status: JourneyProcessStatus;
@@ -156,6 +162,7 @@ export type JourneyEnvironmentFactSnapshot = {
     source: string | null;
 };
 
+/** Event target and source are captured at occurrence time, not inferred from today's party. */
 export type JourneyEventOccurrence = {
     id: string;
     processId: string | null;

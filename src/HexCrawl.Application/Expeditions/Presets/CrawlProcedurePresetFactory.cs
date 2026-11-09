@@ -4,6 +4,10 @@ using HexCrawl.Domain.Spatial;
 
 namespace HexCrawl.Application;
 
+/// <summary>
+/// Builds declarative preset recipes from generic module/mechanic primitives.
+/// Executable behaviors are shared across presets; only selected data differs.
+/// </summary>
 internal static class CrawlProcedurePresetFactory
 {
     internal static CrawlProcedurePresetDefinition Preset(
@@ -32,6 +36,8 @@ internal static class CrawlProcedurePresetFactory
             disclaimer,
             category);
 
+    // The common spatial core is independent of hex, square, or mixed
+    // polygons; each preset supplies its particular tiling and rule parameters.
     internal static IReadOnlyList<ProcedureModuleRecipe> ExecutableCore(
         TimeSpan interval,
         TravelResolutionMode travelResolution,

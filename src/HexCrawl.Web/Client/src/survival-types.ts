@@ -1,4 +1,5 @@
 export type Phase11PolicySupport = "None" | "Supported" | "Unsupported";
+/** Counted, symbolic, supply-die, and external inventories have distinct value semantics. */
 export type ExpeditionResourceInventoryModel = "Counted" | "Abstract" | "SupplyDie" | "ExternalManual";
 export type ExpeditionEffectScope = "Participant" | "Party" | "Mount" | "Vehicle" | "Expedition";
 export type ResourceChangeOperation = "AdjustQuantity" | "SetQuantity" | "SetState" | "SetSupplyDie" | "Deplete";
@@ -110,6 +111,7 @@ export type ExposurePolicy = {
     unsupportedReason: string | null;
 };
 
+/** Inventory record with an explicit target and precisely one value model. */
 export type ExpeditionResource = {
     id: string;
     resourceKey: string;
@@ -132,6 +134,7 @@ export type ForcedTravelResolution = {
     provenance: ConsequenceProvenance;
 };
 
+/** Retained forced-travel progress, idempotency identities, and pending checks. */
 export type ForcedTravelState = {
     amountSinceReset: number;
     unit: string | null;
@@ -180,6 +183,7 @@ export type PendingResourceConsequence = {
     reason: string;
 };
 
+/** Read-only aggregate of survival state and the supported pinned rule contracts. */
 export type SurvivalResources = {
     expeditionVersion: number;
     resourcePolicy: ResourceConsumptionPolicy;

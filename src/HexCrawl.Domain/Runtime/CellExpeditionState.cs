@@ -11,6 +11,10 @@ public enum WorldPositionPrecision
     Exact
 }
 
+/// <summary>
+/// Native spatial session state. The traversal cursor supplies current cell
+/// and exact position; display grid coordinates are not authoritative.
+/// </summary>
 public sealed record CellExpeditionState : CrawlSessionRuntimeState
 {
     public required PeriodicCellTraversal Traversal { get; init; }

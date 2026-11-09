@@ -74,6 +74,10 @@ public sealed record ProcedureReferenceDiagnosticContract(
             diagnostic.AllowedSources.Select(ProcedureReferenceInputSourceContract.From).ToArray());
 }
 
+/// <summary>
+/// Read-only reference to one already materialized mechanic, including its
+/// input requirements, execution support, and attribution.
+/// </summary>
 public sealed record ProcedureReferenceMechanicContract(
     string Key,
     string DisplayName,
@@ -142,6 +146,10 @@ public sealed record ProcedureReferenceSectionContract(
         new(section.Name, section.Modules.Select(ProcedureReferenceModuleContract.From).ToArray());
 }
 
+/// <summary>
+/// Presentation snapshot of a specific procedure revision. Fetching the
+/// reference does not modify any stored rules or expedition state.
+/// </summary>
 public sealed record ProcedureReferenceContract(
     Guid ProcedureId,
     int Revision,

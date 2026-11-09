@@ -32,6 +32,10 @@ public sealed record StartCellExpeditionRequest(
     }
 }
 
+/// <summary>
+/// A watch command carries resolved typed inputs and provenance; the server
+/// verifies automatic-generation claims instead of trusting client labels.
+/// </summary>
 public sealed record AdvanceCellWatchRequest(
     long ExpectedVersion,
     CellWatchTravelPlan Plan,

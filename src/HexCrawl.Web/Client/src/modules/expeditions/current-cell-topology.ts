@@ -74,6 +74,7 @@ export function currentPeriodicCellAdjacency(
         context.selectedExitInterfaceIndex);
 }
 
+/** Both the tiling id and full motif/lattice address participate in identity. */
 export function sameWorldCell(left: WorldCellId, right: WorldCellId): boolean {
     return left.tilingId === right.tilingId
         && left.address.motifCellId === right.address.motifCellId

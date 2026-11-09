@@ -15,6 +15,11 @@ import type {
 } from "./procedure-composer-types";
 import type { ProcedureReference } from "./procedure-reference-types";
 
+/**
+ * Client boundary for revisioned procedure authoring and canonical JSON.
+ * The backend validates and materializes rules; this class only transports
+ * draft inputs and results through hosted or standalone routing.
+ */
 export class ProcedureComposerApi {
     private constructor(private readonly backendBaseUrl: string) {}
 
@@ -97,6 +102,8 @@ export class ProcedureComposerApi {
             "Save procedure revision");
     }
 
+    // Canonical JSON writes still require a specific expected revision;
+    // client-side validation is not a substitute for save-time validation.
     public createCanonicalRevision(
         procedureId: string,
         input: ProcedureCanonicalRevisionInput): Promise<ProcedureComposer> {

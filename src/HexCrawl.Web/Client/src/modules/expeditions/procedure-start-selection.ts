@@ -7,6 +7,10 @@ import type {
 const SAVED_PREFIX = "saved:";
 const PRESET_PREFIX = "preset:";
 
+/**
+ * A stored procedure is selected by exact revision; a preset is only a
+ * recipe that becomes materialized at expedition creation.
+ */
 export type ProcedureStartChoice =
     | { kind: "saved"; procedureId: string; revision: number }
     | { kind: "preset"; presetKey: string };
@@ -35,6 +39,8 @@ export function populateProcedureStartChoices(
     select.append(presetGroup);
 }
 
+    // Keep saved-revision and preset identities distinct even if their
+    // visible display names happen to coincide.
 export function readProcedureStartChoice(value: string): ProcedureStartChoice {
     if (value.startsWith(SAVED_PREFIX)) {
         const encoded = value.slice(SAVED_PREFIX.length);

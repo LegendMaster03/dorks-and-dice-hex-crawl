@@ -5,6 +5,7 @@ export type PeriodicCellAddress = {
     motifCellId: string;
     translation: { u: number; v: number };
 };
+/** Qualified identity: a motif/lattice address from another tiling is a different cell. */
 export type WorldCellId = {
     tilingId: string;
     address: PeriodicCellAddress;
@@ -38,6 +39,10 @@ export type CellVertexContact = {
     point: WorldPoint;
 };
 
+/**
+ * Server-resolved cell topology and traversal cursor. The UI may draw these
+ * interfaces but cannot synthesize or authorize additional neighbors.
+ */
 export type CellTraversalContext = {
     formatVersion: number;
     currentCell: WorldCellId;
@@ -85,6 +90,10 @@ export type Location = {
 
 export type SourceMapRole = "Gm" | "Player" | "Neutral" | "Other";
 
+/**
+ * Affine transform from intrinsic source-image pixels into world coordinates.
+ * It is independent of both display zoom and polygon adjacency.
+ */
 export type MapRegistrationTransform = {
     kind: "Affine" | "Projective";
     m11: number;
@@ -178,6 +187,7 @@ export type PlayerMapDisclosure = {
     showGrid: boolean;
 };
 
+/** Authoritative versioned world projection; map artwork is not itself semantic terrain. */
 export type Overworld = {
     id: string;
     name: string;

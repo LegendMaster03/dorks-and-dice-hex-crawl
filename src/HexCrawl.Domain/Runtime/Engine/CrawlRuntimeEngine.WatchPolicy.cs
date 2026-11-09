@@ -14,6 +14,8 @@ public sealed partial class CrawlRuntimeEngine
         ResolvedEncounter Encounter,
         bool EncounterCheckDue);
 
+    // Determine the new watch's encounter obligations once from the
+    // pinned policy, rather than recomputing them after a pause or edit.
     private static WatchStartPolicy PrepareWatchStart(
         GenericProcedureRuntime procedure,
         CrawlSessionRuntimeState state,
@@ -44,6 +46,8 @@ public sealed partial class CrawlRuntimeEngine
     private readonly record struct WatchEncounterWindow(
         TimeSpan Duration, bool EncounterAtEnd, bool EncounterImmediatelyDue);
 
+    // Encounter cadence and pending encounter state are separate decisions;
+    // an active interruption must not silently create another check.
     private static WatchEncounterWindow ResolveEncounterWindow(
         TimeSpan callRemaining,
         TimeSpan elapsed,

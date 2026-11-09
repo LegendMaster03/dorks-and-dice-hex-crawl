@@ -69,6 +69,10 @@ export function affineRegistrationSaveAllowed(
         && holdoutErrorSourcePixels <= maxAffineHoldoutErrorSourcePixels;
 }
 
+/**
+ * Solves the exact three-landmark pixel-to-world transform. An additional
+ * landmark must be evaluated as an independent holdout, not folded into fit.
+ */
 export function solveAffine(controlPoints: RegistrationControlPoint[]): MapRegistrationTransform {
     if (controlPoints.length !== 3) throw new Error("Affine registration requires exactly three control-point pairs.");
     for (const pair of controlPoints) {
