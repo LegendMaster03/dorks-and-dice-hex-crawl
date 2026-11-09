@@ -7,6 +7,8 @@ namespace HexCrawl.Infrastructure.Persistence;
 
 public sealed partial class PostgresHexCrawlStore
 {
+    // Persist the validated materialized snapshot for a specific owner and
+    // revision; do not replace it with a catalog reference.
     public async Task<StoredCampaignProcedureRevision> CreateCampaignProcedureRevisionAsync(
         StoredCampaignProcedureRevision revision,
         CancellationToken cancellationToken = default)
@@ -127,6 +129,8 @@ public sealed partial class PostgresHexCrawlStore
         return result;
     }
 
+    // Rehydrate the saved procedure itself so historical execution does
+    // not depend on the catalog currently deployed.
     private static StoredCampaignProcedureRevision ReadCampaignProcedure(Npgsql.NpgsqlDataReader reader, string ownerUserId)
     {
         Guid? campaignId = reader.IsDBNull(0) ? null : reader.GetGuid(0);

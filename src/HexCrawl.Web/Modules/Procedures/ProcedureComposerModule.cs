@@ -8,6 +8,10 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace HexCrawl.Web.Modules.Procedures;
 
+/// <summary>
+/// Exposes procedure drafts, canonical validation, and owner-scoped revisions
+/// through the same application services used by expedition creation.
+/// </summary>
 public sealed class ProcedureComposerModule : IHexCrawlModule
 {
     public HexCrawlModuleManifest Manifest { get; } = new(
@@ -50,6 +54,8 @@ public sealed class ProcedureComposerModule : IHexCrawlModule
     private static readonly Lazy<IReadOnlyList<NamedTilingOption>> TilingOptions =
         new(BuildTilingOptions);
 
+    // Tiling picker entries are presentation metadata; supported geometry
+    // remains determined by the validated D-symbol and its topology witness.
     private static IReadOnlyList<NamedTilingOption> BuildTilingOptions()
     {
         var result = CrawlTilingNames.Catalog.ListEntries()
@@ -110,6 +116,8 @@ public sealed class ProcedureComposerModule : IHexCrawlModule
         return Results.Ok(ProcedureComposerContract.From(draft));
     }
 
+    // Compose canonical JSON from structured inputs rather than preserving
+    // a second independent frontend representation of ruleset mechanics.
     private static async Task<IResult> ComposeCanonicalDraftAsync(
         ProcedureCanonicalDraftRequest request,
         HttpContext context,

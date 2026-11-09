@@ -90,6 +90,8 @@ export async function renderExpeditionAssistant(
             }
         }
     };
+    // An initiative handoff originates from a retained encounter occurrence,
+    // not a client-synthesized combat state.
     const renderEncounterHandoff = (): void => {
         const host = required<HTMLElement>(root, "[data-encounter-handoff]");
         host.replaceChildren();

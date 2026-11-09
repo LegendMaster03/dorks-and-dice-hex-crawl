@@ -5,6 +5,10 @@ using HexCrawl.Domain.Spatial;
 
 namespace HexCrawl.Web.Modules.Expeditions;
 
+/// <summary>
+/// Exposes the pinned journey process policy and its explicit support state.
+/// A missing executable rule remains visible to the DM.
+/// </summary>
 public sealed record JourneyProcessPolicyContract(
     JourneyPolicySupport Support,
     string? StageModel,
@@ -126,6 +130,10 @@ public sealed record ExplorationCellContextContract(
     }
 }
 
+/// <summary>
+/// Snapshot projection for journey process, event, and historical state.
+/// Reads must not resolve or advance a pending stage.
+/// </summary>
 public sealed record ExpeditionJourneyStateContract(
     long ExpeditionVersion,
     JourneyProcessPolicyContract ProcessPolicy,
@@ -168,6 +176,10 @@ public sealed record JourneyOperationContract(
         ExpeditionJourneyStateContract.From(result.Expedition));
 }
 
+/// <summary>
+/// Records one explicit exploration event against the active journey and
+/// authoritative world cell, with versioned runtime state.
+/// </summary>
 public sealed record RecordExplorationCellRequest(
     long ExpectedVersion,
     Guid OperationId,

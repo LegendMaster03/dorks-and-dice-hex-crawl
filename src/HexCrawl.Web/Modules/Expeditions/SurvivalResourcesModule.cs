@@ -9,6 +9,10 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace HexCrawl.Web.Modules.Expeditions;
 
+/// <summary>
+/// Routes survival and resource decisions to one expedition application
+/// service; a successful HTTP request returns the new persisted state.
+/// </summary>
 public sealed class SurvivalResourcesModule : IHexCrawlModule
 {
     public HexCrawlModuleManifest Manifest { get; } = new(
@@ -162,6 +166,8 @@ public sealed class SurvivalResourcesModule : IHexCrawlModule
         return Results.Ok(await OperationAsync(result, owner, core, cancellationToken));
     }
 
+    // All mutations use the same result projection so applied, pending,
+    // and adjudication-required outcomes remain distinguishable.
     private static async Task<SurvivalOperationContract> OperationAsync(
         SurvivalOperationResult result,
         string owner,

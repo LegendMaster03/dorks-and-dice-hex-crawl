@@ -56,6 +56,8 @@ export async function renderPeriodicExpeditionWorkbench(
         initial.expedition.cellTraversal?.selectedExitVertexNeighbor);
     let disposed = false;
     let busy = false;
+    // Mutations and refreshes share one generation token. Only the newest
+    // asynchronous response may replace current runtime and topology state.
     let refreshGeneration = 0;
     let generated: CellProcedureResolutionHelperResult | null = null;
     let displayedWatchNumber: number | null | undefined = undefined;
@@ -204,6 +206,8 @@ export async function renderPeriodicExpeditionWorkbench(
     let historyDrawer: WorkspaceDrawer | null = null;
     let inspectionDrawer: WorkspaceDrawer | null = null;
     let repositionDrawer: WorkspaceDrawer | null = null;
+    // Drawer controls can be recreated during rerender; capture a logical
+    // fallback so closing a tool restores focus to a meaningful map action.
     const captureReturnFocus = (): (() => HTMLElement | null) => {
         const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
         const statLabel = opener?.querySelector(".hc-stat-action-label")?.textContent;
@@ -516,6 +520,8 @@ export async function renderPeriodicExpeditionWorkbench(
         }
     );
 
+    // Apply one authoritative expedition mutation at a time. A mutation
+    // invalidates generated helper results and reloads current topology.
     const progress = async (action: () => Promise<ExpeditionDetail>): Promise<void> => {
         if (busy || disposed) return;
         busy = true;
@@ -553,6 +559,8 @@ export async function renderPeriodicExpeditionWorkbench(
             if (!disposed) render();
         }
     };
+    // The response is a snapshot across expedition, topology, and world;
+    // discard it if a newer refresh or mutation has already begun.
     const refresh = async (duringMutation = false): Promise<void> => {
         if (disposed || busy && !duringMutation) return;
         const generation = ++refreshGeneration;
@@ -675,6 +683,8 @@ export async function renderPeriodicExpeditionWorkbench(
     form.addEventListener("change", () => {
         if (generated) invalidateGenerated();
     });
+    // Generated resolution grants are valid only for the exact submitted
+    // travel intent and expedition version, not after manual edits.
     const invalidateGenerated = (): void => {
         generated = null;
         text("[data-helper-result]", "Travel intent or DM input changed. Generate again to use automatic results.");

@@ -7,6 +7,10 @@ using HexCrawl.Domain.Spatial;
 
 namespace HexCrawl.Web.Modules.Procedures;
 
+/// <summary>
+/// Optional draft edits against a preset or saved revision; unspecified
+/// fields retain source values until a validated revision is created.
+/// </summary>
 public sealed record ProcedureComposerDraftRequest(
     string? PresetKey,
     Guid? ProcedureId,
@@ -34,6 +38,10 @@ public sealed record ProcedureComposerRevisionRequest(
     string? TilingDsSymbol = null,
     ProcedureMapBoundsInput? PlayableBounds = null);
 
+/// <summary>
+/// Finite lattice window, independent of tiling family. Omitted bounds
+/// preserve unbounded traversal rather than implying a particular map size.
+/// </summary>
 public sealed record ProcedureMapBoundsInput(int? Width = null, int? Height = null,
     long? MinU = null, long? MinV = null)
 {
@@ -87,6 +95,10 @@ public sealed record ProcedureInputContract(
     string InputKey,
     IReadOnlyList<string> AllowedSources);
 
+/// <summary>
+/// Display and capability metadata for a materialized mechanic. Execution
+/// support is a reported contract, not inferred from a preset's name.
+/// </summary>
 public sealed record ProcedureMechanicComposerContract(
     string Key,
     string DisplayName,

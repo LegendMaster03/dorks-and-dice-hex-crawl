@@ -51,6 +51,10 @@ public sealed record PendingEncounterContract(
         { Cell = occurrence.Cell };
 }
 
+/// <summary>
+/// Polymorphic runtime state projected to a common workbench contract;
+/// location and movement geometry remain authoritative on the server.
+/// </summary>
 public sealed record WorkbenchExpeditionStateContract(
     Guid Id,
     bool IsSpatial,
@@ -196,6 +200,10 @@ public sealed record ExpeditionSummaryContract(
         summary.UpdatedAt);
 }
 
+/// <summary>
+/// Read model combining persisted expedition, procedure, and movement status.
+/// It does not confer new player knowledge by being requested.
+/// </summary>
 public sealed record ExpeditionWorkbenchContract(
     Guid Id,
     Guid? OverworldId,

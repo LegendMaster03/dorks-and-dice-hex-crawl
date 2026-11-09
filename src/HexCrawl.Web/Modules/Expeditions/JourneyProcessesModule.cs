@@ -7,6 +7,10 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace HexCrawl.Web.Modules.Expeditions;
 
+/// <summary>
+/// HTTP boundary for journey processes and events, delegating execution and
+/// optimistic-concurrency checks to the expedition application service.
+/// </summary>
 public sealed class JourneyProcessesModule : IHexCrawlModule
 {
     public HexCrawlModuleManifest Manifest { get; } = new(
@@ -84,6 +88,8 @@ public sealed class JourneyProcessesModule : IHexCrawlModule
         return Results.Ok(JourneyOperationContract.From(result));
     }
 
+    // A resolution is tied to a specific active process and stage rather
+    // than interpreted from the client's displayed progress label.
     private static async Task<IResult> ResolveProcessAsync(
         Guid expeditionId,
         Guid processId,

@@ -4,6 +4,10 @@ using HexCrawl.Domain.Runtime;
 
 namespace HexCrawl.Web.Api;
 
+/// <summary>
+/// Records whether each pinned survival policy is absent, supported, or
+/// unsupported; the UI must not turn unsupported into a neutral rule.
+/// </summary>
 public sealed record Phase11PolicyContract(
     Phase11PolicySupport Support,
     string? MechanicKey,
@@ -114,6 +118,10 @@ public sealed record ExpeditionTargetContract(ExpeditionEffectScope Scope, Guid?
     public ExpeditionEffectTarget ToDomain() => new(Scope, TargetId);
 }
 
+/// <summary>
+/// Wire representation of the exact inventory model and explicit target;
+/// symbolic, quantity, and supply-die values remain distinct.
+/// </summary>
 public sealed record ExpeditionResourceContract(
     Guid Id,
     string ResourceKey,
@@ -199,6 +207,10 @@ public sealed record PendingResourceConsequenceContract(
     IReadOnlyList<string> ResourceKeys,
     string Reason);
 
+/// <summary>
+/// Combines retained survival state and the effective pinned policies for
+/// display, without computing new consequences on read.
+/// </summary>
 public sealed record SurvivalResourcesContract(
     long ExpeditionVersion,
     ResourceConsumptionPolicyContract ResourcePolicy,

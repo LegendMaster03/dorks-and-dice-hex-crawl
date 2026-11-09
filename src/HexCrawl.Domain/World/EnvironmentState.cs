@@ -2,6 +2,10 @@ using HexCrawl.Domain.Spatial;
 
 namespace HexCrawl.Domain.World;
 
+/// <summary>
+/// Generic environmental fact keys; source rule systems may assign their
+/// own meanings without adding a new field to the spatial world model.
+/// </summary>
 public static class EnvironmentDimensions
 {
     public const string Terrain = "terrain";
@@ -120,6 +124,10 @@ public enum EnvironmentAnnotationScopeKind
     Cell
 }
 
+/// <summary>
+/// Explicit scope for an authored fact. Region and feature association is
+/// checked independently of map appearance and tile color.
+/// </summary>
 public sealed record EnvironmentAnnotationScope
 {
     public required EnvironmentAnnotationScopeKind Kind { get; init; }
@@ -192,6 +200,10 @@ public sealed record EnvironmentAnnotation
 /// <summary>
 /// Expedition/session-owned current environment. CurrentFacts model transient conditions;
 /// Overrides are explicit DM overrides. Static world truth remains on OverworldDefinition.
+/// </summary>
+/// <summary>
+/// Expedition-local environment overrides, separate from world-wide facts
+/// and the effective environment context computed by the application layer.
 /// </summary>
 public sealed record ExpeditionEnvironmentState
 {

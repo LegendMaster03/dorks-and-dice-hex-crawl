@@ -20,6 +20,10 @@ type GuidanceArea = {
     annotateAutomation: boolean;
 };
 
+/**
+ * Produces explanatory guidance from the selected procedure's actual modules
+ * and parameters. These labels never enable or execute mechanics themselves.
+ */
 export function presetGuidance(procedure: CampaignProcedure): PresetGuidance {
     const modules = new Map(procedure.modules.map(module => [module.moduleKey, module]));
     const get = (key: string): ProcedureModule | null => modules.get(key) ?? null;

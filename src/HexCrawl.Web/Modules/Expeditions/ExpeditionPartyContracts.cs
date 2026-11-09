@@ -113,6 +113,10 @@ public sealed record ParticipantActivityPolicyContract(
         policy.UnsupportedReason);
 }
 
+/// <summary>
+/// Transfers explicit movement contributions and assignments without
+/// importing character inventories or named ruleset schemas.
+/// </summary>
 public sealed record MovementCapabilityContributorContract(
     Guid Id,
     MovementCapabilityContributorKind Kind,
@@ -197,6 +201,10 @@ public sealed record PartyMovementReferenceContract(
         value is null ? null : new DistanceMeasure(value.Value, value.Unit.ToDomain());
 }
 
+/// <summary>
+/// Party roster, activity assignments, and movement references form one
+/// validated draft; embedded collections must preserve stable identities.
+/// </summary>
 public sealed record ExpeditionPartyContract(
     IReadOnlyList<CrawlPartyMemberContract> Members,
     IReadOnlyList<MarchingOrderPositionContract> MarchingOrder,

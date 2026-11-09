@@ -1,5 +1,9 @@
 namespace HexCrawl.Application.Rules;
 
+/// <summary>
+/// Provider result states are semantic: resolved, adjudication-required,
+/// and conflicted must not be collapsed into one boolean success value.
+/// </summary>
 public static class TravelEnvironmentMechanicStates
 {
     public const string Resolved = "resolved";
@@ -61,6 +65,10 @@ public sealed record TravelEnvironmentProviderCatalogResult(
     TravelEnvironmentCatalogView? Catalog,
     string? Detail = null);
 
+/// <summary>
+/// Optional Rules Core response with unsupported and unavailable outcomes
+/// represented explicitly; callers must not fabricate a fallback mechanic.
+/// </summary>
 public sealed record TravelEnvironmentProviderResolutionResult(
     TravelEnvironmentProviderMetadata? Provider,
     string MechanicKey,
