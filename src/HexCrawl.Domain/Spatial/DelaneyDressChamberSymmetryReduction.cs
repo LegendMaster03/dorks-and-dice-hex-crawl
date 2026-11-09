@@ -14,6 +14,10 @@ public sealed record ChamberSymmetryReduction(
     int? QuotientChambers = null, int? AutomorphismCount = null,
     string? Evidence = null);
 
+/// <summary>
+/// Reduces finite chamber incidence under combinatorial automorphisms only.
+/// A geometric realization may have fewer actual Euclidean symmetries.
+/// </summary>
 public static class DelaneyDressChamberSymmetryReduction
 {
     public static ChamberSymmetryReduction Construct(string source, int chamberLimit = 2048)

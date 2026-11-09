@@ -19,6 +19,8 @@ public static partial class SourceMapApiEndpoints
         int ExpectedColumns,
         int ExpectedRows);
 
+    // Reported printed grid counts are user observations, not results
+    // inferred from image dimensions or the Surveyor detector.
     private static ReviewedGridFit ReviewGridFit(
         PeriodicWorldTiling tiling,
         SourceMapRepresentation map,

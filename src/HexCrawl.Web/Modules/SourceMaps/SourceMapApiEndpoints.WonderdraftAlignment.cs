@@ -7,6 +7,8 @@ namespace HexCrawl.Web.Api;
 
 public static partial class SourceMapApiEndpoints
 {
+    // Read the retained native source to assist registration. This endpoint
+    // does not infer semantic placements or mutate the world.
     private static async Task<IResult> GetStoredWonderdraftAlignmentContextAsync(
         Guid overworldId,
         Guid sourceMapId,

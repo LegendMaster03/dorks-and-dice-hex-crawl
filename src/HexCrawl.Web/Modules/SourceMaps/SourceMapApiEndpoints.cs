@@ -2,6 +2,10 @@ using System.Security.Claims;
 
 namespace HexCrawl.Web.Api;
 
+/// <summary>
+/// Routes source-map upload, registration, and research workflows separately.
+/// Inspection/preview calls never imply that the map's geometry was saved.
+/// </summary>
 public static partial class SourceMapApiEndpoints
 {
     public static void Map(RouteGroupBuilder api)

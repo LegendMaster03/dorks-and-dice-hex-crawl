@@ -91,6 +91,8 @@ public static class DelaneyDressOrientationCover
             lifted.Symbol.Canonical == symbol.Canonical);
     }
 
+    // An orientation cover may still contain rotational branching. Count
+    // remaining branch orbits rather than calling it a translation torus.
     private static int CountBranchedOrbits(DelaneyDressSymbol symbol)
     {
         int count = 0;

@@ -22,6 +22,8 @@ public static class DelaneyDressUniformQuotientUnfolding
     private const string SquareTorus = "<8:2 4 6 8,8 3 5 7,6 5 8 7:4,4>";
     private const string HexagonalTorus = "<12:2 4 6 8 10 12,12 3 5 7 9 11,8 7 10 9 12 11:6,3 3>";
 
+    // Fiber-product lifting uses validated reflection torus seeds only
+    // for their supported uniform Euclidean signatures.
     public static DelaneyDressCoverResult Construct(string source, int chamberLimit = 768)
     {
         static DelaneyDressCoverResult Unsupported(string reason) =>

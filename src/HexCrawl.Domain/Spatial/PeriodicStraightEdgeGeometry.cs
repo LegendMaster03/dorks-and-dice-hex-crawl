@@ -46,6 +46,8 @@ public static class PeriodicStraightEdgeGeometry
             .ThenBy(s => s.BoundaryVertexIndex).ToArray();
     }
 
+    // Subdivision adds atomic interfaces while preserving reciprocal
+    // topology; it does not create a new movement model or alter rules.
     public static PeriodicTopologyWitness Apply(
         PeriodicTopologyWitness topology, IReadOnlyList<PeriodicStraightEdgeSubdivision> splits)
     {

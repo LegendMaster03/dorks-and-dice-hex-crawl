@@ -6,6 +6,8 @@ namespace HexCrawl.Infrastructure.Persistence;
 
 public sealed partial class PostgresHexCrawlStore
 {
+    // Persist a feature's discriminated geometry explicitly so rehydration
+    // does not depend on runtime polymorphic serialization behavior.
     private sealed record FeatureSnapshot(
         Guid Id,
         string Name,
@@ -33,6 +35,8 @@ public sealed partial class PostgresHexCrawlStore
     }
 
     [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+    // Domain-to-store snapshots preserve stable world identity and
+    // authored geometry without recomputing the periodic tiling.
     private sealed record WorldSnapshot(
         Guid Id,
         string Name,

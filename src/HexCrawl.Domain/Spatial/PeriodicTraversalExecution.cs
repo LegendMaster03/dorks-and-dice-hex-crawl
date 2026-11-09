@@ -72,6 +72,8 @@ public static class PeriodicTraversalExecution
         return Execute(world, start, null, steps, continueAcrossBoundaries, adjacency);
     }
 
+    // Apply one authorized polygon crossing at a time; boundary reviews
+    // and unresolved contacts interrupt traversal before consuming more budget.
     private static PeriodicTraversalExecutionResult Execute(
         PeriodicWorldTiling world,
         PeriodicCellTraversal start,

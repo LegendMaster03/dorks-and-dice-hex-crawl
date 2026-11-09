@@ -45,6 +45,8 @@ public static partial class SourceMapApiEndpoints
         return Results.Ok(assessment);
     }
 
+    // Research evidence is insufficient for correction when a known
+    // compatibility blocker remains; do not treat uncertainty as success.
     private static IReadOnlyList<string> CorrectionBlockers(
         StoredOverworld world, IReadOnlyList<ExpeditionSummary> expeditions)
     {
@@ -76,6 +78,8 @@ public static partial class SourceMapApiEndpoints
     /// A single guarded database transaction changes the world and image
     /// alignment, with no procedure or expedition mutation.
     /// </summary>
+    // Revalidate on mutation with the current world version. A prior
+    // read-only analysis cannot authorize an outdated map correction.
     private static async Task<IResult> ApplyMotifCorrectionAsync(
         Guid overworldId, Guid sourceMapId,
         ApplyMotifCorrectionRequest request,

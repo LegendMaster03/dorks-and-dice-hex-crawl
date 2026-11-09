@@ -4,6 +4,10 @@ using System.Linq;
 
 namespace HexCrawl.Domain.Spatial;
 
+/// <summary>
+/// Version of the periodic topology wire contract; authoritative stored worlds
+/// retain their validated tiling instance and its metric realization.
+/// </summary>
 /// <summary>Wire contract v1, additive and not yet authoritative for stored worlds.</summary>
 public static class PeriodicTopologyContractVersion
 {
@@ -104,6 +108,8 @@ public sealed record PeriodicTopologyWitness(
         PeriodicWitnessStructuralValidator.Validate(this);
     }
 
+    // Bound the entire motif-times-lattice product before allocating any
+    // addresses. Lattice coordinates remain exact JSON-safe integers.
     public IReadOnlyList<PeriodicCellAddress> Enumerate(
         long minU, long maxU, long minV, long maxV, long limit = 10000)
     {

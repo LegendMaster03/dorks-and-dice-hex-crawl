@@ -11,6 +11,8 @@ namespace HexCrawl.Web.Api;
 
 public static partial class SourceMapApiEndpoints
 {
+    // Retain Wonderdraft records as source-map content first. Promoting them
+    // to semantic world locations or features is a separate review action.
     private static async Task<IResult> ImportWonderdraftSourceAsync(
         Guid overworldId,
         Guid sourceMapId,
@@ -84,6 +86,8 @@ public static partial class SourceMapApiEndpoints
             return Results.BadRequest(new { error = "The selected raster map has no usable pixel dimensions." });
         }
 
+        // Project pixels into retained raster coordinates only when both
+        // source and raster dimensions admit a verified uniform scale.
         var rasterRelationship = WonderdraftRasterRelationship.Analyze(
             summary.PixelWidth,
             summary.PixelHeight,
@@ -131,6 +135,8 @@ public static partial class SourceMapApiEndpoints
                 properties);
         }).ToArray();
 
+        // Deduplicate the retained project archive by content identity,
+        // independently of the source raster and selected semantic objects.
         string fingerprint;
         await using (var fingerprintStream = file.OpenReadStream())
         {
@@ -164,6 +170,8 @@ public static partial class SourceMapApiEndpoints
             ? "Source records were imported, but the raster still needs whole-map placement."
             : "The existing raster registration was preserved.";
 
+        // Physical scale alone cannot fix rotation or translation against
+        // existing authored anchors; ambiguous placement stays unregistered.
         var hasExistingWorldAnchors =
             world.World.Locations.Count > 0
             || world.World.Features.Count > 0
@@ -217,6 +225,8 @@ public static partial class SourceMapApiEndpoints
                     expectedVersion),
                 cancellationToken);
         }
+        // Compensate a newly stored archive if the world metadata save fails;
+        // the asset store and world transaction are separate systems.
         catch
         {
             if (newArchiveAsset is not null)
@@ -267,6 +277,8 @@ public static partial class SourceMapApiEndpoints
             registrationNote));
     }
 
+    // Origin-centered placement is a constrained fallback for an unanchored
+    // map without a baked grid, never evidence of detected raster phase.
     private static bool TryCreateWonderdraftScaleAlignment(
         PeriodicWorldTiling tiling,
         SourceMapRepresentation map,
