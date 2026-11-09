@@ -11,6 +11,10 @@ export type CurrentCellNavigatorOptions<TCell, TIntent> = {
     onVertexToggle?: (id: string) => void;
 };
 
+/**
+ * Renders contacts supplied by the current-cell topology adapter.
+ * Display position and labels never authorize an additional move.
+ */
 export function renderCurrentCellNavigator<TCell, TIntent>(
     adjacency: CurrentCellAdjacency<TCell, TIntent> | null,
     options: CurrentCellNavigatorOptions<TCell, TIntent>): HTMLElement {

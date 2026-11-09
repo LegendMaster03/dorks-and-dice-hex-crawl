@@ -12,6 +12,10 @@ type CacheEntry = {
 const MaximumLoadAttempts = 3;
 const RetryDelayMilliseconds = 500;
 
+/**
+ * Shares image loads among renderers and exports, with bounded retries.
+ * Ownership includes aborting fetches and disposing decoded image resources.
+ */
 export class RasterImageCache {
     private readonly entries = new Map<string, CacheEntry>();
     private disposed = false;
@@ -61,6 +65,7 @@ export class RasterImageCache {
         return entry;
     }
 
+    // Unused rasters must release image bitmaps, object URLs, and waiters.
     public prune(activeUrls: Set<string>): void {
         for (const [url, entry] of this.entries) {
             if (!activeUrls.has(url)) {
@@ -76,6 +81,8 @@ export class RasterImageCache {
         this.entries.clear();
     }
 
+    // Check entry identity after each asynchronous boundary; a removed or
+    // replaced raster must not render after disposal or map replacement.
     private async load(url: string, entry: CacheEntry): Promise<void> {
         entry.attempts += 1;
         try {

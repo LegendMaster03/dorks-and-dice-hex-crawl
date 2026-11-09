@@ -2,6 +2,7 @@ import type { ExpeditionDetail } from "../../types";
 
 export type WatchPhase = "ready" | "active" | "paused";
 
+/** Projects the server's watch state to presentation phases, without advancing time. */
 export function watchPhase(runtime: ExpeditionDetail): WatchPhase {
     if (runtime.expedition.activeWatchNumber === null) return "ready";
     return runtime.pauseReason === null ? "active" : "paused";
@@ -12,6 +13,7 @@ export function encounterCheckDue(runtime: ExpeditionDetail): boolean {
     return encounterCheckDueForWatch(runtime, runtime.expedition.completedWatches + 1);
 }
 
+/** Reads pinned navigation requirements and current watch context; does not roll or resolve navigation. */
 export function navigationResolutionDue(runtime: ExpeditionDetail, suppressesNavigationCheck: boolean, deliberateDoubleBack: boolean): boolean {
     const procedureRuntime = runtime.procedure.runtime;
     if (runtime.expedition.activeWatchNumber !== null
@@ -39,6 +41,7 @@ export type SpatialTravelContinuationTarget =
     | "survival"
     | "advance";
 
+/** Selects the next displayed travel decision from retained runtime state. */
 export function spatialTravelContinuationTarget(
     runtime: ExpeditionDetail,
     hasSelectedCourse: boolean,

@@ -1,5 +1,7 @@
 export type ExpeditionAssistant = "travel" | "navigation" | "encounters";
 
+/** All supported routes have typed, parsed identities; unknown paths are not silently treated as a session. */
+export type ToolRoute =
 export type ToolRoute =
     | { kind: "home" }
     | { kind: "procedures" }
@@ -15,6 +17,7 @@ export type ToolRoute =
     | { kind: "assistant-entry"; assistant: ExpeditionAssistant }
     | { kind: "unknown"; path: string };
 
+/** Converts the hosting application's base path to a tool-relative route. */
 export function deriveToolRoute(basePath: string, pathname: string, initialRoute?: string | null): string {
     const normalizedBase = normalizeBase(basePath);
     if (normalizedBase === "/") return pathname || initialRoute || "/";
@@ -77,6 +80,7 @@ export function parseToolRoute(path: string): ToolRoute {
     return { kind: "unknown", path: normalized };
 }
 
+/** Preserves the route identity of an expedition rather than inferring a world from its UI. */
 export function canonicalExpeditionRoute(
     _routeWorldId: string,
     expedition: { id: string; overworldId: string | null }): string {

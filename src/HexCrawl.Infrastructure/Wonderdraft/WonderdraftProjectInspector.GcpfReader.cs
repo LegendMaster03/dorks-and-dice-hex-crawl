@@ -7,6 +7,8 @@ namespace HexCrawl.Infrastructure.Wonderdraft;
 
 public static partial class WonderdraftProjectInspector
 {
+    // Streams bounded GCPF blocks into the Variant parser without
+    // allocating the full decoded project in memory.
     private sealed class GcpfPayloadReader
     {
         private static readonly byte[] Magic = "GCPF"u8.ToArray();
@@ -32,6 +34,8 @@ public static partial class WonderdraftProjectInspector
         public long RawSize { get; }
         public long Position { get; private set; }
 
+        // Validate the advertised decoded size and packed block lengths
+        // before allocating buffers or decompressing source data.
         public static async Task<GcpfPayloadReader> OpenAsync(
             Stream source,
             long maxDecodedBytes,
@@ -139,6 +143,8 @@ public static partial class WonderdraftProjectInspector
             }
         }
 
+        // Consume the declared payload and verify the closing magic and EOF;
+        // a valid Variant alone does not prove the container is intact.
         public async Task EnsureCompleteAsync(CancellationToken cancellationToken)
         {
             if (Position != RawSize)

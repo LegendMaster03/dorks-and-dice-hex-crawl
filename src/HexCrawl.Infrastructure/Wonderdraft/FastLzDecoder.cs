@@ -1,5 +1,9 @@
 namespace HexCrawl.Infrastructure.Wonderdraft;
 
+/// <summary>
+/// Bounded FastLZ level 1/2 decoder used for imported Wonderdraft blocks.
+/// Back-references and the exact declared output size are validated before use.
+/// </summary>
 internal static class FastLzDecoder
 {
     public static byte[] Decompress(ReadOnlySpan<byte> source, int expectedOutputSize)
@@ -91,6 +95,8 @@ internal static class FastLzDecoder
                     throw new InvalidDataException("FastLZ block expands beyond its declared decoded size.");
                 }
 
+                // Copy incrementally: valid FastLZ matches may overlap the
+                // region currently being decoded.
                 for (var index = 0; index < length; index++)
                 {
                     if ((uint)reference >= (uint)outputLength)
@@ -122,6 +128,8 @@ internal static class FastLzDecoder
             control = source[inputIndex++];
         }
 
+        // A block shorter than the declared output is malformed too;
+        // accepting it would desynchronize the outer GCPF reader.
         if (outputLength != expectedOutputSize)
         {
             throw new InvalidDataException(

@@ -13,6 +13,7 @@ ensureStyles();
 ensurePartyResponsiveStyles();
 void boot(root);
 
+/** Initializes standalone or hosted routing without requiring an expedition or map. */
 async function boot(rootElement: HTMLElement): Promise<void> {
     renderLoading(rootElement, "Connecting to Dorks & Dice…");
     try {
@@ -25,6 +26,8 @@ async function boot(rootElement: HTMLElement): Promise<void> {
         const navigate = (route: string, replace = false): void =>
             navigateTool(basePath, route, replace);
 
+        // Dispose the previous module before mounting the next route so its
+        // subscriptions and map event handlers cannot survive navigation.
         const renderCurrentRoute = async (): Promise<void> => {
             cleanup?.();
             cleanup = null;
@@ -71,6 +74,7 @@ async function boot(rootElement: HTMLElement): Promise<void> {
             }
         };
 
+        // Browser history and in-app navigation use the same route resolver.
         const onPopState = (): void => { void renderCurrentRoute(); };
         window.addEventListener("popstate", onPopState);
         window.addEventListener("pagehide", () => {

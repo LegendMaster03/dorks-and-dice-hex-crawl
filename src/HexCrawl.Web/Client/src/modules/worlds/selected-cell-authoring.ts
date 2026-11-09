@@ -1,6 +1,7 @@
 import type { EnvironmentAnnotation, EnvironmentFact, WorldEnvironment } from "../../environment-types";
 import type { SpatialFeature, WorldPoint } from "../../types";
 
+/** Adds a scoped authored fact without rewriting unrelated environment annotations. */
 export function addEnvironmentFact(
     annotations: readonly EnvironmentAnnotation[],
     scope: EnvironmentAnnotation["scope"],
@@ -70,6 +71,7 @@ export function measurementFact(
 
 // Presentation-only intersection against a polygon returned by authoritative
 // world geometry. This must never choose a unique cell or execute traversal.
+/** Client-side intersection preview only; the server owns validated world geometry. */
 export function featureIntersectsPolygon(feature: SpatialFeature, polygon: readonly WorldPoint[]): boolean {
     if (feature.kind === "Point") {
         return feature.position !== null && pointInPolygon(feature.position, polygon);
@@ -118,6 +120,7 @@ function segmentIntersectsPolygon(
     return false;
 }
 
+/** Includes polygon boundaries when identifying candidate cells for authoring. */
 export function pointInPolygon(point: WorldPoint, polygon: readonly WorldPoint[]): boolean {
     if (polygon.length < 3) return false;
     for (let index = 0; index < polygon.length; index++) {

@@ -1,6 +1,7 @@
 export type RenderCallback = () => void;
 export type RenderScheduler = (callback: FrameRequestCallback) => number;
 
+/** Coalesces render requests into a frame and owns named render callbacks. */
 export class RenderLifecycle {
     private pending = false;
     private readonly renderers = new Map<string, RenderCallback>();
@@ -13,6 +14,8 @@ export class RenderLifecycle {
         return () => this.renderers.delete(name);
     }
 
+    // Schedule at most one outstanding frame; callers may request multiple
+    // rerenders while geometry or source images are loading.
     public requestRender(): void {
         if (this.pending) return;
         this.pending = true;

@@ -13,6 +13,11 @@ const knownDimensions = [
     "water", "current", "temperature", "hazard", "regional-effect"
 ];
 
+/**
+ * Displays resolved environment context and explicit scope-specific edits.
+ * The effective context is supplied by the server rather than guessed from
+ * terrain colors or individual visible features.
+ */
 export class ExpeditionEnvironmentPanel {
     private readonly panel: HTMLDetailsElement;
     private readonly body: HTMLDivElement;
@@ -279,6 +284,8 @@ export class ExpeditionEnvironmentPanel {
         });
     }
 
+    // Persist world-level annotations independently of per-expedition
+    // overrides so one party's changes do not silently rewrite shared terrain.
     private async saveWorld(annotations: EnvironmentAnnotation[]): Promise<void> {
         await this.mutate(null, async () => {
             const current = this.worldEnvironment;

@@ -10,6 +10,8 @@ public static partial class RasterImageInspector
     private static readonly byte[] PngSignature = [137, 80, 78, 71, 13, 10, 26, 10];
     private static readonly uint[] PngCrcTable = CreatePngCrcTable();
 
+    // Validate PNG chunk structure, order, and checksums before accepting
+    // dimensions; the filename or declared MIME type is insufficient.
     private static async Task<RasterImageInfo> InspectPngAsync(Stream stream, CancellationToken cancellationToken)
     {
         var signature = new byte[8];
@@ -108,6 +110,7 @@ public static partial class RasterImageInspector
         return crc;
     }
 
+    // CRC covers the chunk type and data, not the length field or CRC bytes.
     private static async Task ValidatePngCrcAsync(Stream stream, uint runningCrc, CancellationToken cancellationToken)
     {
         var bytes = new byte[4];

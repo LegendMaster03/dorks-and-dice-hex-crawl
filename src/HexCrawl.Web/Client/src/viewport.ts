@@ -1,5 +1,6 @@
 import type { WorldPoint } from "./types";
 
+/** World-centered transform shared by map editing, travel, and export views. */
 export class Viewport {
     public center: WorldPoint = { x: 0, y: 0 };
     public zoom = 56;
@@ -25,6 +26,8 @@ export class Viewport {
         };
     }
 
+    // Anchor zoom to the pointer's world position rather than snapping the
+    // displayed image back to the viewport center.
     public zoomAt(factor: number, screenX: number, screenY: number, width: number, height: number): void {
         const before = this.screenToWorld(screenX, screenY, width, height);
         this.zoom = Math.min(220, Math.max(12, this.zoom * factor));

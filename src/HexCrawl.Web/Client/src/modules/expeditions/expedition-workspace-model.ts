@@ -50,6 +50,7 @@ export type ExpeditionWorkspacePresentation = {
     journeyLabel: string | null;
 };
 
+/** Derives a UI summary from current runtime and auxiliary states, without changing any of them. */
 export function expeditionWorkspacePresentation(
     runtime: ExpeditionDetail,
     journey: ExpeditionJourneyState | null,
@@ -84,6 +85,7 @@ export function spatialPositionPresentation(runtime: ExpeditionDetail): SpatialP
     };
 }
 
+/** Display capability flags come from selected module contracts, not preset names. */
 export function expeditionWorkspaceCapabilities(modules: ProcedureModule[]): ExpeditionWorkspaceCapabilities {
     const keys = new Set(modules.map(module => module.moduleKey));
     const hasPrefix = (prefix: string): boolean => [...keys].some(key => key.startsWith(prefix));
@@ -104,6 +106,10 @@ export function expeditionWorkspaceCapabilities(modules: ProcedureModule[]): Exp
     };
 }
 
+/**
+ * Chooses the highest-priority pending operation for the workspace.
+ * This presentation ordering does not discharge any server-side obligation.
+ */
 export function expeditionWorkspaceAction(
     runtime: ExpeditionDetail,
     journey: ExpeditionJourneyState | null,

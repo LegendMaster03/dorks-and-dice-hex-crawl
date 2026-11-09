@@ -4,6 +4,8 @@ namespace HexCrawl.Infrastructure.Assets;
 
 public static partial class RasterImageInspector
 {
+    // Parse the JPEG marker structure without decoding pixel data; image
+    // dimensions must be supported by an actual start-of-frame marker.
     private static async Task<RasterImageInfo> InspectJpegAsync(Stream stream, CancellationToken cancellationToken)
     {
         if (ReadByteOrThrow(stream, "JPEG ended before SOI was complete.") != 0xff
@@ -98,6 +100,8 @@ public static partial class RasterImageInspector
         await SkipExactlyAsync(stream, payloadLength - 1, cancellationToken);
     }
 
+    // Scan entropy-coded data with JPEG marker escaping rather than treating
+    // every 0xFF byte as the start of a segment.
     private static int ReadMarkerAfterEntropyData(Stream stream)
     {
         while (true)
