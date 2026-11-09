@@ -4,6 +4,10 @@ public sealed record TravelEnvironmentProviderSelection(
     ITravelEnvironmentProvider? Provider,
     string? Detail);
 
+/// <summary>
+/// Selects an explicitly named or configured default optional provider.
+/// Absence is reported to callers rather than silently creating a local rule.
+/// </summary>
 public sealed class TravelEnvironmentProviderRegistry
 {
     private readonly IReadOnlyList<ITravelEnvironmentProvider> _providers;

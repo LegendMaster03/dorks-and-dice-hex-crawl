@@ -39,6 +39,8 @@ public sealed record RasterGridMargins(
 
 public static class PlayableGridRasterFit
 {
+    // Fit the declared playable lattice window inside the image bounds;
+    // margins are intentional and cannot establish a correct tile count.
     public static MapRegistrationTransform Calculate(
         PeriodicWorldTiling tiling, int pixelWidth, int pixelHeight,
         RasterGridMargins? margins = null)

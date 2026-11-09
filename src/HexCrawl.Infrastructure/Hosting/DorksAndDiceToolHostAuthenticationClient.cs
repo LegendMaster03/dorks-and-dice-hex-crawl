@@ -6,6 +6,10 @@ using HexCrawl.Application.Hosting;
 
 namespace HexCrawl.Infrastructure.Hosting;
 
+/// <summary>
+/// Redeems a host-provided ticket at the expected Hex Crawl introspection
+/// path and validates the returned tool identity before trusting claims.
+/// </summary>
 public sealed class DorksAndDiceToolHostAuthenticationClient(HttpClient httpClient)
     : IToolHostAuthenticationClient
 {
@@ -85,6 +89,8 @@ public sealed class DorksAndDiceToolHostAuthenticationClient(HttpClient httpClie
         return entries[0].Trim();
     }
 
+    // Validate the host-issued tool audience and delegation context before
+    // exposing identity to downstream services.
     private static void Validate(ToolHostAuthenticationContext context)
     {
         if (context.ContractVersion != 1)

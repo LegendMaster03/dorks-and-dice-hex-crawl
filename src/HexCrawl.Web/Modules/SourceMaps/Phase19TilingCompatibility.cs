@@ -18,6 +18,11 @@ public sealed record Phase19CompatibilityAssessment(
 /// Advisory, read-only comparison. Candidate raster observations are never an
 /// authoritative metric realization. Names do not participate in comparisons.
 /// </summary>
+/// <summary>
+/// Reports whether experimental raster observations can coexist with the
+/// pinned world and campaign geometry; this assessment cannot certify a new
+/// authoritative topology from the image alone.
+/// </summary>
 public static class Phase19TilingCompatibility
 {
     private static readonly TilingNomenclatureCatalog Names = CrawlTilingNames.Catalog;

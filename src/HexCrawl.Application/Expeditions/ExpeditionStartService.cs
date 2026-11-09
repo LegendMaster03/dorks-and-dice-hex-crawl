@@ -62,6 +62,10 @@ public sealed record MaplessSpatialStartOptions(
 /// procedures are owner-authorized and pinned by copying the selected revision snapshot.
 /// Runtime execution never resolves a named preset.
 /// </summary>
+/// <summary>
+/// Creates world-bound, mapless spatial, or nonspatial expeditions from
+/// pinned procedures. Spatial tiling is authoritative in each session context.
+/// </summary>
 public sealed class ExpeditionStartService(
     IHexCrawlStore store,
     HexCrawlService coreService,
@@ -310,6 +314,8 @@ public sealed class ExpeditionStartService(
         }, cancellationToken);
     }
 
+    // A saved revision is selected verbatim; presets are materialized
+    // as new revisions rather than referenced by current catalog key.
     private async Task<StoredCampaignProcedureRevision> ResolveProcedureAsync(
         string ownerUserId,
         ProcedureStartSelection selection,

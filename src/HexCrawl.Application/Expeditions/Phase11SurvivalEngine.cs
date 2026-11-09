@@ -20,6 +20,10 @@ public sealed record SurvivalStateTransition(
     string Detail,
     bool StateChanged);
 
+/// <summary>
+/// Pure forced-travel accounting under the exact pinned procedure. Recording
+/// movement may create a due check, but does not automatically resolve it.
+/// </summary>
 public static class Phase11SurvivalEngine
 {
     public static SurvivalStateTransition AccountForcedTravel(
@@ -59,6 +63,8 @@ public static class Phase11SurvivalEngine
         }
 
         var current = state.ForcedTravel;
+        // Retained occurrence identities make travel accounting idempotent
+        // across retries, persistence, and repeated caller submissions.
         if (current.AccountedTravelOccurrences.Contains(occurrenceKey, StringComparer.Ordinal))
         {
             return new(state, SurvivalOperationStatus.AlreadyApplied,
@@ -100,6 +106,8 @@ public static class Phase11SurvivalEngine
         return new(updated, SurvivalOperationStatus.Applied, detail, true);
     }
 
+    // Reset is explicit. A rest, camp, or elapsed-time event cannot silently
+    // discard accumulated forced-travel exposure.
     public static SurvivalStateTransition ResetForcedTravel(
         ExpeditionSurvivalState state,
         CrawlPartySheet party,

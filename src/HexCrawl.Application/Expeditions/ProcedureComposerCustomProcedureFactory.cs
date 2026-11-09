@@ -4,6 +4,10 @@ using HexCrawl.Domain.Runtime;
 
 namespace HexCrawl.Application;
 
+/// <summary>
+/// Supplies a blank authoring start and generic module defaults. These are
+/// editable templates, never automatically persisted executable rulesets.
+/// </summary>
 internal static class ProcedureComposerCustomProcedureFactory
 {
     public static CampaignProcedure Create()
@@ -23,6 +27,8 @@ internal static class ProcedureComposerCustomProcedureFactory
         };
     }
 
+    // Module defaults are structural starting values for the composer;
+    // named-system preset identity is not involved.
     public static MaterializedProcedureModule CreateDefaultModule(string moduleKey) => moduleKey switch
     {
         GenericProcedureCatalog.TimeIntervalModule => Select(

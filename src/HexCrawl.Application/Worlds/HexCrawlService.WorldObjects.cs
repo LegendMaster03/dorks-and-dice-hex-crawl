@@ -105,6 +105,8 @@ public sealed partial class HexCrawlService
         return await SaveWorldAsync(updated, command.ExpectedVersion, cancellationToken);
     }
 
+    // Import candidate data only after a caller has explicitly selected
+    // semantic locations/features; retain stable new world object ids.
     public async Task<StoredOverworld> ImportWorldObjectsAsync(
         Guid overworldId,
         string ownerUserId,
@@ -214,6 +216,8 @@ public sealed partial class HexCrawlService
         return await SaveWorldAsync(updated, expectedVersion, cancellationToken);
     }
 
+    // Existing expedition knowledge and history may reference the stable
+    // object ids, so deleting authored geometry is forbidden after play begins.
     private async Task EnsureSemanticDeletionIsSafeAsync(StoredOverworld world, CancellationToken cancellationToken)
     {
         if (await _store.HasExpeditionsAsync(world.World.Id, world.OwnerUserId, cancellationToken))
@@ -223,6 +227,8 @@ public sealed partial class HexCrawlService
         }
     }
 
+    // Each geometry kind has a distinct domain contract; imported points,
+    // polylines, and regions are never interchangeable.
     private static SpatialFeature BuildFeature(
         Guid id,
         string name,

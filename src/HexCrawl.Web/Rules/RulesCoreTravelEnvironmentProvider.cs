@@ -7,6 +7,11 @@ using HexCrawl.Web.Authentication;
 
 namespace HexCrawl.Web.Rules;
 
+/// <summary>
+/// Optional Rules Core travel/environment adapter using a Tool Host-issued
+/// delegation capability. An unavailable provider remains unavailable;
+/// Hex Crawl does not reconstruct Rules Core mechanics from labels.
+/// </summary>
 public sealed class RulesCoreTravelEnvironmentProvider(
     HttpClient httpClient,
     IHttpContextAccessor httpContextAccessor,
@@ -108,6 +113,8 @@ public sealed class RulesCoreTravelEnvironmentProvider(
             null);
     }
 
+    // Transport failures, authorization, unsupported capabilities, and
+    // resolved evaluations are kept distinct for the consuming composer.
     private async Task<ProviderTransportResult<T>> SendJsonAsync<T>(
         HttpMethod method,
         string targetPath,
@@ -210,6 +217,8 @@ public sealed class RulesCoreTravelEnvironmentProvider(
         }
     }
 
+    // Never construct a direct upstream request without the current
+    // authenticated Tool Host's scoped Rules Core delegation capability.
     private bool TryGetDelegation(
         out string capability,
         out string delegationPrefix,

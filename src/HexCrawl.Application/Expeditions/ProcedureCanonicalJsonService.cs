@@ -12,6 +12,10 @@ public sealed record ProcedureCanonicalValidationResult(
     long? LineNumber,
     long? BytePositionInLine);
 
+/// <summary>
+/// Canonical JSON authoring uses the same CampaignProcedure domain validator
+/// and revision service as the structured composer, not a second rules schema.
+/// </summary>
 public sealed class ProcedureCanonicalJsonService(
     CampaignProcedureService procedures,
     ProcedureComposerService composer)
@@ -47,6 +51,8 @@ public sealed class ProcedureCanonicalJsonService(
         return Serialize(draft.Procedure);
     }
 
+    // A parsed document is not valid merely because it is syntactically JSON:
+    // procedure geometry, dependencies, and mechanic contracts must validate.
     public ProcedureCanonicalValidationResult Validate(string canonicalJson)
     {
         if (string.IsNullOrWhiteSpace(canonicalJson))
@@ -160,6 +166,8 @@ public sealed class ProcedureCanonicalJsonService(
         return procedure;
     }
 
+    // Upgrade recognized schema versions before domain validation; this
+    // does not fetch or replace pinned mechanics from the current catalog.
     private static CampaignProcedure Deserialize(string canonicalJson)
     {
         var procedure = JsonSerializer.Deserialize<CampaignProcedure>(canonicalJson, JsonOptions)

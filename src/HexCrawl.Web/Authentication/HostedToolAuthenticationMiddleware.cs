@@ -3,6 +3,10 @@ using HexCrawl.Application.Hosting;
 
 namespace HexCrawl.Web.Authentication;
 
+/// <summary>
+/// Redeems Tool Host tickets into a scoped request principal. Standalone
+/// development identity is a separately configured path when no ticket is sent.
+/// </summary>
 public sealed class HostedToolAuthenticationMiddleware(RequestDelegate next, IConfiguration configuration)
 {
     private const string ContextItemKey = "HexCrawl.ToolHostAuthenticationContext";
@@ -16,6 +20,8 @@ public sealed class HostedToolAuthenticationMiddleware(RequestDelegate next, ICo
         var hasTicketHeader = tickets.Count > 0;
         var hasIntrospectionHeader = introspectionPaths.Count > 0;
 
+        // A request without Tool Host headers follows standalone auth
+        // configuration; incomplete header pairs must fail closed.
         if (!hasTicketHeader && !hasIntrospectionHeader)
         {
             ApplyStandaloneDevelopmentIdentity(httpContext);
@@ -85,6 +91,8 @@ public sealed class HostedToolAuthenticationMiddleware(RequestDelegate next, ICo
             ? value as ToolHostAuthenticationContext
             : null;
 
+    // This fallback requires explicit configuration and must not be
+    // mistaken for a successfully redeemed hosted delegation ticket.
     private void ApplyStandaloneDevelopmentIdentity(HttpContext context)
     {
         if (!configuration.GetValue("ToolHost:StandaloneIdentity:Enabled", false))
