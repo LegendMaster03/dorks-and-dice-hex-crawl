@@ -109,6 +109,10 @@ public sealed record EncounterHandoffLinkedScene(
     string Kind,
     string ReferenceKey);
 
+/// <summary>
+/// Bounded, versioned context handed to the initiative tracker. This is a
+/// projection of a recorded encounter, not another source of expedition truth.
+/// </summary>
 public sealed record EncounterHandoffV2(
     int Version,
     string SourceTool,
@@ -124,10 +128,16 @@ public sealed record EncounterHandoffV2(
     EncounterHandoffJourneyProvenance? JourneyProvenance,
     IReadOnlyList<EncounterHandoffLinkedScene> LinkedScenes);
 
+/// <summary>
+/// Produces a handoff for exactly one historical runtime encounter or
+/// journey event at a specified expedition aggregate version.
+/// </summary>
 public sealed class EncounterHandoffService(HexCrawlService coreService)
 {
     private const int MaximumContextItems = 50;
 
+    // A handoff must identify exactly one retained encounter; a stale
+    // version or mixed source identity would misrepresent its context.
     public async Task<EncounterHandoffV2> CreateAsync(
         Guid expeditionId,
         string ownerUserId,
@@ -412,6 +422,8 @@ public sealed class EncounterHandoffService(HexCrawlService coreService)
             .ToArray()
         ?? [];
 
+    // Restrict return navigation to relative Hex Crawl routes to prevent
+    // external or protocol-relative redirects in a handoff payload.
     private static string? ValidateReturnPath(string? value)
     {
         if (value is null) return null;

@@ -34,8 +34,14 @@ public sealed record MaterializedCampaignProcedure(
     CampaignProcedure Procedure,
     ProcedureOriginMetadata? Origin);
 
+/// <summary>
+/// Copies module and mechanic definitions into self-contained procedures.
+/// Existing sessions must not depend on changes to catalog recipes.
+/// </summary>
 public static class CampaignProcedureMaterializer
 {
+    // Snapshot module definitions and selected mechanics rather than
+    // retaining references to mutable catalog entries.
     public static MaterializedCampaignProcedure Materialize(
         CrawlProcedurePresetDefinition preset,
         Guid? procedureId = null)
@@ -176,6 +182,8 @@ public static class CampaignProcedureMaterializer
         }
     }
 
+    // Apply inclusions and overrides to copied materialized modules,
+    // preserving the prior revision and its parameter values.
     private static CampaignProcedure ApplyChanges(
         CampaignProcedure current,
         IReadOnlyList<ProcedureModuleSelection> moduleSelections,

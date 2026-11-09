@@ -15,6 +15,11 @@ public sealed record ProcedureComposerDraft(
     ProcedureDependencyReport Dependencies,
     IReadOnlyList<ProcedureDependencyFixSuggestion>? DependencyFixes = null);
 
+/// <summary>
+/// Creates drafts and persisted revisions from saved procedures, presets, or
+/// an intentionally blank authoring source. Draft dependency suggestions
+/// do not replace validation required by a durable revision.
+/// </summary>
 public sealed class ProcedureComposerService(CampaignProcedureService procedures)
 {
     public Task<ProcedureComposerDraft> CreateDraftAsync(
@@ -26,6 +31,8 @@ public sealed class ProcedureComposerService(CampaignProcedureService procedures
         CancellationToken cancellationToken = default) =>
         CreateDraftAsync(ownerUserId, presetKey, procedureId, revision, [], overrides, cancellationToken);
 
+    // Preview composition can report dependency issues without persisting
+    // an invalid or incomplete draft.
     public async Task<ProcedureComposerDraft> CreateDraftAsync(
         string ownerUserId,
         string? presetKey,
@@ -100,6 +107,8 @@ public sealed class ProcedureComposerService(CampaignProcedureService procedures
         CancellationToken cancellationToken = default) =>
         CreateRevisionAsync(ownerUserId, procedureId, expectedRevision, [], overrides, cancellationToken);
 
+    // Save an independent procedure revision rather than updating an
+    // historical snapshot referenced by an existing expedition.
     public async Task<StoredCampaignProcedureRevision> CreateRevisionAsync(
         string ownerUserId,
         Guid procedureId,
@@ -185,6 +194,8 @@ public sealed class ProcedureComposerService(CampaignProcedureService procedures
         return await procedures.ListRevisionsAsync(owner, procedureId, cancellationToken);
     }
 
+    // Distinguish an absent bounds override from an explicit null that
+    // removes a previously finite map boundary.
     private static CampaignProcedure ApplyBounds(
         CampaignProcedure source, PeriodicMapBounds? bounds, bool specified)
     {

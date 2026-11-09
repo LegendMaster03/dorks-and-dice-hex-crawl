@@ -17,6 +17,8 @@ public sealed record ResourceConsequenceApplyResult(
 /// </summary>
 public static class ResourceConsequenceConsumer
 {
+    // Read accepted pending resource work and validate the entire mutation
+    // before clearing it; the same consequence id must not apply twice.
     public static ResourceConsequenceApplyResult Consume(
         ExpeditionResourceState resources,
         ExpeditionEffectState effects,
@@ -121,6 +123,8 @@ public static class ResourceConsequenceConsumer
         return new(resourceState, effectState, status, detail, true);
     }
 
+    // Prefer explicit resource identities; an ambiguous key and target
+    // match requires adjudication instead of guessing an inventory entry.
     private static (ExpeditionResource? Resource, ExpeditionConsequenceStatus Status, string? Detail) FindResource(
         IReadOnlyList<ExpeditionResource> resources,
         ExpeditionEffectTarget target,

@@ -5,6 +5,10 @@ using HexCrawl.Domain.Spatial;
 
 namespace HexCrawl.Application;
 
+/// <summary>
+/// Resolves explicitly supplied helper inputs with validated dice rolls
+/// and the pinned procedure's typed runtime context, not display labels.
+/// </summary>
 public sealed class ProcedureResolutionResolver(IProcedureResolutionRandomSource random)
 {
     /// <summary>
@@ -38,6 +42,8 @@ public sealed class ProcedureResolutionResolver(IProcedureResolutionRandomSource
         return results;
     }
 
+    // Cell-specific travel and navigation resolution consumes structured
+    // inputs, preserving responsibility for all derived crossing geometry.
     public CellProcedureResolutionHelperResult ResolveCells(
         GenericProcedureRuntime procedure,
         CrawlSessionContext context,

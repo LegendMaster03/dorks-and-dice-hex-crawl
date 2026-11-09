@@ -100,6 +100,10 @@ public sealed record ProcedureEncounterRuntime(EncounterCheckCadence Cadence);
 /// <summary>
 /// Ephemeral native runtime binding of one pinned generic procedure. This is not persisted.
 /// </summary>
+/// <summary>
+/// Binds native handlers by identity and version from a materialized
+/// procedure. Preset keys and the current catalog do not govern execution.
+/// </summary>
 public sealed class GenericProcedureRuntime
 {
     private GenericProcedureRuntime(
@@ -132,6 +136,8 @@ public sealed class GenericProcedureRuntime
     public ProcedureResolutionHelperProfile? ResolutionHelpers { get; }
     public ExplorationFlowPolicy? ExplorationFlow { get; }
 
+    // Reject missing or unsupported handlers rather than silently falling
+    // back to a different preset's runtime implementation.
     public static GenericProcedureRuntime Bind(CampaignProcedure procedure)
     {
         ArgumentNullException.ThrowIfNull(procedure);
