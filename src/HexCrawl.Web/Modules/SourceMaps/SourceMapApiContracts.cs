@@ -9,6 +9,10 @@ public sealed record SourceMapSourceArchiveContract(
     string MediaType,
     string? OriginalFileName);
 
+/// <summary>
+/// Source representation and retained import metadata. Its registration
+/// describes pixel placement; source content is not automatically world truth.
+/// </summary>
 public sealed record SourceMapDetailContract(
     Guid Id,
     string GeographyKey,
@@ -73,6 +77,10 @@ public sealed record WonderdraftPhysicalScaleContract(
     double PixelLength,
     double UnitsPerPixel);
 
+/// <summary>
+/// Reports retained native-source import and registration status separately
+/// from semantic candidate promotion.
+/// </summary>
 public sealed record WonderdraftSourceImportContract(
     OverworldContract World,
     WonderdraftInspectionContract Summary,

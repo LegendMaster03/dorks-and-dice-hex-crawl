@@ -3,6 +3,10 @@ using HexCrawl.Application.Rules;
 
 namespace HexCrawl.Web.Api;
 
+/// <summary>
+/// Converts typed application and optional-provider failures to consistent
+/// HTTP responses; expected validation and conflicts are not server crashes.
+/// </summary>
 public sealed class HexCrawlExceptionMiddleware(
     RequestDelegate next,
     ILogger<HexCrawlExceptionMiddleware> logger)

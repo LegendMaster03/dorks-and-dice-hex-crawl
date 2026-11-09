@@ -73,6 +73,10 @@ public sealed record ExplorationFlowContract(
         policy.RequireRegionOnDiscovery, policy.LocationResultTableKey);
 }
 
+/// <summary>
+/// Read-only executable capabilities bound from a materialized procedure,
+/// not an evaluation of today's catalog or its display labels.
+/// </summary>
 public sealed record ProcedureRuntimeContract(
     double IntervalHours,
     TravelResolutionMode TravelResolution,
@@ -136,6 +140,10 @@ public sealed record ProcedureModuleContract(
         module.Parameters);
 }
 
+/// <summary>
+/// Full versioned procedure projection, including selected tiling, bounds,
+/// and module snapshots needed by a consumer.
+/// </summary>
 public sealed record CampaignProcedureContract(
     Guid ProcedureId,
     int Revision,

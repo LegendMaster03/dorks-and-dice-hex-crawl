@@ -7,6 +7,11 @@ public enum WonderdraftRasterRelationshipKind
     UnresolvedDimensionMismatch
 }
 
+/// <summary>
+/// Compares the native project canvas with its retained raster counterpart.
+/// Only exact or uniformly scaled dimensions permit candidate pixel mapping;
+/// incompatible proportions must not be stretched into world coordinates.
+/// </summary>
 public sealed record WonderdraftRasterRelationship(
     WonderdraftRasterRelationshipKind Kind,
     double? UniformScale,

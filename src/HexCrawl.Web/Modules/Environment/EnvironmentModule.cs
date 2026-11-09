@@ -9,6 +9,10 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace HexCrawl.Web.Modules.Environment;
 
+/// <summary>
+/// Separates world-wide authored environment facts from expedition-local
+/// overrides and the derived effective context displayed during travel.
+/// </summary>
 public sealed class EnvironmentModule : IHexCrawlModule
 {
     public HexCrawlModuleManifest Manifest { get; } = new(

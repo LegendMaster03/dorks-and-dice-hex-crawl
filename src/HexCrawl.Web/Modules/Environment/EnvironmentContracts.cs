@@ -70,6 +70,10 @@ public sealed record EnvironmentAnnotationContract(
     };
 }
 
+/// <summary>
+/// Versioned authored world facts. They are independent of a party's
+/// current conditions and the presentation colors on the map.
+/// </summary>
 public sealed record WorldEnvironmentContract(
     Guid OverworldId,
     long Version,
@@ -115,6 +119,10 @@ public sealed record EnvironmentConflictContract(
         value.Dimension, value.Candidates.Select(EffectiveEnvironmentFactContract.From).ToArray(), value.Detail);
 }
 
+/// <summary>
+/// Server-composed effective facts and conflicts with their source
+/// attribution; the browser must not independently merge terrain rules.
+/// </summary>
 public sealed record EffectiveEnvironmentContextContract(
     EnvironmentContextStatus Status,
     IReadOnlyList<EffectiveEnvironmentFactContract> Facts,

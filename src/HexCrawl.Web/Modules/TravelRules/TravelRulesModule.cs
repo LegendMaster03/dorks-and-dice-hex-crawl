@@ -10,6 +10,10 @@ namespace HexCrawl.Web.Modules.TravelRules;
 
 public sealed record UpdateExpeditionRulesScopeRequest(long ExpectedVersion, Guid? CampaignId);
 
+/// <summary>
+/// Exposes optional Rules Core provider catalog, resolution, and campaign
+/// scoping without embedding Rules Core mechanics into Hex Crawl.
+/// </summary>
 public sealed class TravelRulesModule : IHexCrawlModule
 {
     public HexCrawlModuleManifest Manifest { get; } = new(
@@ -65,6 +69,8 @@ public sealed class TravelRulesModule : IHexCrawlModule
         return Results.Ok(result);
     }
 
+    // Changing the selected campaign rules context is version-checked
+    // and does not rewrite the expedition's pinned CampaignProcedure.
     private static async Task<IResult> UpdateScopeAsync(
         Guid expeditionId,
         UpdateExpeditionRulesScopeRequest request,

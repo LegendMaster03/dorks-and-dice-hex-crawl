@@ -16,6 +16,10 @@ import type {
     UpsertResourceRequest
 } from "./survival-types";
 
+/**
+ * API transport for resolved survival operations. Server status distinguishes
+ * applied, already-applied, and adjudication-required outcomes.
+ */
 export class SurvivalResourcesApi {
     private readonly backendBaseUrl: string;
 

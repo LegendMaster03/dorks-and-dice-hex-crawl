@@ -1,6 +1,7 @@
 import { formatHours } from "./runtime-view.js";
 import type { CampaignProcedure, DiceRollFormula, ProcedureRuntime } from "./types";
 
+/** Summarizes the selected materialized procedure for display without deriving new executable rules. */
 export function campaignProcedureSummary(procedure: CampaignProcedure): string {
     const runtime = procedure.runtime;
     if (!runtime) {

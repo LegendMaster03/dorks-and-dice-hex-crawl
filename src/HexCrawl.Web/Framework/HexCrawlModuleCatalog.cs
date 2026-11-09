@@ -46,6 +46,8 @@ public static class HexCrawlModuleCatalog
         foreach (var module in Installed) module.MapEndpoints(api);
     }
 
+    // Validate declared module identities and dependencies before
+    // registering routes; runtime feature behavior stays in each module.
     private static IReadOnlyList<IHexCrawlModule> Validate(IReadOnlyList<IHexCrawlModule> modules)
     {
         var byId = new Dictionary<string, HexCrawlModuleManifest>(StringComparer.OrdinalIgnoreCase);

@@ -15,6 +15,8 @@ using HexCrawl.Web.MapAnalysis;
 using HexCrawl.Web.Rules;
 using Microsoft.AspNetCore.Http.Features;
 
+// The web composition root wires shared application services and modular
+// endpoints. Named ruleset behavior remains inside materialized procedures.
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.ConfigureHttpJsonOptions(options =>
