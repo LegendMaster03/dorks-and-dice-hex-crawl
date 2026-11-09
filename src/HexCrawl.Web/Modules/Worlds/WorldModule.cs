@@ -11,6 +11,11 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace HexCrawl.Web.Modules.Worlds;
 
+/// <summary>
+/// HTTP adapter for authoritative overworld geometry, authored objects,
+/// disclosure, and finite-grid operations. Domain and application services
+/// decide compatibility and persist all world changes.
+/// </summary>
 public sealed class WorldModule : IHexCrawlModule
 {
     public HexCrawlModuleManifest Manifest { get; } = new(
@@ -317,6 +322,8 @@ public sealed class WorldModule : IHexCrawlModule
 
     // Geometry is calculated only by the authoritative domain world, and only after
     // the existing owner-scoped world lookup. Never derive tiles in the browser.
+    // Page authoritative tiling polygons for a viewport; no endpoint
+    // derives cell identity from raster pixels or a hard-coded hex grid.
     private static async Task<IResult> GetVisibleCellsAsync(
         Guid overworldId,
         double minX,
@@ -353,6 +360,8 @@ public sealed class WorldModule : IHexCrawlModule
 
     // Full-map geometry is derived from the same verified tiling as the live viewport.
     // Pagination never infers tile shape, and enforces a finite work budget.
+    // Bound export enumeration to the world's optional finite domain and
+    // version so repeated pages belong to one coherent map snapshot.
     private static async Task<IResult> GetBoundedExportCellsAsync(
         Guid overworldId, long expectedVersion, int offset, int limit,
         HttpContext context, HexCrawlService service, CancellationToken cancellationToken)

@@ -6,6 +6,8 @@ namespace HexCrawl.Infrastructure.Persistence;
 
 public sealed partial class PostgresHexCrawlStore
 {
+    // The persisted discriminator describes the executable runtime shape.
+    // Historical axial/hex-specific runtime variants are not supported.
     private enum RuntimeStateKind
     {
         Unspecified = 0,
@@ -13,6 +15,8 @@ public sealed partial class PostgresHexCrawlStore
         CellSpatial = 2
     }
 
+    // Snapshot storage is separate from domain types: the exact traversal
+    // cursor, active watch, encounter state, and elapsed time round-trip.
     private sealed record RuntimeStateSnapshot
     {
         public RuntimeStateKind Kind { get; init; }
@@ -66,6 +70,8 @@ public sealed partial class PostgresHexCrawlStore
             _ => throw new NotSupportedException("Only cell-based spatial or nonspatial session states are supported.")
         };
 
+        // Reject unknown discriminator values instead of guessing how to
+        // deserialize an outdated or malformed runtime snapshot.
         public CrawlSessionRuntimeState ToDomain() => Kind switch
         {
             RuntimeStateKind.CellSpatial => ToCellSpatial(),
@@ -81,6 +87,8 @@ public sealed partial class PostgresHexCrawlStore
             _ => throw new InvalidDataException("Persisted crawl session runtime kind is not supported.")
         };
 
+        // A generalized cursor requires its declared format and coherent
+        // active-watch count before the expedition can be resumed.
         private CellExpeditionState ToCellSpatial()
         {
             var cursor = CellTraversal
@@ -192,6 +200,8 @@ public sealed partial class PostgresHexCrawlStore
         }
     }
 
+    // A standalone spatial context retains its actual periodic geometry;
+    // a world-bound context retains an overworld reference instead.
     private sealed record CrawlSessionContextSnapshot(
         CrawlSessionContextKind Kind,
         Guid? OverworldId = null,

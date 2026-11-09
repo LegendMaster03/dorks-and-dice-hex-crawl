@@ -11,6 +11,8 @@ namespace HexCrawl.Infrastructure.Persistence;
 
 public sealed partial class PostgresHexCrawlStore
 {
+    // Persist the complete validated expedition aggregate and its initial
+    // history, not just the runtime cursor or procedure identifier.
     public async Task<StoredExpedition> CreateExpeditionAsync(
         StoredExpedition expedition,
         CancellationToken cancellationToken = default)
@@ -131,6 +133,8 @@ public sealed partial class PostgresHexCrawlStore
         return result;
     }
 
+    // Rehydrate party, environment, survival, effects, journey, and pinned
+    // procedure together before returning a usable expedition.
     public async Task<StoredExpedition?> GetExpeditionAsync(
         Guid expeditionId,
         string ownerUserId,
@@ -204,6 +208,8 @@ public sealed partial class PostgresHexCrawlStore
         return expedition;
     }
 
+    // Compare-and-swap the aggregate version and record newly produced
+    // runtime events in the same transaction.
     public async Task<SaveResult<StoredExpedition>> SaveExpeditionAsync(
         StoredExpedition expedition,
         long expectedVersion,
@@ -364,6 +370,8 @@ public sealed partial class PostgresHexCrawlStore
         AddTimestamp(command, "updated", expedition.UpdatedAt);
     }
 
+    // Aggregate validation runs before JSON persistence so a partial
+    // cross-system transition cannot be committed as a valid expedition.
     private static void ValidateAggregate(StoredExpedition expedition)
     {
         expedition.CampaignProcedure.Validate();

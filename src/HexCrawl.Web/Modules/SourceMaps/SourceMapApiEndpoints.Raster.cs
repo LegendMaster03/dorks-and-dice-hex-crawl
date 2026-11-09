@@ -20,6 +20,8 @@ public static partial class SourceMapApiEndpoints
             world.World.SourceMaps.Select(SourceMapDetailContract.From).ToArray()));
     }
 
+    // Validate metadata, expected world version, compressed file length,
+    // and raster headers before storing untrusted image bytes.
     private static async Task<IResult> UploadAsync(
         Guid overworldId,
         HttpContext context,
@@ -152,6 +154,8 @@ public static partial class SourceMapApiEndpoints
         Results.Ok(OverworldContract.From(await service.RegisterAsync(
             overworldId, sourceMapId, UserId(context), request.ToCommand(), cancellationToken)));
 
+    // Resolve the owned world and representation before exposing the
+    // private range-enabled raster asset stream.
     private static async Task<IResult> GetAssetAsync(
         Guid overworldId,
         Guid sourceMapId,
@@ -172,6 +176,8 @@ public static partial class SourceMapApiEndpoints
         return Results.Stream(stream, map.MediaType, enableRangeProcessing: true);
     }
 
+    // The retained source project is a separate asset from its raster
+    // representation; authorization remains tied to the owned world.
     private static async Task<IResult> GetSourceArchiveAsync(
         Guid overworldId,
         Guid sourceMapId,
@@ -194,6 +200,8 @@ public static partial class SourceMapApiEndpoints
         return Results.Stream(stream, archive.MediaType, enableRangeProcessing: true);
     }
 
+    // Remove authored reference first and handle physical asset lifetime
+    // separately, since stored assets may be shared or retained.
     private static async Task<IResult> DeleteAsync(
         Guid overworldId,
         Guid sourceMapId,

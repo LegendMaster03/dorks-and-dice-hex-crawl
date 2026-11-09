@@ -48,6 +48,8 @@ public sealed partial class PostgresHexCrawlStore
         return result;
     }
 
+    // The database owner and requested id both scope the read; rehydrated
+    // world identity must also agree with the row being returned.
     public async Task<StoredOverworld?> GetOverworldAsync(
         Guid overworldId,
         string ownerUserId,
@@ -79,6 +81,8 @@ public sealed partial class PostgresHexCrawlStore
             ReadTimestamp(reader, 3));
     }
 
+    // Optimistic version checks prevent overwriting concurrent map authoring
+    // changes; distinguish a missing world from a version conflict.
     public async Task<SaveResult<StoredOverworld>> SaveOverworldAsync(
         StoredOverworld overworld,
         long expectedVersion,
@@ -117,6 +121,9 @@ public sealed partial class PostgresHexCrawlStore
         return new SaveResult<StoredOverworld>(exists ? SaveOutcome.Conflict : SaveOutcome.NotFound, null);
     }
 
+    // This exceptional geometry replacement requires a row lock and an
+    // unused world. Existing authored objects, calibrations, or expeditions
+    // cannot be silently remapped to a different tiling identity.
     public async Task<SaveResult<StoredOverworld>> ReplaceUnusedPeriodicWorldAsync(
         StoredOverworld candidate,
         long expectedVersion,
@@ -196,6 +203,8 @@ public sealed partial class PostgresHexCrawlStore
         return new SaveResult<StoredOverworld>(SaveOutcome.Saved, updated);
     }
 
+    // Check the expected version and dependent expedition references in
+    // the transaction before deleting world state.
     public async Task<DeleteOverworldOutcome> DeleteOverworldAsync(
         Guid overworldId,
         string ownerUserId,

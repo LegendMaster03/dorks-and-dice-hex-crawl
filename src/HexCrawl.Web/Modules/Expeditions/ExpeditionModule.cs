@@ -10,6 +10,11 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace HexCrawl.Web.Modules.Expeditions;
 
+/// <summary>
+/// HTTP surface for expedition lifecycle, spatial travel, party state, and
+/// shared survival/effect/journey services. It delegates rule resolution to
+/// pinned application and domain mechanics.
+/// </summary>
 public sealed class ExpeditionModule : IHexCrawlModule
 {
     public HexCrawlModuleManifest Manifest { get; } = new(
@@ -202,6 +207,8 @@ public sealed class ExpeditionModule : IHexCrawlModule
         return Results.Ok(result);
     }
 
+    // The service verifies generated resolution grants and the expected
+    // expedition version; the request body is not itself roll authority.
     private static async Task<IResult> AdvanceCellWatchAsync(
         Guid expeditionId,
         AdvanceCellWatchRequest request,
@@ -218,6 +225,8 @@ public sealed class ExpeditionModule : IHexCrawlModule
         return Results.Ok(await ContractAsync(updated, owner, service, cancellationToken));
     }
 
+    // Navigation resolution remains a domain transition; a UI heading
+    // selection is not sufficient to reinterpret a pending course.
     private static async Task<IResult> ResolveCellCourseAsync(
         Guid expeditionId,
         ResolveCellCourseRequest request,
