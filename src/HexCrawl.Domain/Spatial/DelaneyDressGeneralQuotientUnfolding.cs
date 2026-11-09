@@ -39,6 +39,9 @@ public static class DelaneyDressGeneralQuotientUnfolding
         return Math.Abs(a);
     }
 
+    // Form the oriented orbifold vertex graph from chamber involution
+    // orbits. Local branching is derived from orbit sizes and D-symbol labels;
+    // a malformed orbit is not accepted as a trivial stabilizer.
     private static Graph? ConstructOrbifoldGraph(DelaneyDressSymbol symbol)
     {
         int n = symbol.ChamberCount;
@@ -104,6 +107,8 @@ public static class DelaneyDressGeneralQuotientUnfolding
         return arcs.Count == 3 * n / 2 ? new Graph(vertices, which, arcs) : null;
     }
 
+    // Dynamic programming over charge residues finds primitive local
+    // monodromies whose total charge vanishes modulo the sheet count.
     private static int[]? AssignCyclicCharges(Graph graph, int sheets)
     {
         List<int>?[] states = new List<int>?[sheets];
@@ -131,6 +136,8 @@ public static class DelaneyDressGeneralQuotientUnfolding
         return states[0]?.ToArray();
     }
 
+    // Assign voltages on a spanning tree and verify the resulting divergence
+    // at every orbifold vertex. This enforces the requested local holonomy.
     private static bool AssignVoltages(Graph graph, IReadOnlyList<int> charges, int sheets)
     {
         int count = graph.Vertices.Count;
@@ -204,6 +211,8 @@ public static class DelaneyDressGeneralQuotientUnfolding
         var graph = ConstructOrbifoldGraph(oriented);
         if (graph is null)
             return Inconclusive("Unable to construct the oriented orbifold vertex graph.");
+        // The least common multiple of local branch orders gives a candidate
+        // cyclic cover degree; boundedness is checked before lifting chambers.
         int sheets = 1;
         foreach (var vertex in graph.Vertices)
         {
@@ -227,6 +236,8 @@ public static class DelaneyDressGeneralQuotientUnfolding
             voltage[arc.Involution][opposite] = Mod(-arc.Voltage, sheets);
         }
 
+        // Traverse only the connected lift of (chamber, sheet). Replicating
+        // every possible pair would include disconnected cover components.
         var pairs = new List<(int Chamber, int Sheet)> { (1, 0) };
         var which = new Dictionary<(int Chamber, int Sheet), int> { [(1, 0)] = 1 };
         int[][] maps = [new int[chamberLimit + 1], new int[chamberLimit + 1], new int[chamberLimit + 1]];
@@ -256,6 +267,8 @@ public static class DelaneyDressGeneralQuotientUnfolding
             m01[i + 1] = oriented.M01[pairs[i].Chamber];
             m12[i + 1] = oriented.M12[pairs[i].Chamber];
         }
+        // Reinspect the lift and prove that all local branching vanished
+        // before asking the primitive torus constructor for a topology witness.
         var lifted = DelaneyDressTopology.Inspect(Serialize(pairs.Count, maps, m01, m12), chamberLimit);
         if (lifted.Status != DelaneyDressStatus.Euclidean || lifted.Symbol is null
             || !lifted.Symbol.FixedPointFree || !lifted.Symbol.WeaklyOrientable)
@@ -266,6 +279,8 @@ public static class DelaneyDressGeneralQuotientUnfolding
         var cover = DelaneyDressTorusCover.Construct(lifted.Symbol.Canonical, chamberLimit);
         if (cover.Status != DelaneyDressCoverStatus.Constructed || cover.Witness is null)
             return Inconclusive($"Unbranched lift failed primitive torus construction: {cover.Reason}");
+        // Preserve a verifiable projection to the input quotient; the output
+        // is not merely an unrelated periodic tiling with similar geometry.
         var projection = DelaneyDressTopology.ProjectChambers(lifted.Symbol, original);
         if (projection is null || DelaneyDressTopology.ProjectChambers(lifted.Symbol, oriented) is null)
             return Inconclusive("The final torus does not project onto both chamber quotients.");

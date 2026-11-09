@@ -2,10 +2,19 @@ using HexCrawl.Domain.Spatial;
 
 namespace HexCrawl.Domain.World;
 
+/// <summary>
+/// Solves a source-pixel-to-world affine registration from exactly three
+/// landmark pairs. A fourth independent landmark is a validation concern,
+/// not an additional fitting input.
+/// </summary>
 public static class AffineRegistrationSolver
 {
     private const double Epsilon = 1e-10;
 
+    /// <summary>
+    /// Rejects duplicate or collinear landmarks and singular results rather
+    /// than returning an unstable transform that would misplace map artwork.
+    /// </summary>
     public static MapRegistrationTransform Solve(IReadOnlyList<MapRegistrationControlPoint> controlPoints)
     {
         ArgumentNullException.ThrowIfNull(controlPoints);
@@ -55,6 +64,10 @@ public static class AffineRegistrationSolver
         return transform;
     }
 
+    /// <summary>
+    /// Transforms all four source-image corners; an affine image footprint
+    /// may be rotated or sheared and is not necessarily axis-aligned.
+    /// </summary>
     public static IReadOnlyList<WorldPoint> Coverage(MapRegistrationTransform transform, int pixelWidth, int pixelHeight)
     {
         ArgumentNullException.ThrowIfNull(transform);
@@ -72,6 +85,8 @@ public static class AffineRegistrationSolver
         ];
     }
 
+    // Cramer's rule for one output axis of x'=ax+by+c / y'=ax+by+c.
+    // The same source triangle determinant is used for both world axes.
     private static (double A, double B, double C) SolveAxis(
         IReadOnlyList<WorldPoint> source,
         IReadOnlyList<double> target,

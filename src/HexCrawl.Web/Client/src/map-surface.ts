@@ -6,6 +6,11 @@ import type { EnvironmentAnnotation } from "./environment-types";
 import type { Overworld, WorldPoint, WorldCellGeometry, PlayerMapPreview } from "./types";
 import { Viewport } from "./viewport";
 
+/**
+ * Coordinates viewport input, authoritative cell queries, and rendering.
+ * Canvas geometry is presentation state; cell identities and adjacency come
+ * from the server's versioned tiling, not locally inferred grid positions.
+ */
 export class MapSurface {
     private static nextAccessibilityId = 0;
 
@@ -328,6 +333,9 @@ export class MapSurface {
         }
     }
 
+    // Query a padded viewport to reduce fetches during small pans. The
+    // generation counter prevents stale asynchronous responses from replacing
+    // polygons for a newer extent or topology revision.
     private loadVisibleCells(): void {
         const world = this.getWorld();
         if (!world?.tiling || !this.api) return;
@@ -435,6 +443,9 @@ export class MapSurface {
         this.renderer.dispose();
     }
 
+    // Registration and review overlays receive clicks before cell lookup.
+    // Otherwise authoring coordinates and topological selection share the
+    // same input without assuming that every point belongs to one cell.
     private activatePoint(point: WorldPoint): void {
         if (this.clickInterceptor?.(point)) return;
 

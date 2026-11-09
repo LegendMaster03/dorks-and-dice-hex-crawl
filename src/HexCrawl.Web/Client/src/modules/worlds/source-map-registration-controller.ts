@@ -22,6 +22,11 @@ type RegistrationState = {
     holdoutErrorSourcePixels: number | null;
 };
 
+/**
+ * Owns the temporary manual registration workflow. Three image/world
+ * landmark pairs determine the preview; an optional fourth pair checks it
+ * independently and is never submitted as fitting data.
+ */
 export class SourceMapRegistrationController {
     private registration: RegistrationState | null = null;
     private readonly panel: HTMLElement;
@@ -79,12 +84,16 @@ export class SourceMapRegistrationController {
         if (this.registration) this.cancel();
     }
 
+    // Release the map's click interceptor when leaving this authoring view,
+    // or future map clicks would continue to be consumed by this controller.
     public dispose(): void {
         this.cancel();
         this.map.setClickInterceptor(null);
         this.image.removeAttribute("src");
     }
 
+    // Convert displayed image clicks back to intrinsic image pixel units;
+    // CSS scaling must not change the saved registration coordinates.
     private captureSourcePoint(event: MouseEvent): void {
         if (!this.registration || this.registration.pairs.length >= 4) return;
         if (this.registration.pairs.length === 3 && !this.map.renderer.registrationPreview) return;
@@ -104,6 +113,8 @@ export class SourceMapRegistrationController {
         this.renderStatus();
     }
 
+    // Pair each pending image landmark with a world-map click. While active,
+    // registration consumes these clicks before ordinary cell selection.
     private consumeWorldClick(point: WorldPoint): boolean {
         if (!this.registration) return false;
         if (!this.registration.pendingSource) {
@@ -182,6 +193,8 @@ export class SourceMapRegistrationController {
         this.map.requestRender();
     }
 
+    // Recheck all local prerequisites and send the current world version for
+    // optimistic concurrency. The independent holdout is validation-only.
     private async save(): Promise<void> {
         if (!this.registration || !affineRegistrationSaveAllowed(
             this.registration.pairs.length,

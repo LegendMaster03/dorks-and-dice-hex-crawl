@@ -112,6 +112,11 @@ public static class MovementCompositionPolicyResolver
         "hexes-per-quarter-day"
     };
 
+    /// <summary>
+    /// Reads the materialized procedure pinned to this campaign. Missing,
+    /// supported, and unsupported policy states remain distinct; changes to
+    /// the current preset catalog must not retroactively change an expedition.
+    /// </summary>
     public static MovementCompositionPolicy Resolve(CampaignProcedure procedure)
     {
         ArgumentNullException.ThrowIfNull(procedure);
@@ -167,6 +172,8 @@ public static class MovementCompositionPolicyResolver
             : [];
 
         MovementPaceDistances? paceDistances = null;
+        // Pace tables are an all-or-nothing contract: partial tables cannot
+        // silently define different movement behavior for unnamed modes.
         var hasPaceData = budget.Parameters.ContainsKey("paceDistanceUnit")
             || budget.Parameters.ContainsKey("paceRatesPerHour")
             || budget.Parameters.ContainsKey("paceRatesPerDay")
@@ -215,6 +222,8 @@ public static class MovementCompositionPolicyResolver
             paceDistances);
     }
 
+    // Terrain has its own support state even if no movement budget was pinned.
+    // Do not treat an unrecognized mechanic as a neutral adjustment.
     private static MovementTerrainPolicy ResolveTerrain(CampaignProcedure procedure)
     {
         var selected = procedure.Modules.SingleOrDefault(module =>

@@ -64,6 +64,12 @@ public sealed record MovementCapabilityComposition(
     MovementReferenceUse ReferenceUse,
     DistanceMeasure? SuggestedExpectedDistance);
 
+/// <summary>
+/// Composes movement from the pinned campaign procedure and explicit party
+/// capabilities without interpreting ruleset names or recomputing rules.
+/// Unresolved, unsupported, and fallback outcomes retain their provenance
+/// so the DM can distinguish adjudication from a calculated result.
+/// </summary>
 public static class MovementCapabilityComposer
 {
     private static readonly HashSet<string> DirectBudgetModels = new(StringComparer.Ordinal)
@@ -90,6 +96,11 @@ public static class MovementCapabilityComposer
         Quantity? Quantity,
         MovementReferenceUse Use);
 
+    /// <summary>
+    /// Selects an authoritative base, applies compatible contributor stages,
+    /// and applies an explicit DM override last. A reference is not counted
+    /// twice when a capability already supplies the base.
+    /// </summary>
     public static MovementCapabilityComposition Compose(
         StoredExpedition expedition,
         MovementCompositionInput? input = null)
@@ -118,6 +129,8 @@ public static class MovementCapabilityComposer
             diagnostics.Add(input.ExternalDiagnostic.Trim());
         }
 
+        // Sort the combined persisted and externally resolved contributors
+        // deterministically before choosing a base or applying adjustments.
         var all = expedition.Party.MovementContributors
             .Concat(input.ResolvedContributors ?? [])
             .Where(value => value.Enabled)
@@ -229,6 +242,8 @@ public static class MovementCapabilityComposer
             }
         }
 
+        // Preserve the computed value for review; an explicit DM override is
+        // the final decision, not another arithmetic modifier.
         var preOverride = quantity?.Value;
         if (dmOverride is not null)
         {
@@ -280,6 +295,8 @@ public static class MovementCapabilityComposer
             suggestion);
     }
 
+    // Without a pinned budget, only a single explicit party-level
+    // environment base can be inferred. Competing bases require adjudication.
     private static BaseResolution ResolvePolicyFreeBase(
         IReadOnlyList<MovementCapabilityContributor> all,
         List<MovementAppliedContributor> applied,
@@ -319,6 +336,9 @@ public static class MovementCapabilityComposer
         return new BaseResolution(quantity, MovementCompositionStatus.Resolved, selected.Key, selected.ParticipantId);
     }
 
+    // Conveyances replace their assigned travelers rather than adding their
+    // movement to the party. Excluded members and unassigned mounts/vehicles
+    // must not constrain the limiting movement candidate.
     private static BaseResolution ResolveBase(
         StoredExpedition expedition,
         MovementCompositionPolicy policy,
@@ -524,6 +544,8 @@ public static class MovementCapabilityComposer
             or MovementCapabilityContributorKind.Environment;
     }
 
+    // Stage order is significant: load and travel mode precede pinned terrain
+    // and route adjustments. Keep it consistent with the recorded provenance.
     private static MovementCompositionStatus ApplyAdjustments(
         StoredExpedition expedition,
         MovementCompositionPolicy policy,
@@ -668,6 +690,8 @@ public static class MovementCapabilityComposer
         return currentStatus;
     }
 
+    // A terrain key without a matching pinned adjustment is missing input,
+    // not permission to assume that terrain has no movement cost.
     private static MovementCompositionStatus ApplyPinnedTerrain(
         MovementCompositionPolicy policy,
         string terrainKey,
@@ -804,6 +828,8 @@ public static class MovementCapabilityComposer
         return MovementCompositionStatus.RequiresAdjudication;
     }
 
+    // The DM-supplied reference is an explicit fallback or informational
+    // baseline; it is not automatically equivalent to a rules-derived rate.
     private static ReferenceResolution ResolveReference(
         StoredExpedition expedition,
         List<MovementAppliedContributor> applied,
@@ -986,6 +1012,9 @@ public static class MovementCapabilityComposer
         return true;
     }
 
+    // A matching distance unit is insufficient if the time or activity
+    // denominator differs. Never convert per-hour rates into per-watch rates
+    // without an explicit duration policy.
     private static bool TryConvert(Quantity source, Quantity target, out Quantity converted)
     {
         converted = source;
@@ -1017,6 +1046,8 @@ public static class MovementCapabilityComposer
         return true;
     }
 
+    // A suggestion is physical distance only when the runtime has a calibrated
+    // unit and enough interval information; abstract progress stays abstract.
     private static DistanceMeasure? Suggest(StoredExpedition expedition, Quantity quantity)
     {
         // Physical travel suggestions require calibrated spatial distance.

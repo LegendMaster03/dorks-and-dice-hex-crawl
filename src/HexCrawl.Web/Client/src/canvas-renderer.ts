@@ -17,6 +17,11 @@ export type MapReviewOverlay = {
 };
 import { Viewport } from "./viewport";
 
+/**
+ * Paints source images and authoritative world geometry into a viewport.
+ * Visual colors, preview transforms, and transient overlays do not modify
+ * persisted terrain, topology, or player knowledge.
+ */
 export class CanvasMapRenderer {
     public selectedWorldCell: WorldCellGeometry | null = null;
     public currentWorldCell: WorldCellGeometry | null = null;
@@ -60,6 +65,8 @@ export class CanvasMapRenderer {
         return true;
     }
 
+    // Layer order is intentional: source rasters first, then world geometry,
+    // authoring overlays and labels, with expedition position on top.
     public render(): void {
         this.resizeToDisplaySize();
         const world = this.getWorld();
@@ -146,6 +153,9 @@ export class CanvasMapRenderer {
         this.provisionalSourceMapTransforms.clear();
     }
 
+    // A live registration preview takes precedence over a saved alignment;
+    // otherwise an unregistered raster may be provisionally fitted for
+    // display only. The provisional transform is never persisted.
     private drawSourceMaps(ctx: CanvasRenderingContext2D, world: DemoWorld, width: number, height: number): void {
         const activeUrls = new Set<string>();
         const activeMapIds = new Set<string>();
@@ -177,6 +187,8 @@ export class CanvasMapRenderer {
         }
     }
 
+    // Keep the first provisional transform stable while the viewport pans.
+    // Re-centering on each render would make an unregistered image drift.
     private provisionalSourceMapTransform(
         sourceMapId: string,
         image: CanvasImageSource,

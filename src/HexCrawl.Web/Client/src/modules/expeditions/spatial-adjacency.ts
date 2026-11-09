@@ -3,6 +3,11 @@ export type AdjacencyPoint = {
     y: number;
 };
 
+/**
+ * Geometry-neutral boundary contact supplied by an authoritative topology
+ * adapter. Intent values encode permitted moves; visual positions do not
+ * determine which neighbors exist or are traversable.
+ */
 export type SpatialAdjacencyInterface<TCell, TIntent> = {
     id: string;
     order: number;
@@ -25,6 +30,7 @@ export type CurrentCellAdjacency<TCell, TIntent> = {
     selectedAdjacencyId: string | null;
 };
 
+/** Copies display geometry and orders contacts without modifying topology. */
 export function createCurrentCellAdjacency<TCell, TIntent>(
     currentCell: TCell,
     boundary: AdjacencyPoint[],
@@ -55,6 +61,7 @@ export function adjacencyForIntent<TCell, TIntent>(
     return adjacency.adjacencies.find(candidate => Object.is(candidate.intentValue, intent)) ?? null;
 }
 
+/** Describes a rendered contact for accessibility, not a ruleset direction. */
 export function screenRelativeAdjacencyLabel(anchor: AdjacencyPoint): string {
     const horizontal = anchor.x < 0.38 ? "left" : anchor.x > 0.62 ? "right" : "";
     const vertical = anchor.y < 0.38 ? "upper" : anchor.y > 0.62 ? "lower" : "";
@@ -62,6 +69,11 @@ export function screenRelativeAdjacencyLabel(anchor: AdjacencyPoint): string {
     return `${position || "center"} boundary`;
 }
 
+/**
+ * Fits a boundary and all of its contacts into the same normalized viewport.
+ * The same transform is required for polygon and contact segments to avoid
+ * visual drift; authoritative world coordinates remain unchanged.
+ */
 export function fitAdjacencyGeometry<TCell, TIntent>(
     boundary: readonly AdjacencyPoint[],
     adjacencies: readonly SpatialAdjacencyInterface<TCell, TIntent>[],
@@ -99,6 +111,8 @@ export function fitAdjacencyGeometry<TCell, TIntent>(
     };
 }
 
+// Area-weighted centroid; degenerate polygons use a vertex average so
+// navigator display remains finite without claiming valid world geometry.
 function polygonCenter(polygon: readonly AdjacencyPoint[]): AdjacencyPoint {
     if (polygon.length === 0) return { x: 0.5, y: 0.5 };
 
