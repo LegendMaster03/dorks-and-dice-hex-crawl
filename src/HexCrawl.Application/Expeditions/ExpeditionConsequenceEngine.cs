@@ -28,6 +28,8 @@ public static class ExpeditionConsequenceEngine
         "journey-events"
     };
 
+    // Consequence identity is separate from its derived effects; replaying
+    // the occurrence must not double-apply any state change.
     public static ConsequenceProcessingResult Process(
         ExpeditionEffectState state,
         PersistentEffectPolicy policy,
@@ -114,6 +116,8 @@ public static class ExpeditionConsequenceEngine
         return new ConsequenceProcessingResult(updated, ExpeditionConsequenceStatus.Applied, detail, [], true);
     }
 
+    // Recover only from an explicit resolved input and the pinned recovery
+    // model, never merely because time passed or a camp was recorded.
     public static EffectRecoveryResult Recover(
         ExpeditionEffectState state,
         PersistentEffectPolicy policy,
@@ -617,6 +621,8 @@ public static class ExpeditionConsequenceEngine
         return result.Values.OrderBy(value => value.Id).ToArray();
     }
 
+    // Retain unresolved components for adjudication instead of treating
+    // unsupported semantics as a consequence-free result.
     private static ConsequenceProcessingResult Pend(
         ExpeditionEffectState state,
         ExpeditionConsequence consequence,

@@ -74,11 +74,17 @@ public sealed record JourneyOperationResult(
     Guid? ProcessId = null,
     Guid? EventOccurrenceId = null);
 
+/// <summary>
+/// Persists journey and exploration transitions under expedition versions.
+/// Executions retain pinned definitions and historical resolution inputs.
+/// </summary>
 public sealed class ExpeditionJourneyService(
     IHexCrawlStore store,
     HexCrawlService coreService,
     ProcedureResolutionResolver procedureResolver)
 {
+    // Validate against the campaign's pinned procedure and retain its
+    // execution snapshot when starting the process.
     public async Task<JourneyOperationResult> StartProcessAsync(
         Guid expeditionId,
         string ownerUserId,
@@ -146,6 +152,8 @@ public sealed class ExpeditionJourneyService(
     /// GM-supplied tables use the shared procedure resolver; neither publisher
     /// table rows nor player discoveries are fabricated.
     /// </summary>
+    // An exploration submission belongs to a concrete process and stage;
+    // outcomes are recorded, not regenerated from the current catalog.
     public async Task<JourneyOperationResult> RecordExplorationCellAsync(
         Guid expeditionId,
         string ownerUserId,
@@ -777,6 +785,8 @@ public sealed class ExpeditionJourneyService(
         };
     }
 
+    // Capture facts as observed at resolution time even if the world is
+    // edited later.
     private async Task<IReadOnlyList<JourneyEnvironmentFactSnapshot>> SnapshotEnvironmentAsync(
         StoredExpedition expedition,
         string ownerUserId,

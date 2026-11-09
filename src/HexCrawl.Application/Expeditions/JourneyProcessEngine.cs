@@ -45,8 +45,14 @@ public sealed record JourneyProcessTransitionResult(
     bool ProgressChanged,
     bool StageChanged);
 
+/// <summary>
+/// Pure transitions for pinned journey processes. Resolution identity prevents
+/// replay; stage progress, transitions, and history are validated together.
+/// </summary>
 public static class JourneyProcessEngine
 {
+    // Snapshot the executable stage contract at process start so later
+    // catalog edits cannot reinterpret an in-progress journey.
     public static JourneyProcessTransitionResult Start(
         ExpeditionJourneyState state,
         Guid processId,
@@ -106,6 +112,8 @@ public static class JourneyProcessEngine
         return new(updated, process, null, true, false, false);
     }
 
+    // A consumed resolution id is idempotent only for its original
+    // process/stage; reuse for a different operation is a conflict.
     public static JourneyProcessTransitionResult Resolve(
         ExpeditionJourneyState state,
         JourneyProcessResolutionInput input,
@@ -182,6 +190,8 @@ public static class JourneyProcessEngine
             Complications = checked(nextStageState.Complications + input.ComplicationDelta)
         };
 
+        // Terminal failure takes precedence over stage completion and
+        // success transitions.
         var processFailed = input.FailProcess
             || definition.FailProcessAtFailureLimit && definition.FailureLimit.HasValue && nextStageState.Failures >= definition.FailureLimit.Value
             || definition.FailProcessAtComplicationLimit && definition.ComplicationLimit.HasValue && nextStageState.Complications >= definition.ComplicationLimit.Value;
@@ -326,6 +336,8 @@ public static class JourneyProcessEngine
                 "Journey process failed.", process.Id, input.StageKey, input.ResolutionId));
         }
 
+        // Retain closed processes and resolution history for provenance
+        // rather than discarding them when an active process completes.
         var updated = state with
         {
             ActiveProcesses = active,
@@ -432,6 +444,10 @@ public static class JourneyProcessEngine
         return new JourneyParticipantSnapshot(member.Id, member.Name, roleKey?.Trim(), assignment?.Id);
     }
 
+    /// <summary>
+    /// Derives a stable child identity for repeatable journey work using the
+    /// occurrence id and its purpose, avoiding new ids after a retry.
+    /// </summary>
     public static Guid DeterministicId(Guid sourceId, string discriminator)
     {
         discriminator = RequiredText(discriminator, "Journey deterministic-id discriminator", 200);
@@ -535,6 +551,8 @@ public static class JourneyProcessEngine
         }
     }
 
+    // Numeric and explicit-state progress are different contracts. Clamp
+    // numeric changes to the pinned bounds without inventing conversions.
     private static JourneyStageState ApplyProgress(
         JourneyProcessExecutionSnapshot execution,
         JourneyStageState state,
@@ -600,6 +618,8 @@ public static class JourneyProcessEngine
         _ => throw new InvalidOperationException("Journey stage completion model is not supported.")
     };
 
+    // A stage target must follow the pinned transition model: sequential
+    // order, outcome mapping, or explicit selection.
     private static string? ResolveTransitionTarget(
         JourneyProcessInstance process,
         JourneyStageDefinition stage,

@@ -3,6 +3,10 @@ using NpgsqlTypes;
 
 namespace HexCrawl.Infrastructure.Persistence;
 
+/// <summary>
+/// Applies only verified schema transitions under a transaction and advisory
+/// lock. Unknown existing versions are preserved rather than reset.
+/// </summary>
 public sealed class PostgresSchemaMigrator(string connectionString)
 {
     public const int CurrentVersion = 12;
@@ -23,6 +27,8 @@ public sealed class PostgresSchemaMigrator(string connectionString)
             await bootstrap.ExecuteNonQueryAsync(cancellationToken);
         }
 
+        // Serialize concurrent app startups through a transaction-scoped
+        // advisory lock before inspecting or migrating schema state.
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
         try
         {

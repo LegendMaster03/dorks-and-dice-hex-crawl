@@ -9,6 +9,8 @@ public static partial class RasterImageInspector
     private const uint WebPVp8L = 0x5650384c;
     private const uint WebPAnmf = 0x414e4d46;
 
+    // Validate the RIFF container without decoding pixels. Payload sizes
+    // are little-endian; four-character chunk identifiers are read big-endian.
     private static async Task<RasterImageInfo> InspectWebPAsync(Stream stream, CancellationToken cancellationToken)
     {
         var riffHeader = new byte[12];
@@ -46,7 +48,9 @@ public static partial class RasterImageInspector
                 throw new InvalidDataException("WebP chunk extends beyond the declared RIFF container.");
             }
 
-            if (firstChunk && chunkType is not WebPVp8X and not WebPVp8 and not WebPVp8L)
+            // The primary chunk must establish an image format; ancillary
+        // metadata cannot substitute for a valid image header.
+        if (firstChunk && chunkType is not WebPVp8X and not WebPVp8 and not WebPVp8L)
             {
                 throw new InvalidDataException("WebP image uses an unsupported or malformed primary chunk.");
             }
@@ -105,6 +109,8 @@ public static partial class RasterImageInspector
             firstChunk = false;
         }
 
+        // Enforce chunk boundaries and padding, then reject trailing bytes
+        // rather than silently accepting extra image data.
         if (consumed != containerLength) throw new InvalidDataException("WebP RIFF container length is inconsistent.");
         if (image is null || !hasImagePayload) throw new InvalidDataException("WebP container does not contain a complete image payload.");
         if (stream.ReadByte() != -1) throw new InvalidDataException("WebP contains trailing data beyond the declared RIFF container.");
@@ -140,6 +146,8 @@ public static partial class RasterImageInspector
         return (width, height);
     }
 
+    // Animated WebP nests image subchunks inside each ANMF frame; validate
+    // their lengths separately from the outer RIFF chunk.
     private static async Task<bool> ValidateWebPAnimationFrameAsync(Stream stream, uint chunkLength, CancellationToken cancellationToken)
     {
         if (chunkLength < 24) throw new InvalidDataException("Malformed WebP animation frame.");

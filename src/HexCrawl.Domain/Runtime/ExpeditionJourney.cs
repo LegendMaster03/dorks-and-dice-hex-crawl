@@ -192,6 +192,10 @@ public sealed record JourneyStageDefinition
     }
 }
 
+/// <summary>
+/// Authored stage graph retained with the process, independently of any
+/// mutable procedure catalog.
+/// </summary>
 public sealed record JourneyProcessDefinition
 {
     public required string ProcessKey { get; init; }
@@ -257,6 +261,10 @@ public sealed record JourneyProcessDefinition
     }
 }
 
+/// <summary>
+/// Frozen execution semantics for a process instance. A later ruleset edit
+/// must not reinterpret its progress model, bounds, or transition policy.
+/// </summary>
 public sealed record JourneyProcessExecutionSnapshot
 {
     public required string StageModel { get; init; }
@@ -312,6 +320,10 @@ public sealed record JourneyProcessExecutionSnapshot
     }
 }
 
+/// <summary>
+/// Per-stage progress uses either a numeric value or an explicit state,
+/// according to the retained process execution snapshot.
+/// </summary>
 public sealed record JourneyStageState
 {
     public required string StageKey { get; init; }
@@ -410,6 +422,10 @@ public sealed record JourneyPendingAction
     }
 }
 
+/// <summary>
+/// Retains the definition, execution policy, pending work, stage state, and
+/// historical timing across active and terminal process states.
+/// </summary>
 public sealed record JourneyProcessInstance
 {
     public required Guid Id { get; init; }
@@ -520,6 +536,10 @@ public sealed record JourneyEnvironmentFactSnapshot(
     }
 }
 
+/// <summary>
+/// Records an event opportunity and its resolution while preserving the
+/// historical target rather than substituting present party membership.
+/// </summary>
 public sealed record JourneyEventOccurrence
 {
     public required Guid Id { get; init; }
@@ -794,6 +814,10 @@ public sealed record JourneyHistoryRecord
     }
 }
 
+/// <summary>
+/// Journey aggregate whose validation protects links among processes,
+/// events, pending actions, resolutions, and historical records.
+/// </summary>
 public sealed record ExpeditionJourneyState
 {
     public IReadOnlyList<JourneyProcessInstance> ActiveProcesses { get; init; } = [];

@@ -13,6 +13,10 @@ import { WonderdraftImportController } from "./wonderdraft-import-controller";
 const newGeographyValue = "__new_geography__";
 type CoordinatedRasterView = "manual" | "gm-grid" | "gm-gridless" | "player-grid" | "player-gridless";
 
+/**
+ * Coordinates source representations, display variants, grid-fit previews,
+ * and manual registration. Preview state is not persisted until acceptance.
+ */
 export class SourceMapWorkspace {
     private details: SourceMapDetail[] = [];
     private selected: SourceMapDetail | null = null;
@@ -584,6 +588,8 @@ export class SourceMapWorkspace {
         return { observedColumns: count(columns), observedRows: count(rows), margins };
     }
 
+    // A finite-grid fit is offered for review, not accepted simply because
+    // the raster size matches an expected grid window.
     private async previewFullGridFit(): Promise<void> {
         const source = this.selected;
         if (!source) throw new Error("Select a map image before fitting it.");
@@ -641,6 +647,8 @@ export class SourceMapWorkspace {
         }
     }
 
+    // Save against the latest world version to avoid accepting a stale fit
+    // over another registration or map edit.
     private async acceptFullGridFit(): Promise<void> {
         const preview = this.gridFitPreview;
         const world = this.getWorld();

@@ -124,6 +124,8 @@ public sealed class ExpeditionSurvivalService(IHexCrawlStore store, HexCrawlServ
             existing is null ? "Expedition resource added." : "Expedition resource corrected explicitly.");
     }
 
+    // A resource targeted by an unresolved consequence must remain until
+    // that consequence is explicitly resolved or adjudicated.
     public async Task<SurvivalOperationResult> RemoveResourceAsync(
         Guid expeditionId,
         Guid resourceId,
@@ -206,6 +208,8 @@ public sealed class ExpeditionSurvivalService(IHexCrawlStore store, HexCrawlServ
             "resource-consumption", command.Target, command.Changes, command.Provenance, cancellationToken);
     }
 
+    // A pinned foraging workflow does not imply a generic yield; callers
+    // must provide the resolved resource gain.
     public async Task<SurvivalOperationResult> ResolveForagingAsync(
         Guid expeditionId,
         string ownerUserId,
@@ -268,6 +272,8 @@ public sealed class ExpeditionSurvivalService(IHexCrawlStore store, HexCrawlServ
         return new(saved, transition.Status, transition.Detail);
     }
 
+    // Repeated forced-travel check ids return their retained outcome rather
+    // than applying another consequence.
     public async Task<SurvivalOperationResult> ResolveForcedTravelCheckAsync(
         Guid expeditionId,
         string ownerUserId,
@@ -347,6 +353,8 @@ public sealed class ExpeditionSurvivalService(IHexCrawlStore store, HexCrawlServ
         return new(saved, transition.Status, transition.Detail);
     }
 
+    // A single occurrence may carry progress and consequence components.
+    // Inconsistent reuse must not partially replay either component.
     public async Task<SurvivalOperationResult> ResolveExposureAsync(
         Guid expeditionId,
         string ownerUserId,
@@ -468,6 +476,8 @@ public sealed class ExpeditionSurvivalService(IHexCrawlStore store, HexCrawlServ
         return new(saved, resultStatus, detail, command.ConsequenceComponents.Count > 0 ? command.OccurrenceId : null);
     }
 
+    // Recording a rest trigger is not automatic effect recovery; recovery
+    // requires a separate explicit resolved operation.
     public async Task<SurvivalOperationResult> ResolveCampAsync(
         Guid expeditionId,
         string ownerUserId,

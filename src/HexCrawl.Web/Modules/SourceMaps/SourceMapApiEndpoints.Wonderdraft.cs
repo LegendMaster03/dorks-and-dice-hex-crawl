@@ -8,8 +8,12 @@ using Microsoft.Extensions.Options;
 
 namespace HexCrawl.Web.Api;
 
+// Wonderdraft import is a review-and-promote pipeline. Source candidates
+// become semantic world objects only after explicit selection and validation.
 public static partial class SourceMapApiEndpoints
 {
+    // Inspect uploaded projects within decode and raster limits without
+    // promoting source locations or features.
     private static async Task<IResult> InspectWonderdraftAsync(
         Guid overworldId,
         HttpContext context,
@@ -169,6 +173,8 @@ public static partial class SourceMapApiEndpoints
         return Results.Ok(BuildWonderdraftCandidatePreview(map, document));
     }
 
+    // Candidate pixel positions require an already registered source map
+    // before they can be interpreted as world coordinates.
     private static async Task<IResult> ImportWonderdraftCandidatesAsync(
         Guid overworldId,
         Guid sourceMapId,
@@ -352,6 +358,8 @@ public static partial class SourceMapApiEndpoints
             cancellationToken);
     }
 
+    // Scale from Wonderdraft project pixels to retained raster pixels
+    // before applying the stored affine world registration.
     private static async Task<IResult> PromoteWonderdraftCandidatesAsync(
         Guid overworldId,
         string owner,
@@ -463,6 +471,8 @@ public static partial class SourceMapApiEndpoints
         return Results.Ok(OverworldContract.From(updated));
     }
 
+    // Reinspect a retained archive against current import limits; prior
+    // storage does not imply it is valid for current promotion.
     private static async Task<WonderdraftProjectDocument> ReadStoredWonderdraftProjectAsync(
         SourceMapRepresentation map,
         IMapAssetStore assetStore,

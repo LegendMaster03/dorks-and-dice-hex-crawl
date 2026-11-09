@@ -5,6 +5,11 @@ using HexCrawl.Domain.Spatial;
 
 namespace HexCrawl.Application.Rules;
 
+/// <summary>
+/// Enriches missing travel and navigation inputs through optional providers.
+/// Explicit inputs remain authoritative; provider failure is not a license
+/// to invent rules locally.
+/// </summary>
 public sealed class ProcedureResolutionProviderEnricher(TravelEnvironmentProviderRegistry providers)
 {
     public Task<ProcedureResolutionHelperCommand> PrepareAsync(
@@ -13,6 +18,8 @@ public sealed class ProcedureResolutionProviderEnricher(TravelEnvironmentProvide
         CancellationToken cancellationToken = default) =>
         PrepareAsync(expedition, command, null, cancellationToken);
 
+    // Enrich only fields absent from the command. Local movement composition
+    // takes precedence when it produces an authoritative physical distance.
     public async Task<ProcedureResolutionHelperCommand> PrepareAsync(
         StoredExpedition expedition,
         ProcedureResolutionHelperCommand command,
@@ -105,6 +112,8 @@ public sealed class ProcedureResolutionProviderEnricher(TravelEnvironmentProvide
         return prepared;
     }
 
+    // A provider's hourly distance requires compatible units and a live
+    // cell expedition, not an arbitrary abstract movement budget.
     private static async Task<ProcedureResolutionHelperCommand> ResolveDistanceAsync(
         ITravelEnvironmentProvider provider,
         StoredExpedition expedition,
@@ -291,6 +300,8 @@ public sealed class ProcedureResolutionProviderEnricher(TravelEnvironmentProvide
         };
     }
 
+    // A provider distance multiplier cannot replace pinned terrain
+    // mechanics that use costs, points, or another semantic unit.
     private static void EnsureProviderTerrainCanCompose(StoredExpedition expedition)
     {
         var policy = MovementCompositionPolicyResolver.Resolve(expedition.CampaignProcedure);

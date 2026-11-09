@@ -28,6 +28,10 @@ public sealed record RegisterSourceMapCommand(
 
 public sealed record DeletedSourceMapResult(StoredOverworld World, SourceMapRepresentation SourceMap);
 
+/// <summary>
+/// Manages source-map representations in an optimistic-versioned world.
+/// Raster assets, map registration, and player disclosure remain separate.
+/// </summary>
 public sealed partial class SourceMapApplicationService(IHexCrawlStore store)
 {
     public async Task<StoredOverworld> GetOverworldAsync(
@@ -96,6 +100,8 @@ public sealed partial class SourceMapApplicationService(IHexCrawlStore store)
         return await ReplaceAsync(current, sourceMapId, replacement, command.ExpectedVersion, cancellationToken);
     }
 
+    // Store an exact three-landmark affine fit and its transformed image
+    // footprint together.
     public async Task<StoredOverworld> RegisterAsync(
         Guid overworldId,
         Guid sourceMapId,
@@ -120,6 +126,8 @@ public sealed partial class SourceMapApplicationService(IHexCrawlStore store)
         return await ReplaceAsync(current, sourceMapId, replacement, command.ExpectedVersion, cancellationToken);
     }
 
+    // Removing a representation also revokes its player-map disclosure
+    // even if its physical raster asset has a separate lifetime.
     public async Task<DeletedSourceMapResult> DeleteAsync(
         Guid overworldId,
         Guid sourceMapId,
@@ -145,6 +153,8 @@ public sealed partial class SourceMapApplicationService(IHexCrawlStore store)
         return new DeletedSourceMapResult(updated, existing);
     }
 
+    // Editing a GM source representation revokes stale player visibility;
+    // player-role replacements can preserve the existing selection.
     private async Task<StoredOverworld> ReplaceAsync(
         StoredOverworld current,
         Guid sourceMapId,
