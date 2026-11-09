@@ -4,6 +4,10 @@ using static HexCrawl.Application.CrawlProcedureCatalog;
 
 namespace HexCrawl.Application.Presets;
 
+/// <summary>
+/// Role-driven journey with guide progress and events modeled as shared generic stages.
+/// This preset supplies declarative data to shared executable modules.
+/// </summary>
 internal static class OneRing2ePreset
 {
     internal static CrawlProcedurePresetDefinition Create() =>

@@ -4,6 +4,10 @@ using static HexCrawl.Application.CrawlProcedureCatalog;
 
 namespace HexCrawl.Application.Presets;
 
+/// <summary>
+/// 2014 travel with pace, terrain, activities, foraging, and explicit forced-march checks.
+/// This preset supplies declarative data to shared executable modules.
+/// </summary>
 internal static class Dnd2014Preset
 {
     internal static CrawlProcedurePresetDefinition Create() =>

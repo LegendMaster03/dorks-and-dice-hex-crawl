@@ -4,6 +4,10 @@ using static HexCrawl.Application.CrawlProcedureCatalog;
 
 namespace HexCrawl.Application.Presets;
 
+/// <summary>
+/// Quarter-day travel with role assignments and resource dice implemented through common modules.
+/// This preset supplies declarative data to shared executable modules.
+/// </summary>
 internal static class ForbiddenLandsPreset
 {
     internal static CrawlProcedurePresetDefinition Create() =>

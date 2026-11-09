@@ -4,6 +4,10 @@ using static HexCrawl.Application.CrawlProcedureCatalog;
 
 namespace HexCrawl.Application.Presets;
 
+/// <summary>
+/// 2024 travel with pace and terrain limits, activity assignments, and extended-travel consequences.
+/// This preset supplies declarative data to shared executable modules.
+/// </summary>
 internal static class Dnd2024Preset
 {
     internal static CrawlProcedurePresetDefinition Create() =>

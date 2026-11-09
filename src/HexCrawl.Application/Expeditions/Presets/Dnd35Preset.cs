@@ -4,6 +4,10 @@ using static HexCrawl.Application.CrawlProcedureCatalog;
 
 namespace HexCrawl.Application.Presets;
 
+/// <summary>
+/// Hourly overland travel including navigation, foraging, and forced-march fatigue.
+/// This preset supplies declarative data to shared executable modules.
+/// </summary>
 internal static class Dnd35Preset
 {
     internal static CrawlProcedurePresetDefinition Create() =>

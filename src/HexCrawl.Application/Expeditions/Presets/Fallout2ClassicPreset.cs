@@ -6,6 +6,10 @@ using static HexCrawl.Application.CrawlProcedureCatalog;
 
 namespace HexCrawl.Application.Presets;
 
+/// <summary>
+/// Continuous square-sector travel; mountain rates and Outdoorsman/vehicle effects remain manually resolved.
+/// This preset supplies declarative data to shared executable modules.
+/// </summary>
 internal static class Fallout2ClassicPreset
 {
     internal static CrawlProcedurePresetDefinition Create() =>

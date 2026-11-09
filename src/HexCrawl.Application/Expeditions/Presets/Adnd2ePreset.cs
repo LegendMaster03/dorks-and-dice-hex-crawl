@@ -4,6 +4,10 @@ using static HexCrawl.Application.CrawlProcedureCatalog;
 
 namespace HexCrawl.Application.Presets;
 
+/// <summary>
+/// Daily overland travel with terrain and navigation rules; uncertain encounter detail remains manual.
+/// This preset supplies declarative data to shared executable modules.
+/// </summary>
 internal static class Adnd2ePreset
 {
     internal static CrawlProcedurePresetDefinition Create() =>

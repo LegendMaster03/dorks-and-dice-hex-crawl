@@ -6,6 +6,10 @@ using static HexCrawl.Application.CrawlProcedureCatalog;
 
 namespace HexCrawl.Application.Presets;
 
+/// <summary>
+/// Continuous square-sector travel; terrain-specific rates and encounters require explicit resolution.
+/// This preset supplies declarative data to shared executable modules.
+/// </summary>
 internal static class FalloutClassicPreset
 {
     internal static CrawlProcedurePresetDefinition Create() =>

@@ -4,6 +4,10 @@ using static HexCrawl.Application.CrawlProcedureCatalog;
 
 namespace HexCrawl.Application.Presets;
 
+/// <summary>
+/// Four-hour distance travel with persistent veer, watch encounters, and explicit resolution helpers.
+/// This preset supplies declarative data to shared executable modules.
+/// </summary>
 internal static class AlexandrianAdvancedPreset
 {
     internal static CrawlProcedurePresetDefinition Create() =>

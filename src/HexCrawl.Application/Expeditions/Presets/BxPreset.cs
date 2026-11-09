@@ -4,6 +4,10 @@ using static HexCrawl.Application.CrawlProcedureCatalog;
 
 namespace HexCrawl.Application.Presets;
 
+/// <summary>
+/// Daily wilderness travel with terrain, encounters, foraging, and supply tracking.
+/// This preset supplies declarative data to shared executable modules.
+/// </summary>
 internal static class BxPreset
 {
     internal static CrawlProcedurePresetDefinition Create() =>
