@@ -8,7 +8,6 @@ namespace HexCrawl.Domain.Spatial;
 /// Version of the periodic topology wire contract; authoritative stored worlds
 /// retain their validated tiling instance and its metric realization.
 /// </summary>
-/// <summary>Wire contract v1, additive and not yet authoritative for stored worlds.</summary>
 public static class PeriodicTopologyContractVersion
 {
     public const int Current = 1;
