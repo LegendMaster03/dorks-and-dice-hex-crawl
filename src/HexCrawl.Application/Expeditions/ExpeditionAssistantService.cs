@@ -29,10 +29,17 @@ public sealed record ResolveEncounterCommand(
     string? ResolutionNote = null,
     string? ResultNote = null);
 
+/// <summary>
+/// Applies focused nonspatial watch and encounter decisions to the shared
+/// expedition aggregate. Manual inputs cannot impersonate verified
+/// server-generated automatic rolls.
+/// </summary>
 public sealed class ExpeditionAssistantService(
     IHexCrawlStore store,
     HexCrawlService coreService)
 {
+    // Nonspatial advancement still uses the campaign's pinned time
+    // semantics, provenance, and expected aggregate version.
     public async Task<StoredExpedition> RecordNonSpatialWatchAsync(
         Guid expeditionId,
         string ownerUserId,
@@ -178,6 +185,8 @@ public sealed class ExpeditionAssistantService(
         }
     }
 
+    // Reject an unverified automatic source rather than trusting a client
+    // label that claims the server made a random resolution.
     private static ResolutionProvenance ClientSuppliedProvenance(
         ResolutionSource source,
         string? note)

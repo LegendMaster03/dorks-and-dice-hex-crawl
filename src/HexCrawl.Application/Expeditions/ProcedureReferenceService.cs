@@ -85,6 +85,10 @@ public sealed record ProcedureReference(
     ProcedureDependencyReport Dependencies,
     IReadOnlyList<ProcedureReferenceSection> Sections);
 
+/// <summary>
+/// Builds a human-readable reference from the exact saved procedure revision.
+/// Explanatory grouping never alters executable module semantics or inputs.
+/// </summary>
 public sealed class ProcedureReferenceService(CampaignProcedureService procedures)
 {
     private static readonly IReadOnlyList<string> SectionOrder =
@@ -112,6 +116,8 @@ public sealed class ProcedureReferenceService(CampaignProcedureService procedure
         return Generate(stored.Procedure, stored.ProcedureOrigin);
     }
 
+    // Project already-materialized modules and dependency diagnostics;
+    // do not rebuild the reference from newer catalog definitions.
     public static ProcedureReference Generate(
         CampaignProcedure procedure,
         ProcedureOriginMetadata? origin = null)
@@ -156,6 +162,8 @@ public sealed class ProcedureReferenceService(CampaignProcedureService procedure
             _ => string.IsNullOrWhiteSpace(category) ? "Procedure Support" : category.Trim()
         };
 
+    // Present overrides, requirements, and support status alongside the
+    // effective mechanic so an operator can see unresolved execution inputs.
     private static ProcedureReferenceModule BuildModule(
         CampaignProcedure procedure,
         MaterializedProcedureModule selected,

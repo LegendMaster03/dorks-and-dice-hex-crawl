@@ -7,12 +7,18 @@ using HexCrawl.Domain.Procedure;
 
 namespace HexCrawl.Application;
 
+/// <summary>
+/// Orchestrates cell procedure helper inputs, environment projection, optional
+/// providers, server rolls, and persisted audit records in one versioned flow.
+/// </summary>
 public sealed class ProcedureResolutionHelperService(
     IHexCrawlStore store,
     HexCrawlService coreService,
     ProcedureResolutionResolver resolver,
     ProcedureResolutionProviderEnricher providerEnricher)
 {
+    // The generated helper result is bound to the current expedition
+    // version so later cell actions cannot reuse stale automatic rolls.
     public async Task<CellProcedureResolutionHelperResult> ResolveCellsAsync(
         Guid expeditionId,
         string ownerUserId,
@@ -125,6 +131,8 @@ public sealed class ProcedureResolutionHelperService(
         return audited with { ExpeditionVersion = saved.Version };
     }
 
+    // Propagate the server-generated audit identity to every related
+    // resolution rather than leaving an untraceable automatic result.
     private static CellProcedureResolutionHelperResult AddCellAuditReference(
         CellProcedureResolutionHelperResult result, Guid id, long sequence)
     {

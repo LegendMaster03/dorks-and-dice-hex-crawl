@@ -37,8 +37,14 @@ public sealed record JourneyEventTransitionResult(
     JourneyEventOccurrence Occurrence,
     bool StateChanged);
 
+/// <summary>
+/// Pure transitions for event opportunities and resolutions under a pinned
+/// event policy. Occurrence identities make identical retries idempotent.
+/// </summary>
 public static class JourneyEventEngine
 {
+    // A pending event records its trigger, target proposal, and environment
+    // before content and consequences are separately resolved.
     public static JourneyEventTransitionResult CreateOpportunity(
         ExpeditionJourneyState state,
         JourneyEventPolicy policy,
@@ -120,6 +126,8 @@ public static class JourneyEventEngine
         return new(updated, occurrence, true);
     }
 
+    // A skipped or inapplicable event cannot carry resolved content;
+    // retained resolutions may be replayed only with identical inputs.
     public static JourneyEventTransitionResult Resolve(
         ExpeditionJourneyState state,
         JourneyEventPolicy policy,
@@ -220,6 +228,8 @@ public static class JourneyEventEngine
         return new(updated, resolved, true);
     }
 
+    // A matching occurrence id is not enough for idempotence; all resolved
+    // details must match what was originally committed.
     private static void ValidateResolutionReplay(
         JourneyEventOccurrence occurrence,
         JourneyEventResolutionInput input)

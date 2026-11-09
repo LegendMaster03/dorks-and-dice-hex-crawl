@@ -31,10 +31,16 @@ public sealed record EffectiveEnvironmentContext(
     IReadOnlyList<EffectiveEnvironmentFact> Facts,
     IReadOnlyList<EnvironmentConflict> Conflicts);
 
+/// <summary>
+/// Combines authored world facts, current expedition facts, and DM overrides
+/// into an effective context with explicit source and precedence.
+/// </summary>
 public static class EnvironmentContextResolver
 {
     private sealed record Candidate(EnvironmentFact Fact, EnvironmentFactSource Source, int Precedence);
 
+    // Evaluate precedence independently for each fact dimension, retaining
+    // lower-priority facts as provenance rather than discarding their source.
     public static EffectiveEnvironmentContext Resolve(StoredExpedition expedition, OverworldDefinition? world = null)
     {
         expedition.Environment.Validate();
@@ -136,6 +142,8 @@ public static class EnvironmentContextResolver
         }
     }
 
+    // Multiple tag values may coexist; conflicting scalar value kinds or
+    // measurements at equal precedence require DM adjudication.
     private static EnvironmentConflict? FindConflict(string dimension, IReadOnlyList<Candidate> active)
     {
         if (active.Count <= 1) return null;

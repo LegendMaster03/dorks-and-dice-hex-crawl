@@ -122,8 +122,15 @@ public sealed record JourneyEventPolicy(
 /// modules stored on an expedition CampaignProcedure. Preset identity, procedure origin metadata,
 /// and current catalog recipes are deliberately not execution inputs.
 /// </summary>
+/// <summary>
+/// Reads journey and event mechanics from materialized campaign procedures.
+/// Absent and unsupported policies remain distinct; neither is silently
+/// replaced by a current catalog default.
+/// </summary>
 public static class JourneyProcedurePolicyResolver
 {
+    // Parse the exact selected process mechanic and its execution contract
+    // before allowing stages or roles to be resolved.
     public static JourneyProcessPolicy ResolveProcess(CampaignProcedure procedure)
     {
         var selected = Selected(procedure, GenericProcedureCatalog.JourneyProcessModule);
@@ -194,6 +201,8 @@ public static class JourneyProcedurePolicyResolver
             null);
     }
 
+    // Trigger and target availability are properties of the pinned event
+    // policy, not assumptions derived from the encounter UI.
     public static JourneyEventPolicy ResolveEvents(CampaignProcedure procedure)
     {
         var selected = Selected(procedure, GenericProcedureCatalog.JourneyEventsModule);

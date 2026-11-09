@@ -23,8 +23,15 @@ public sealed record EnvironmentProcedureEvaluation(
     IReadOnlyList<string> Diagnostics,
     IReadOnlyList<string> Provenance);
 
+/// <summary>
+/// Projects effective environment facts into pinned movement inputs without
+/// changing world truth. Unsupported, conflicting, and unit-bearing values
+/// retain their need for explicit adjudication.
+/// </summary>
 public static class EnvironmentProcedureEvaluator
 {
+    // Resolve terrain, route, and weather separately. A tag or scalar fact
+    // does not imply a ruleset-specific numeric modifier by itself.
     public static EnvironmentProcedureEvaluation Evaluate(
         StoredExpedition expedition,
         EffectiveEnvironmentContext context)
@@ -56,6 +63,8 @@ public static class EnvironmentProcedureEvaluator
             provenance.Add(DescribeSource(fact));
         }
 
+        // Equal-authority conflicts must not resolve by choosing the first
+        // tag or whichever value the current mechanic happens to recognize.
         if (HasConflict(context, EnvironmentDimensions.Terrain))
         {
             contributors.Add(AdjudicationContributor(
@@ -137,6 +146,8 @@ public static class EnvironmentProcedureEvaluator
             }
         }
 
+        // An explicitly neutral route policy may ignore movement costs,
+        // but the underlying environment observations remain visible.
         if (routeHasNoMovementEffect && (route.Count > 0 || routeMeasurements.Count > 0 || HasConflict(context, EnvironmentDimensions.Route)))
         {
             diagnostics.Add("The pinned route adjustment model is 'none'; route facts and conflicts remain visible but do not alter movement.");

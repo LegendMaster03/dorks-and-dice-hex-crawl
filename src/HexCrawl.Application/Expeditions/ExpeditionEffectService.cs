@@ -32,10 +32,16 @@ public sealed record ResolvePendingConsequenceCommand(
     string ResolutionNote,
     ExpeditionConsequenceProvenance Provenance);
 
+/// <summary>
+/// Coordinates effect and consequence transitions under expedition version
+/// checks. Shared pure engines own the underlying effect semantics.
+/// </summary>
 public sealed class ExpeditionEffectService(
     IHexCrawlStore store,
     HexCrawlService coreService)
 {
+    // Check consumed consequence identity before applying new effects.
+    // A recorded time delay is handled against the runtime clock separately.
     public async Task<ApplyExpeditionConsequenceResult> ApplyConsequenceAsync(
         Guid expeditionId,
         string ownerUserId,
@@ -82,6 +88,8 @@ public sealed class ExpeditionEffectService(
         return new ApplyExpeditionConsequenceResult(saved, result with { State = saved.Effects });
     }
 
+    // A manual effect can inherit a compatible pinned recovery model but
+    // does not gain unrequested movement or recovery mechanics.
     public async Task<StoredExpedition> UpsertEffectAsync(
         Guid expeditionId,
         string ownerUserId,

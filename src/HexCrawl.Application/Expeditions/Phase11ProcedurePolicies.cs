@@ -141,8 +141,14 @@ public sealed record ExposurePolicy(
 /// the stored CampaignProcedure. Preset keys, origin metadata, and current catalog recipes are not
 /// inputs to runtime behavior.
 /// </summary>
+/// <summary>
+/// Binds survival policies from pinned materialized modules while retaining
+/// missing, supported, and unsupported mechanic states separately.
+/// </summary>
 public static class Phase11ProcedurePolicyResolver
 {
+    // Resource inventory models carry different interpretation rules;
+    // never substitute a counted model for a symbolic or supply-die model.
     public static ResourceConsumptionPolicy ResolveResources(CampaignProcedure procedure)
     {
         var selected = Selected(procedure, GenericProcedureCatalog.ResourceConsumptionModule);
@@ -236,6 +242,8 @@ public static class Phase11ProcedurePolicyResolver
             selected.Mechanic.Key, selected.Mechanic.Version, selected.Mechanic.ExecutionHandler, null);
     }
 
+    // Incomplete exposure semantics remain externally resolved; effective
+    // weather or terrain facts alone do not create an exposure formula.
     public static ExposurePolicy ResolveExposure(CampaignProcedure procedure)
     {
         var selected = Selected(procedure, Phase11GenericProcedureCatalog.ExposureModule);

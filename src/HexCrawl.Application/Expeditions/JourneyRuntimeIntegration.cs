@@ -3,8 +3,14 @@ using HexCrawl.Domain.Runtime;
 
 namespace HexCrawl.Application;
 
+/// <summary>
+/// Bridges authoritative runtime watch completion into pinned journey
+/// opportunities and enforces process/event gates on additional travel.
+/// </summary>
 public static class JourneyRuntimeIntegration
 {
+    // Pending resolutions block travel only when the corresponding pinned
+    // process or event policy explicitly requires that gate.
     public static void EnsureRelevantTravelAllowed(StoredExpedition expedition)
     {
         ArgumentNullException.ThrowIfNull(expedition);
@@ -26,6 +32,8 @@ public static class JourneyRuntimeIntegration
         }
     }
 
+    // Watch observation is keyed by occurrence so repeat processing of
+    // the same runtime transition does not create duplicate journey work.
     public static ExpeditionJourneyState ObserveCompletedWatches(
         StoredExpedition expedition,
         CrawlSessionRuntimeState before,
