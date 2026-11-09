@@ -1,4 +1,5 @@
 
+/** A handoff carries the minimal starting roster, not authoritative encounter state. */
 export type EncounterHandoffCombatant = {
     name: string;
     side: "players" | "enemies";
@@ -118,6 +119,7 @@ export interface EncounterHandoffStorage {
 
 export const encounterHandoffStoragePrefix = "dorks-and-dice:hex-encounter-handoff:";
 
+/** Creates a link to Block Initiative with a preexisting encounter handoff identity. */
 export function blockInitiativeHandoffHref(
     handoff: HexCrawlEncounterHandoffV2,
     storage: EncounterHandoffStorage = window.sessionStorage): string {

@@ -5,6 +5,7 @@ import type {
     TilingCatalogEntry
 } from "../../procedure-composer-types";
 
+/** Filters catalog entries for authoring UI; this does not change the geometry accepted by the server. */
 export function selectableTilings(entries: TilingCatalogEntry[]): TilingCatalogEntry[] {
     return entries.filter(entry => entry.showInRulesetSelector);
 }
@@ -121,6 +122,7 @@ export function createPendingOverride(
     };
 }
 
+/** Produces a new pending override for a selected mechanic without mutating the original module snapshot. */
 export function withBehavior(
     module: ProcedureModuleComposer,
     existing: ProcedureComposerOverrideInput | undefined,
@@ -208,6 +210,7 @@ export function executionSummary(module: ProcedureModuleComposer): string {
     return `${module.mechanic.automationLevel} native mechanic.`;
 }
 
+/** A disabled save is driven by composer diagnostics rather than a client-side interpretation of rules. */
 export function saveBlocked(module: ProcedureModuleComposer): boolean {
     return module.validationIssues.length > 0
         || module.dependencyIssues.some(issue =>

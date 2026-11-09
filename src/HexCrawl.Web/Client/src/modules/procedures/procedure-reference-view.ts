@@ -9,6 +9,10 @@ import type {
 import { showUiError } from "../../ui-error";
 import { procedurePresentationSections } from "./procedure-presentation";
 
+/**
+ * Read-only reference for a particular saved procedure revision. Displayed
+ * mechanics come from the materialized revision, not today's preset catalog.
+ */
 export async function renderProcedureReference(
     root: HTMLElement,
     procedureId: string,

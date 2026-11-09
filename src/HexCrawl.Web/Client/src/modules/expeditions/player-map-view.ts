@@ -12,6 +12,8 @@ export async function renderExpeditionPlayerMap(
     root: HTMLElement,
     api: HexCrawlApi,
     expeditionId: string): Promise<() => void> {
+    // Request only the authorized player projection, not an unrestricted
+    // world snapshot that would require local filtering of GM information.
     let projection = await api.getExpeditionPlayerMap(expeditionId);
     let disposed = false;
     let fetching = false;

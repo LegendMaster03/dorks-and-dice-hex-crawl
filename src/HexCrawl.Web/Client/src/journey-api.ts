@@ -12,6 +12,7 @@ import type {
     StartJourneyProcessRequest
 } from "./journey-types";
 
+/** Typed transport for journey state and explicit process/event transitions; the server owns idempotency. */
 export class JourneyApi {
     private readonly backendBaseUrl: string;
 
@@ -75,6 +76,8 @@ export class JourneyApi {
             "Encounter handoff");
     }
 
+    // A terminal process transition is an explicit API command, not
+    // implied by leaving its panel or navigating away.
     private closeProcess(action: string, expeditionId: string, processId: string, request: CloseJourneyProcessRequest): Promise<JourneyOperation> {
         return this.sendJson("POST", `/api/expeditions/${encodeURIComponent(expeditionId)}/journeys/processes/${encodeURIComponent(processId)}/${action}`, request, `${action} journey process`);
     }

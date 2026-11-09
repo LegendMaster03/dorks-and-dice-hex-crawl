@@ -5,6 +5,10 @@ import { canonicalDistanceUnit } from "./world-form";
 import type { DistanceUnitKind } from "./world-form";
 import { applyGuidedExperience, guidancePreferenceButton } from "../../ui/guidance";
 
+/**
+ * Lists authored worlds and initiates new map creation. Existing worlds
+ * retain their spatial tiling and saved version independently of UI filters.
+ */
 export async function renderWorldList(
     root: HTMLElement,
     api: HexCrawlApi,

@@ -11,6 +11,10 @@ import {
     startChoiceSummary
 } from "./procedure-start-selection";
 
+/**
+ * Augments world-bound expedition creation with selectable pinned procedures
+ * and an authoritative initial cell. Setup choices do not alter the world.
+ */
 export async function enhanceExpeditionSetup(
     root: HTMLElement,
     api: HexCrawlApi,

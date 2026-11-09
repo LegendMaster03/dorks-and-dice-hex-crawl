@@ -5,6 +5,10 @@ import type { ExpeditionDetail } from "../../types";
 import { guidedDisclosure } from "../../ui/guidance";
 import { disclosure, humanizeIdentifier, textElement } from "../../ui/workspace";
 
+/**
+ * Renders retained persistent effects and unresolved consequence components.
+ * Applying, recovering, or adjudicating effects remains a server operation.
+ */
 export class ExpeditionEffectsPanel {
     private readonly panel: HTMLDetailsElement;
     private readonly body: HTMLElement;
@@ -30,6 +34,8 @@ export class ExpeditionEffectsPanel {
         root.append(this.panel);
     }
 
+        // Ignore superseded responses so a stale fetch cannot undo a newer
+        // accepted mutation in the visible effect ledger.
     public async sync(): Promise<ExpeditionEffectState> {
         const generation = ++this.syncGeneration;
         const state = await this.api.get(this.expeditionId);
@@ -213,6 +219,8 @@ export class ExpeditionEffectsPanel {
         return card;
     }
 
+    // Pending consequence components are not silently interpreted as
+    // resolved effects or ignored because a display label is unknown.
     private pendingCard(pending: PendingConsequence): HTMLElement {
         const card = document.createElement("article");
         card.className = "hc-card";

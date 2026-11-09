@@ -1,6 +1,7 @@
 import type { ExpeditionDetail, MovementAppliedContributor } from "../../types";
 import { statusCell } from "../../ui/dom";
 
+/** Summarizes the server's effective movement, limiting contributor, and unresolved diagnostics. */
 export function movementCompositionStatusCells(runtime: ExpeditionDetail): HTMLElement[] {
     const composition = runtime.movementComposition;
     const cells = [
@@ -21,6 +22,10 @@ export function movementCompositionStatusCells(runtime: ExpeditionDetail): HTMLE
     return cells;
 }
 
+/**
+ * Displays applied and rejected contributors with provenance. The client
+ * never recomputes a movement quantity or overrides a pinned policy.
+ */
 export function movementCompositionLedger(runtime: ExpeditionDetail): HTMLElement {
     const composition = runtime.movementComposition;
     const section = document.createElement("section");

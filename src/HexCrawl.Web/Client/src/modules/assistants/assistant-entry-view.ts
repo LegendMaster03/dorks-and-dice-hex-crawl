@@ -19,6 +19,10 @@ import {
     startChoiceSummary
 } from "../expeditions/procedure-start-selection";
 
+/**
+ * Selects a supported expedition or starts a suitable session for a focused
+ * assistant. Assistant entry does not create independent rules or world geometry.
+ */
 export async function renderAssistantEntry(
     root: HTMLElement,
     api: HexCrawlApi,
