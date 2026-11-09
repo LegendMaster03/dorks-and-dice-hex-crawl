@@ -53,6 +53,10 @@ public sealed record WonderdraftProjectDocument(
     WonderdraftProjectSummary Summary,
     IReadOnlyList<WonderdraftImportCandidate> Candidates);
 
+/// <summary>
+/// Parses bounded Wonderdraft GCPF/Godot data into summaries and candidates.
+/// Inspection never directly promotes source data to authoritative world facts.
+/// </summary>
 public static partial class WonderdraftProjectInspector
 {
     public const long DefaultMaxDecodedBytes = 256L * 1024 * 1024;
@@ -69,6 +73,8 @@ public static partial class WonderdraftProjectInspector
         CancellationToken cancellationToken = default) =>
         (await ReadAsync(stream, maxDecodedBytes, cancellationToken)).Summary;
 
+    // Require exact decompressed Variant length and full consumption,
+    // rejecting truncated or trailing project data.
     public static async Task<WonderdraftProjectDocument> ReadAsync(
         Stream stream,
         long maxDecodedBytes = DefaultMaxDecodedBytes,
@@ -125,6 +131,8 @@ public static partial class WonderdraftProjectInspector
         return new WonderdraftProjectDocument(summary, ExtractCandidates(root));
     }
 
+    // Limit both candidate count and geometry points before displaying
+    // untrusted project contents for review.
     private static IReadOnlyList<WonderdraftImportCandidate> ExtractCandidates(DictionaryValue root)
     {
         var records = new List<WonderdraftImportCandidate>();
@@ -372,6 +380,8 @@ public static partial class WonderdraftProjectInspector
         _ => null
     };
 
+    // Preserve explicit supported scale metadata; absent or ambiguous
+    // metadata is not a basis for an inferred physical distance.
     private static WonderdraftPhysicalScale? TryReadPhysicalScale(IReadOnlyDictionary<string, string> metadata)
     {
         var unit = metadata

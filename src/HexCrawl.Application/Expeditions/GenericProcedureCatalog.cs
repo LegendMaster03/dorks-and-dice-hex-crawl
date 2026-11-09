@@ -3,6 +3,10 @@ using HexCrawl.Domain.Runtime;
 
 namespace HexCrawl.Application;
 
+/// <summary>
+/// Current catalog for authoring generic modules and mechanics. Existing
+/// expeditions execute materialized snapshots rather than catalog lookups.
+/// </summary>
 public static class GenericProcedureCatalog
 {
     public const string TimeIntervalModule = "time.interval";
@@ -54,6 +58,8 @@ public static class GenericProcedureCatalog
     public const string MultiStageExpeditionProcessMechanic = "multi-stage-expedition-process";
     public const string ExplorationFlowMechanic = "exploration-flow-policy";
 
+    // Describe semantic inputs, outputs, dependencies, and compatible
+    // mechanics independently of preset identity.
     public static IReadOnlyList<ProcedureModuleDefinition> Modules { get; } =
     [
         Module(
@@ -761,6 +767,8 @@ public static class GenericProcedureCatalog
             ["exploration", "flow", "generic"])
     ];
 
+    // Catalog resolution is appropriate during authoring and materialization,
+    // never as a replacement for an expedition's pinned module definition.
     public static ProcedureModuleDefinition ResolveModule(string key) =>
         Modules.FirstOrDefault(value => string.Equals(value.Key, key, StringComparison.Ordinal))
         ?? throw new InvalidOperationException($"Unknown generic procedure module '{key}'.");

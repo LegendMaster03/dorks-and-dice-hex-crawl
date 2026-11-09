@@ -7,6 +7,8 @@ namespace HexCrawl.Infrastructure.Wonderdraft;
 
 public static partial class WonderdraftProjectInspector
 {
+    // Bounded Godot Variant reader. Unsupported types are rejected or
+    // consumed as opaque data, not assumed to be semantic world objects.
     private sealed class VariantReader
     {
         private const uint Flag64 = 1u << 16;
@@ -25,6 +27,8 @@ public static partial class WonderdraftProjectInspector
 
         public long Remaining { get; private set; }
 
+            // Recursive structures have explicit depth, count, and string
+            // limits before their decoded representation is allocated.
         public async Task<WonderdraftValue> ReadValueAsync(int depth, CancellationToken cancellationToken)
         {
             if (depth > MaxDepth)
@@ -193,6 +197,8 @@ public static partial class WonderdraftProjectInspector
             return OpaqueValue.Instance;
         }
 
+        // Only packed 2D vectors are interpreted as candidate geometry;
+        // other widths are consumed without assigning meaning.
         private async Task<WonderdraftValue> ReadPackedVectorArrayAsync(
             int components,
             CancellationToken cancellationToken)
@@ -217,6 +223,8 @@ public static partial class WonderdraftProjectInspector
             return new VectorArrayValue("PoolVector2Array", values);
         }
 
+        // Godot strings are byte-length-prefixed, aligned to four bytes,
+        // and decoded with strict rather than replacement UTF-8.
         private async Task<string> ReadRawStringAsync(CancellationToken cancellationToken)
         {
             var length = await ReadUInt32Async(cancellationToken);

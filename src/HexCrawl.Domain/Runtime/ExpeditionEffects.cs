@@ -3,6 +3,10 @@ using HexCrawl.Domain.Spatial;
 
 namespace HexCrawl.Domain.Runtime;
 
+/// <summary>
+/// Identifies the kind of resolved consequence. Its payload must contain
+/// a compatible structured component, not merely a category label.
+/// </summary>
 public enum ExpeditionConsequenceCategory
 {
     TimeDelay,
@@ -146,6 +150,10 @@ public sealed record ExpeditionEffectTarget(
         : Scope.ToString();
 }
 
+/// <summary>
+/// Source and resolution history retained independently of the durable
+/// effect or resource mutation that a consequence produces.
+/// </summary>
 public sealed record ExpeditionConsequenceProvenance(
     ExpeditionConsequenceSourceKind SourceKind,
     string SourceKey,
@@ -195,6 +203,10 @@ public sealed record ExpeditionConsequenceProvenance(
 [JsonDerivedType(typeof(EncounterCircumstanceConsequenceComponent), "encounterCircumstance")]
 [JsonDerivedType(typeof(ExternalStateConsequenceComponent), "externalState")]
 [JsonDerivedType(typeof(CustomConsequenceComponent), "custom")]
+/// <summary>
+/// Typed consequence payload. Unrecognized or unresolved work is retained
+/// for adjudication rather than converted into an unrelated rule.
+/// </summary>
 public abstract record ExpeditionConsequenceComponent
 {
     public abstract void Validate();
@@ -342,6 +354,10 @@ public sealed record ResourceChangeConsequenceComponent : ExpeditionConsequenceC
     }
 }
 
+/// <summary>
+/// Explicit persistent-effect operation, optionally with movement components
+/// later projected into the shared movement capability composer.
+/// </summary>
 public sealed record PersistentEffectChangeConsequenceComponent : ExpeditionConsequenceComponent
 {
     public required string EffectKey { get; init; }
@@ -525,6 +541,10 @@ public sealed record ExpeditionConsequence
     }
 }
 
+/// <summary>
+/// Durable effect state linked to its source consequences; recovery is
+/// explicitly resolved, not inferred from elapsed time alone.
+/// </summary>
 public sealed record ExpeditionEffect
 {
     public required Guid Id { get; init; }

@@ -10,6 +10,10 @@ public enum ProcedureAutomationLevel
 }
 
 [Flags]
+/// <summary>
+/// Permitted sources of a mechanic input when no selected module produces it.
+/// Missing input is resolvable only through a source explicitly allowed here.
+/// </summary>
 public enum ProcedureInputSource
 {
     None = 0,
@@ -63,6 +67,10 @@ public sealed record ProcedureParameterDefinition(
     }
 }
 
+/// <summary>
+/// Versioned executable contract, including parameter schema, declared inputs
+/// and outputs, and the handler stored with each materialized procedure.
+/// </summary>
 public sealed record MechanicDefinition(
     string Key,
     string DisplayName,
@@ -245,6 +253,10 @@ public sealed record CampaignProcedureOverride(
     }
 }
 
+/// <summary>
+/// Pinned module, mechanic, and parameter definitions. Runtime execution
+/// must not reinterpret these through today's mutable catalog.
+/// </summary>
 public sealed record MaterializedProcedureModule(
     ProcedureModuleDefinition Module,
     MechanicDefinition Mechanic,
@@ -322,6 +334,10 @@ public sealed record ProcedureDependencyReport(IReadOnlyList<ProcedureDependency
         or ProcedureDependencyIssueKind.IncompatibleMechanic);
 }
 
+/// <summary>
+/// Upgrades supported historical procedure schema versions without replacing
+/// previously materialized mechanic definitions.
+/// </summary>
 public static class CampaignProcedureSchema
 {
     public const string LegacyVersion = "1";
@@ -358,6 +374,10 @@ public static class CampaignProcedureSchema
     }
 }
 
+/// <summary>
+/// Versioned ruleset snapshot with its Euclidean tiling, optional finite
+/// bounds, and selected mechanics. Bounds are not square-specific.
+/// </summary>
 public sealed record CampaignProcedure
 {
     public required Guid ProcedureId { get; init; }
@@ -451,6 +471,8 @@ public sealed record CampaignProcedure
         }
     }
 
+    // Distinguish missing producers from inputs explicitly permitted to
+    // come from a DM, provider, or external runtime state.
     public ProcedureDependencyReport EvaluateDependencies()
     {
         var issues = new List<ProcedureDependencyIssue>();
