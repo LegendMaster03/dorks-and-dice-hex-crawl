@@ -15,6 +15,11 @@ import { dmJourneyProvenance, target } from "../../journey-types";
 import type { ExpeditionDetail } from "../../types";
 import type { ExpeditionEffectScope } from "../../survival-types";
 
+/**
+ * UI projection of the expedition's retained journey processes, pending
+ * decisions, and history. Stage transitions and outcome authority remain
+ * with the application service, not with this form.
+ */
 export class ExpeditionJourneyPanel {
     private readonly panel: HTMLDetailsElement;
     private readonly body: HTMLElement;
@@ -42,6 +47,8 @@ export class ExpeditionJourneyPanel {
         page?.append(this.panel);
     }
 
+        // Ignore responses from older refreshes after a mutation or disposal
+        // so pending forms do not revert to stale journey state.
     public async sync(): Promise<ExpeditionJourneyState> {
         const generation = ++this.syncGeneration;
         const state = await this.api.get(this.expeditionId);
@@ -131,6 +138,8 @@ export class ExpeditionJourneyPanel {
         return section;
     }
 
+    // Starting a journey is an explicit operation using a process
+    // definition; displaying available choices does not advance any stage.
     private startView(state: ExpeditionJourneyState): HTMLElement {
         const section = this.section("Start a process / challenge");
         const exploration = this.getRuntime().procedure.runtime?.explorationFlow;
@@ -538,6 +547,8 @@ export class ExpeditionJourneyPanel {
         return list;
     }
 
+    // The submitted outcome must identify the currently active stage and
+    // resolution operation; progress is calculated by the server.
     private resolveProcessForm(process: JourneyProcessInstance): HTMLElement {
         const form = document.createElement("form");
         form.className = "hc-form hc-form-grid";
@@ -804,6 +815,8 @@ export class ExpeditionJourneyPanel {
         return card;
     }
 
+    // Show retained event and process history independently of the live
+    // party composition or currently active procedure catalog.
     private historyView(state: ExpeditionJourneyState): HTMLElement {
         const section = this.section("Journey history");
         if (state.history.length === 0) {

@@ -23,6 +23,11 @@ export type SurvivalResourcesPanelFocus =
     | "forcedTravel"
     | "pendingResourceConsequences";
 
+/**
+ * Presents resources, forced-travel checks, exposure, foraging, and rest
+ * decisions. The server evaluates pinned policies and applies consequences;
+ * this panel only collects explicit resolved inputs.
+ */
 export class ExpeditionSurvivalResourcesPanel {
     private readonly panel: HTMLDetailsElement;
     private readonly body: HTMLElement;
@@ -51,6 +56,8 @@ export class ExpeditionSurvivalResourcesPanel {
         if (page) page.append(this.panel);
     }
 
+        // A generation token prevents an older async fetch from restoring
+        // obsolete resource state after a later mutation or disposal.
     public async sync(): Promise<SurvivalResources> {
         const generation = ++this.syncGeneration;
         const state = await this.api.get(this.expeditionId);
@@ -90,6 +97,8 @@ export class ExpeditionSurvivalResourcesPanel {
             this.section("Camping and rest", this.campingView(state)));
     }
 
+    // Resource inventory models have distinct input semantics; an abstract
+    // resource is not automatically interpreted as a counted quantity.
     private resourcesView(state: SurvivalResources): HTMLElement {
         const container = document.createElement("div");
         container.append(this.policySummary("Resource policy", state.resourcePolicy));
@@ -783,6 +792,8 @@ export class ExpeditionSurvivalResourcesPanel {
         return contributor ? `${humanize(target.scope)} · ${humanize(contributor.key)}` : `${humanize(target.scope)} · ${target.targetId}`;
     }
 
+    // Target choices depend on live party membership and conveyance
+    // contributors; invalid targets are not invented to fill the selector.
     private targetSelect(
         label: string,
         scopeSource: ExpeditionEffectScope | HTMLSelectElement): { wrapper: HTMLLabelElement; control: HTMLSelectElement } {

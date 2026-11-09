@@ -27,6 +27,11 @@ import { encounterScheduleConfiguration, hasEncounterSchedule } from "./encounte
 import { orderedJourneyStageDefinitions } from "./journey-stage-presentation";
 import { expeditionWorkspacePresentation } from "./expedition-workspace-model";
 
+/**
+ * Expedition entry point. Spatial sessions use the generalized polygonal
+ * workbench; the remaining view handles nonspatial focused operations.
+ * Both paths share the persisted expedition and its pinned procedure.
+ */
 export async function renderExpedition(
     root: HTMLElement,
     api: HexCrawlApi,
@@ -78,6 +83,8 @@ export async function renderExpedition(
         cleanup?.();
     };
 
+    // Survival, effects, and journey state are separate API projections
+    // of the same expedition and may be refreshed independently.
     const refreshAuxiliary = async (): Promise<void> => {
         [survival, effects, journey] = await Promise.all([
             safeLoad(() => survivalApi.get(expeditionId)),
@@ -86,6 +93,8 @@ export async function renderExpedition(
         ]);
     };
 
+    // A successful runtime mutation advances the aggregate version; align
+    // cached auxiliary projections before their next optimistic write.
     const rebaseAuxiliaryVersions = (version: number): void => {
         if (survival) survival = { ...survival, expeditionVersion: version };
         if (journey) journey = { ...journey, expeditionVersion: version };
@@ -96,6 +105,8 @@ export async function renderExpedition(
         publishExpeditionRuntimeChanged(root, runtime);
     };
 
+    // Centralize mutation error handling rather than allowing individual
+    // panels to silently discard a rejected state transition.
     const mutate = async (action: () => Promise<void>): Promise<void> => {
         const error = root.querySelector<HTMLElement>("[data-error]");
         if (error) clearUiError(error);

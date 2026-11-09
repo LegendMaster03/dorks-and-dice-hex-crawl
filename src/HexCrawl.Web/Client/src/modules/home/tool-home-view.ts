@@ -18,6 +18,11 @@ import {
 const ABSTRACT_CONTEXT = "__abstract__";
 const NON_SPATIAL_CONTEXT = "__nonspatial__";
 
+/**
+ * Entry workflow for selecting a spatial, abstract, or nonspatial expedition
+ * context and its procedure. The selected preset supplies the rules;
+ * this page does not interpret ruleset-specific mechanics.
+ */
 export async function renderToolHome(
     root: HTMLElement,
     api: HexCrawlApi,
@@ -465,6 +470,8 @@ export async function renderToolHome(
     return () => { disposed = true; worldSelectionGeneration++; };
 }
 
+// Display retained expeditions independently of the setup wizard so
+// a change in setup choices does not alter existing sessions.
 function renderExpeditions(
     host: HTMLElement,
     expeditions: ExpeditionSummary[],

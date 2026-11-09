@@ -19,6 +19,11 @@ import {
     tagFact
 } from "./selected-cell-authoring";
 
+/**
+ * Coordinates map geometry authoring and source-image management against
+ * one versioned overworld. MapSurface renders authoritative cell polygons;
+ * editor drafts and transient overlays are not persisted until saved.
+ */
 export async function renderWorldEditor(
     root: HTMLElement,
     api: HexCrawlApi,
@@ -32,6 +37,8 @@ export async function renderWorldEditor(
     let world = initialWorld;
     let worldEnvironment = initialWorldEnvironment;
     let selectedLocation: Location | null = null;
+    // Keep the topological cell selection separate from arbitrary authored
+    // feature points; a clicked edge need not identify one unique cell.
     let selectedPeriodicCell: WorldCellGeometry | null = null;
     let selectedFeature: SpatialFeature | null = null;
     let placement: "location" | "point" | "line" | "region" | null = null;
@@ -163,6 +170,8 @@ export async function renderWorldEditor(
     for (const button of root.querySelectorAll<HTMLButtonElement>("[data-world-tool-button]")) {
         button.addEventListener("click", () => openTool(button.dataset.worldToolButton!));
     }
+    // Mutations share form-pending and conflict handling. On a version
+    // conflict reload authoritative state instead of resubmitting stale data.
     const run = async (form: HTMLFormElement | null, action: () => Promise<void>): Promise<void> => {
         if (form?.dataset.pending === "true") return;
         clearUiError(error);

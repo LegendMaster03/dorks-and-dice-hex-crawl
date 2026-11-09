@@ -18,6 +18,11 @@ type CandidateDraft = {
     discoverability: "Obvious" | "Hidden" | "Conditional";
 };
 
+/**
+ * Separates project inspection and source retention from semantic promotion.
+ * Candidates remain review data until a user explicitly chooses world
+ * objects, names, categories, and discoverability.
+ */
 export class WonderdraftImportController {
     private preview: WonderdraftCandidatePreview | null = null;
     private readonly drafts = new Map<string, CandidateDraft>();
@@ -75,6 +80,8 @@ export class WonderdraftImportController {
         }
     }
 
+    // Reopen candidate review from an already retained archive; it does
+    // not require another upload or create duplicate semantic objects.
     public async openStoredReview(sourceMap: SourceMapDetail): Promise<void> {
         if ((sourceMap.importedContentCount ?? 0) <= 0
             || sourceMap.importProvenance?.sourceType.toLocaleLowerCase() !== "wonderdraft"
@@ -120,6 +127,8 @@ export class WonderdraftImportController {
         this.map.requestRender();
     }
 
+    // Without a registered raster, inspect the project only. Import and
+    // candidate preview require a selected source-map representation.
     private async inspectOrImport(): Promise<void> {
         const file = input(this.form, "file").files?.[0];
         if (!file) throw new Error("Choose a .wonderdraft_map project file.");
@@ -492,6 +501,8 @@ export class WonderdraftImportController {
         }
     }
 
+    // Promote only explicitly selected, classified records and require
+    // the current source map and optimistic world version to still match.
     private async importCandidates(): Promise<void> {
         const preview = this.preview;
         if (!preview) {

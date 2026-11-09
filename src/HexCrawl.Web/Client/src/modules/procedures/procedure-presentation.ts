@@ -362,6 +362,8 @@ export function compactRule(moduleKey: string): CompactRuleDescriptor | null {
     return ruleMap.get(moduleKey) ?? null;
 }
 
+/** Selects a compact editor representation from rule parameter metadata.
+ * UI input types are presentation hints, not executable mechanics. */
 export function compactParameter(
     key: string,
     definition: ProcedureParameterDefinition,
@@ -406,6 +408,8 @@ export function compactModuleSummary(module: ProcedureModuleComposer): string {
         : descriptor?.description ?? module.purpose;
 }
 
+/** Reconciles module and selected mechanic schemas so both compact and
+ * advanced editors expose the same effective parameter definitions. */
 export function parameterDefinitions(
     module: ProcedureModuleComposer): Array<[string, ProcedureParameterDefinition]> {
     const definitions = new Map<string, ProcedureParameterDefinition>();
@@ -447,6 +451,8 @@ export function friendlyStoredValue(key: string, value: string, moduleKey: strin
     return friendlyToken(value);
 }
 
+/** Groups canonical procedure values into readable sections without
+ * changing the values that the server validates or executes. */
 export function procedurePresentationSections(
     moduleKey: string,
     parameters: Record<string, string>): ProcedurePresentationSection[] {
@@ -602,6 +608,8 @@ export function ticksToDuration(value: string): { amount: number; unit: "minutes
     return { amount: minutes, unit: "minutes" };
 }
 
+/** Serializes editor duration input to the procedure's tick representation;
+ * do not equate a travel watch or turn with a fixed wall-clock duration. */
 export function durationToTicks(amount: number, unit: "minutes" | "hours" | "days"): string {
     const multiplier = unit === "days" ? 24 * 60 : unit === "hours" ? 60 : 1;
     return Math.round(amount * multiplier * 600_000_000).toString();

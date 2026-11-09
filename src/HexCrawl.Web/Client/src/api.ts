@@ -42,6 +42,8 @@ import type {
 
 let activeBackendBaseUrl = "";
 
+/** Resolves the Tool Host upstream proxy prefix when running embedded;
+ * standalone deployments use relative same-origin API paths. */
 export function backendBaseFromContext(apiBaseUrl?: string | null): string {
     return apiBaseUrl ? `${apiBaseUrl.replace(/\/$/, "")}/upstream` : "";
 }
@@ -161,11 +163,18 @@ export class HexCrawlApiError extends Error {
     }
 }
 
+/**
+ * Typed boundary for authoritative Hex Crawl endpoints. Callers supply
+ * expected aggregate versions on writes; the client does not resolve
+ * competing server updates or infer world geometry.
+ */
 export class HexCrawlApi {
     private constructor(private readonly backendBaseUrl: string) {
         activeBackendBaseUrl = backendBaseUrl;
     }
 
+    // Embedded mode obtains its upstream routing from Tool Host context;
+    // a missing context URL deliberately selects same-origin standalone mode.
     public static async create(root: HTMLElement): Promise<{ api: HexCrawlApi; context: ToolHostContext | null }> {
         const contextUrl = root.dataset.toolContextUrl;
         if (!contextUrl) return { api: new HexCrawlApi(""), context: null };
@@ -714,6 +723,8 @@ export class HexCrawlApi {
         return await response.json() as T;
     }
 
+    // Let fetch supply multipart boundaries for binary uploads; adding
+    // an application/json Content-Type here would corrupt the form request.
     private async sendForm<T>(method: "POST", path: string, body: FormData, label: string): Promise<T> {
         const response = await fetch(`${this.backendBaseUrl}${path}`, {
             method,
@@ -731,6 +742,8 @@ export class HexCrawlApi {
     }
 }
 
+/** Classifies optimistic concurrency separately from ordinary validation
+ * so views can refresh rather than retrying stale write payloads blindly. */
 export async function apiError(response: Response, label: string): Promise<HexCrawlApiError> {
     const kind = errorKind(response.status);
     const detail = kind === "validation" ? await responseDetail(response) : null;

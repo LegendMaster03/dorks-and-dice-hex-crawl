@@ -20,6 +20,10 @@ type PartyMutationRunner = (
 
 type MovementKey = "perHour" | "perWatch" | "perMarch";
 
+/**
+ * Maintains an editable party draft while rendering server-owned party
+ * state. A refresh must not silently overwrite unsaved user edits.
+ */
 export class ExpeditionPartySheetController {
     private draft: ExpeditionParty | null = null;
     private latestVersion = 0;
@@ -33,6 +37,8 @@ export class ExpeditionPartySheetController {
         private readonly applyRuntime: (runtime: ExpeditionDetail) => void,
         private readonly mutate: PartyMutationRunner) {}
 
+        // Update display/version metadata every refresh, but keep an
+        // intentionally dirty draft until it is saved or discarded.
     public sync(runtime: ExpeditionDetail): void {
         this.latestVersion = runtime.version;
         this.runtimeForUnits = runtime;
@@ -715,6 +721,8 @@ export class ExpeditionPartySheetController {
         }
     }
 
+    // Removing a party member also requires reconciling movement
+    // contributors that referenced the removed participant.
     private removeMember(memberId: string): void {
         const party = this.requireDraft();
         party.members = party.members.filter(member => member.id !== memberId);
@@ -776,6 +784,8 @@ export class ExpeditionPartySheetController {
             this.requireDraft().baseMovement);
     }
 
+    // Validate the complete draft before sending an optimistic mutation;
+    // the backend remains the final source of party invariants.
     private validateDraft(): void {
         const party = this.requireDraft();
         const policy = this.requirePolicy();
@@ -975,6 +985,8 @@ function readUnit(kind: string, symbol: string, meters: string): DistanceUnit {
     return { kind: "Mile", symbol: "mi", metersPerUnit: 1609.344 };
 }
 
+// Isolate mutable form edits from server response objects so rendering or
+// discarding the draft cannot mutate the currently displayed runtime.
 function cloneParty(
     party: ExpeditionParty,
     includeMovementContributors = false): ExpeditionParty {

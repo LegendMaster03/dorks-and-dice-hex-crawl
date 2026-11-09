@@ -36,6 +36,11 @@ type EntryState = "landing" | "presets" | "workspace";
 
 const modeStorageKey = "hex-crawl.procedure-authoring.mode";
 
+/**
+ * Presents compact, advanced, and canonical JSON editors for the same
+ * CampaignProcedure draft. The server owns composition, validation, and
+ * revision identity; this view only maintains unsaved overrides.
+ */
 export async function renderProcedureAuthoringWorkspace(
     root: HTMLElement,
     api: HexCrawlApi,
@@ -87,6 +92,8 @@ export async function renderProcedureAuthoringWorkspace(
     ]);
     if (disposed) return () => {};
 
+    // Historical revisions can be inspected, but edits and saves must target
+    // a current revision rather than modifying retained procedure history.
     const historical = (): boolean =>
         sourceProcedureId !== null
         && viewedRevision !== null
@@ -145,6 +152,8 @@ export async function renderProcedureAuthoringWorkspace(
         if (!disposed) render();
     };
 
+    // A newer edit supersedes any in-flight composition result; otherwise
+    // slower responses could overwrite the latest local override state.
     const refreshDraft = async (): Promise<void> => {
         const serial = ++refreshSerial;
         try {
@@ -162,6 +171,8 @@ export async function renderProcedureAuthoringWorkspace(
         }
     };
 
+    // Preview a prospective tiling through the composer before adopting it.
+    // Rejected or stale responses leave the current selection unchanged.
     const changeTiling = async (symbol: string): Promise<void> => {
         if (tilingPending || savePending || historical() || symbol === draft?.tilingDsSymbol) return;
         const nextOverride = symbol === baselineTiling ? null : symbol;
@@ -207,6 +218,8 @@ export async function renderProcedureAuthoringWorkspace(
         await refreshDraft();
     };
 
+    // Seed raw editing from the server's canonical representation of the
+    // current structured draft, rather than a separately maintained schema.
     const loadJson = async (): Promise<void> => {
         if (!draft || jsonBusy || jsonText) return;
         let failure: unknown | null = null;
@@ -1511,6 +1524,8 @@ export async function renderProcedureAuthoringWorkspace(
         return card;
     };
 
+    // Raw JSON and structured editing use the same procedure authority.
+    // A local validation preview is not a substitute for server save checks.
     const renderJson = (): HTMLElement => {
         const section = document.createElement("section");
         section.className = "hc-panel hc-json-editor";
