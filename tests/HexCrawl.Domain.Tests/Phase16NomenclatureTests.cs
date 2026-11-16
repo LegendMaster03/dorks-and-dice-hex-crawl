@@ -149,6 +149,67 @@ public sealed class Phase16NomenclatureTests
     }
 
     [Fact]
+    public void CairoType4IsCongruentConvexAndPlayableThroughGenericPeriodicGeometry()
+    {
+        var entry = Assert.Single(CrawlTilingNames.Catalog.ListEntries(),
+            item => item.PresetId == "convex-pentagon-type-4");
+        var topology = Assert.IsType<PeriodicTopologyWitness>(entry.RepresentativeTopology);
+        var realization = Assert.IsType<PeriodicMetricRealization>(entry.RepresentativeRealization);
+        var world = new PeriodicWorldTiling(Guid.NewGuid(), topology, realization, new WorldPoint(0, 0));
+        world.Validate();
+        Assert.Equal(new[] { "Pentagons", "Convex" }, entry.CategoryPath);
+        Assert.Equal(8, topology.MotifCells.Count);
+        Assert.All(topology.MotifCells, cell => Assert.Equal(5, cell.Boundary.Count));
+
+        var exemplar = realization.Polygons["H00"];
+        static double Length(TilingWorldPoint left, TilingWorldPoint right) =>
+            Math.Sqrt(Math.Pow(left.X - right.X, 2) + Math.Pow(left.Y - right.Y, 2));
+        static (double[] Sides, double[] Angles) Signature(IReadOnlyList<TilingWorldPoint> points)
+        {
+            var sides = new double[5];
+            var angles = new double[5];
+            for (var i = 0; i < 5; i++)
+            {
+                var previous = points[(i + 4) % 5];
+                var current = points[i];
+                var next = points[(i + 1) % 5];
+                sides[i] = Length(current, next);
+                var dx1 = previous.X - current.X;
+                var dy1 = previous.Y - current.Y;
+                var dx2 = next.X - current.X;
+                var dy2 = next.Y - current.Y;
+                var cos = (dx1 * dx2 + dy1 * dy2)
+                    / (Length(current, previous) * Length(current, next));
+                angles[i] = Math.Acos(Math.Clamp(cos, -1, 1)) * 180 / Math.PI;
+            }
+            return (sides, angles);
+        }
+        var reference = Signature(exemplar);
+        foreach (var polygon in realization.Polygons.Values)
+        {
+            Assert.Equal(5, polygon.Count);
+            var current = Signature(polygon);
+            Assert.Equal(2, current.Angles.Count(value => Math.Abs(value - 90) < 1e-7));
+            Assert.Equal(3, current.Angles.Count(value => Math.Abs(value - 120) < 1e-7));
+            Assert.Equal(4, current.Sides.Count(value =>
+                Math.Abs(value - 1 / Math.Sqrt(3)) < 1e-7));
+            Assert.Single(current.Sides, value =>
+                Math.Abs(value - (1 - 1 / Math.Sqrt(3))) < 1e-7);
+            Assert.True(Enumerable.Range(0, 5).Any(offset =>
+                Enumerable.Range(0, 5).All(i =>
+                    Math.Abs(current.Sides[i] - reference.Sides[(i + offset) % 5]) < 1e-7
+                    && Math.Abs(current.Angles[i] - reference.Angles[(i + offset) % 5]) < 1e-7))
+                || Enumerable.Range(0, 5).Any(offset =>
+                    Enumerable.Range(0, 5).All(i =>
+                        Math.Abs(current.Sides[i] - reference.Sides[(offset - i + 4) % 5]) < 1e-7
+                        && Math.Abs(current.Angles[i] - reference.Angles[(offset - i) % 5]) < 1e-7)),
+                "Every pentagon in the motif must be a rotated or mirrored congruent copy.");
+        }
+        Assert.Equal(5, world.Neighbors(new("H00", new(0, 0))).Count);
+        Assert.Equal(5, world.Boundaries(new("V10", new(0, 0))).Count);
+    }
+
+    [Fact]
     public void CategoryPathsAndCatalogIdentitiesDoNotRestrictGeometry()
     {
         var square = Assert.Single(CrawlTilingNames.Catalog.ListEntries(),
