@@ -4,10 +4,9 @@
 convex pentagon families as ordinary catalog data. The generic periodic topology,
 metric validator, map renderer and traversal engine remain authoritative.
 
-**Current state:** the hierarchical catalog UI is implemented; no pentagon family
-is yet advertised as selectable. All fifteen need independently verified geometric
-fixtures and passing existing geometry checks. Do not manufacture preview geometry
-from an illustration or add a name-only selector entry.
+**Current state:** the hierarchical catalog UI and the Type 1 pentagonal representative
+are implemented. Types 2–15 remain pending; do not manufacture preview geometry from
+an illustration or add a name-only selector entry.
 
 ## Mathematical source
 
@@ -22,7 +21,7 @@ similarity. See https://mathworld.wolfram.com/PentagonTiling.html.
 
 | Type | Source's defining conditions | Verified motif |
 | --- | --- | --- |
-| 1 | D + E = 180° | Pending |
+| 1 | D + E = 180° | Implemented: two congruent half-hexagon pentagons, two cells per primitive motif |
 | 2 | C + E = 180°; a = d | Pending |
 | 3 | A = C = D = 120°; a = b; d = c + e | Pending |
 | 4 | A = C = 90°; a = b; c = d | Pending |
@@ -37,6 +36,26 @@ similarity. See https://mathworld.wolfram.com/PentagonTiling.html.
 | 13 | A = C = 90°; 2B = 2E = 360° − D; c = d; 2c = e | Pending |
 | 14 | D = 90°; 2E + A = 360°; A + C = 180°; b = c = 2a = 2d | Pending |
 | 15 | A = 60°; B = 135°; C = 105°; D = 90°; E = 150°; a = 2b = 2d = 2e | Pending |
+
+## Implemented Type 1 example
+
+The first example bisects each regular hexagon along the segment joining
+the midpoints of opposite edges, creating two congruent convex pentagons.
+Their interior angles, in cyclic order, are 90°, 120°, 120°, 120°, 90°;
+the two adjacent right angles satisfy the Type 1 condition. A rotation
+through 180° maps one pentagon onto the other. The primitive translation
+motif contains two pentagons and uses the regular hexagonal lattice.
+
+The fixture is defined by `VerifiedPentagonType1()` in
+`CrawlTilingNames.cs`, with both an explicit topology witness and a metric
+realization. The existing validator proves periodic incidence, reciprocal
+edges, nonoverlap and area coverage. The domain suite checks congruence
+and generic cell traversal geometry. HTTP integration tests cover catalog
+delivery, finite-bounds world creation, expedition startup and reload.
+
+The construction is independent of the particular pentagonal gallery
+illustrations; the Type 1 classification is supported by the cited general
+family definition.
 
 ## Requirements for admitting a representative
 
