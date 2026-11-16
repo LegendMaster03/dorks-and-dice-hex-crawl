@@ -519,7 +519,8 @@ export async function renderProcedureAuthoringWorkspace(
                 const group = document.createElement("optgroup");
                 group.label = path.join(" / ") || "Other tilings";
                 for (const entry of node.entries) {
-                    if (!seenSymbols.add(entry.dsSymbol)) continue;
+                    if (seenSymbols.has(entry.dsSymbol)) continue;
+                    seenSymbols.add(entry.dsSymbol);
                     const option = document.createElement("option");
                     option.value = entry.dsSymbol;
                     option.textContent = entry.displayName;
