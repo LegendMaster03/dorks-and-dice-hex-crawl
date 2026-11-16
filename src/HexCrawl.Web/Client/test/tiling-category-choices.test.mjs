@@ -42,13 +42,21 @@ test("nested tiling choices reuse preview controls and invoke the selected catal
     ];
     let picked = null;
     const choices = tilingCategoryChoices(entries, "square", entry => { picked = entry; });
-    const summaries = [...choices.querySelectorAll("summary")].map(node => node.textContent);
-    assert.deepEqual(summaries, ["Pentagons", "Convex", "Squares"]);
+    assert.deepEqual([...choices.querySelectorAll("summary")].map(node => node.textContent),
+        ["Pentagons", "Squares"]);
+    // Do not draw hidden polygon patches until the category is expanded.
+    assert.equal(choices.querySelectorAll("canvas[role='img']").length, 1);
     const squareButton = [...choices.querySelectorAll("button")]
         .find(button => button.textContent.includes("Square"));
     assert.equal(squareButton.getAttribute("aria-pressed"), "true");
-    assert.equal(choices.querySelectorAll("canvas[role='img']").length, 3);
     assert.equal(choices.querySelectorAll("details[open]").length, 1);
+    const pentagons = choices.querySelector("details");
+    pentagons.open = true;
+    pentagons.dispatchEvent(new dom.window.Event("toggle"));
+    const convex = pentagons.querySelector("details");
+    convex.open = true;
+    convex.dispatchEvent(new dom.window.Event("toggle"));
+    assert.equal(choices.querySelectorAll("canvas[role='img']").length, 3);
     const type2 = [...choices.querySelectorAll("button")]
         .find(button => button.textContent.includes("Type 2"));
     type2.click();
