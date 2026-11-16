@@ -92,8 +92,45 @@ internal static partial class PentagonalRepresentativeCatalog
         // Adjacent small-bar endpoints are placed so that the other four
         // sides have equal length; the pentagon has 90°,120°,90°,120°,120°
         // interior angles. All values are geometric data, not runtime rules.
-        double offset = (1 - 1 / Math.Sqrt(3)) / 2;
-        var metric = new PeriodicMetricRealization(
+        var metric = CairoMetric((1 - 1 / Math.Sqrt(3)) / 2);
+
+        return new TilingNameEntry(
+            symbol, "Cairo pentagonal tiling — Type 4", null,
+            ["Cairo tiling", "pentagonal tiling type 4"],
+            "Periodic tiling by eight congruent convex Cairo pentagons",
+            "Journal of Scientific Reports, 2025: 4-fold Cairo pattern; derivation from alternating square-centered bars",
+            Geometry: new(5), CategoryPath: ["Pentagons", "Convex"],
+            PresetId: "convex-pentagon-type-4",
+            RepresentativeTopology: topology, RepresentativeRealization: metric);
+    }
+
+    /// <summary>
+    /// A distinct Type 2 representative obtained from the same generic Cairo
+    /// periodic adjacency. Setting the middle side equal to the other four
+    /// produces an equilateral convex pentagon. Its two nonadjacent right
+    /// angles satisfy C + E = 180°, and equal sides satisfy a = d.
+    /// This is an intentionally documented Type 2 / Type 4 intersection,
+    /// not a claim that every Cairo pentagon belongs to both families.
+    /// </summary>
+    internal static TilingNameEntry EquilateralCairoType2()
+    {
+        var cairo = CairoType4();
+        double equalSideOffset = (Math.Sqrt(7) - 1) / 6;
+        return cairo with
+        {
+            PreferredName = "Equilateral Cairo pentagons — Type 2",
+            Aliases = ["pentagonal tiling type 2", "equilateral Cairo pentagon"],
+            Description = "Periodic equilateral convex pentagons with complementary nonadjacent right angles",
+            Provenance = "Equilateral Cairo metric derived by matching its fifth edge to four equal remaining edges",
+            PresetId = "convex-pentagon-type-2",
+            RepresentativeRealization = CairoMetric(equalSideOffset)
+        };
+    }
+
+    /// <summary>Geometry varies independently of the shared periodic topology.</summary>
+    private static PeriodicMetricRealization CairoMetric(double offset)
+    {
+        return new PeriodicMetricRealization(
             "world-unit", new(2, 0), new(0, 2),
             new Dictionary<string, IReadOnlyList<TilingWorldPoint>>
             {
@@ -162,13 +199,5 @@ internal static partial class PentagonalRepresentativeCatalog
                     new(0.5, 1.5 - offset)
                 ]
             }, []);
-        return new TilingNameEntry(
-            symbol, "Cairo pentagonal tiling — Type 4", null,
-            ["Cairo tiling", "pentagonal tiling type 4"],
-            "Periodic tiling by eight congruent convex Cairo pentagons",
-            "Journal of Scientific Reports, 2025: 4-fold Cairo pattern; derivation from alternating square-centered bars",
-            Geometry: new(5), CategoryPath: ["Pentagons", "Convex"],
-            PresetId: "convex-pentagon-type-4",
-            RepresentativeTopology: topology, RepresentativeRealization: metric);
     }
 }
