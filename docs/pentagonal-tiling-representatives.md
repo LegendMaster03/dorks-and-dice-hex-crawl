@@ -4,10 +4,10 @@
 convex pentagon families as ordinary catalog data. The generic periodic topology,
 metric validator, map renderer and traversal engine remain authoritative.
 
-**Current state:** the hierarchical catalog and Types 1–4 have concrete
-periodic representative definitions and automated tests. Types 5–15 remain
-pending. Do not manufacture preview geometry from an illustration or add a
-name-only selector entry.
+**Current state:** the hierarchical catalog and Types 1, 2, 3, 4 and 15
+have concrete periodic representatives and automated domain/integration tests.
+Types 5–14 remain pending. Do not manufacture preview geometry from an
+illustration or add a name-only selector entry.
 
 ## Mathematical source
 
@@ -36,7 +36,7 @@ similarity. See https://mathworld.wolfram.com/PentagonTiling.html.
 | 12 | A = 90°; C + E = 180°; 2B + C = 360°; 2a = c + e = d | Pending |
 | 13 | A = C = 90°; 2B = 2E = 360° − D; c = d; 2c = e | Pending |
 | 14 | D = 90°; 2E + A = 360°; A + C = 180°; b = c = 2a = 2d | Pending |
-| 15 | A = 60°; B = 135°; C = 105°; D = 90°; E = 150°; a = 2b = 2d = 2e | Pending |
+| 15 | A = 60°; B = 135°; C = 105°; D = 90°; E = 150°; a = 2b = 2d = 2e | Implemented: 12 congruent pentagons per period, four with six atomic interfaces |
 
 ## Implemented Type 1 example
 
@@ -105,6 +105,41 @@ T-junction midpoint. No special movement mode is needed. The Type 3 fixture
 tests both generic edge subdivision and geometry-aware naming.
 
 Reference: https://commons.wikimedia.org/wiki/File:Pent-Hex-Type3-3.svg
+
+## Implemented Type 15 fixed-shape pentagon
+
+The MathWorks [Type 15 construction](https://blogs.mathworks.com/graphics/2015/08/19/type-15-convex-pentagon/)
+provides exact coordinates for the fixed convex pentagon, reflections,
+rotations, twelve pentagons in a repeating region, and two independent
+translation vectors. The motif was independently reconstructed from the
+published transformations.
+
+The resulting boundary graph contains twelve pentagons and 64 atomic edge
+interfaces. Four tiles contain a collinear T-junction split and therefore
+six atomic interfaces, while all twelve have five geometric sides.
+The primitive translation basis was reoriented to positive determinant,
+and individual motif tiles were moved by whole lattice periods to remain
+within the existing bounded metric verifier. These transformations do not
+change the tiling.
+
+Independent domain tests verify the source's 60°, 90°, 105°, 135° and
+150° angles; the edge-length ratios; positive, nonoverlapping geometry;
+the primitive translation cover; and reciprocal interfaces.
+The existing HTTP acceptance test also exercises world creation,
+finite bounds, expedition startup and persisted world reload.
+
+No Type 15 logic was added to the general spatial engine.
+
+## Source classification discrepancy to resolve before Type 5
+
+The introductory Frontiers for Young Minds figure and the 2018
+i-block-transitive paper have been indexed as Type 5 with
+`C = 2A = 90°`. Other mathematical sources, including Sugimoto and Ogawa,
+*Forma* (2005), state the Type 5 conditions as `A = 120°, C = 60°,
+a = b, c = d`. Those statements are mathematically different.
+Verify the primary diagrams and consistent labeling before admitting a
+Type 5 representative; do not select a geometry solely from an
+inconsistent secondary transcription.
 
 ## Requirements for admitting a representative
 
