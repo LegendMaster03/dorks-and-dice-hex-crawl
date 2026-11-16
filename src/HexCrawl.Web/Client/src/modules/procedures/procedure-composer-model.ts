@@ -36,8 +36,13 @@ export function tilingCategoryTree(entries: readonly TilingCatalogEntry[]): Tili
     }
     const sort = (node: TilingCategoryNode): void => {
         node.categories.sort((a, b) => a.label.localeCompare(b.label));
-        node.entries.sort((a, b) => a.displayName.localeCompare(b.displayName)
-            || (a.presetId ?? a.dsSymbol).localeCompare(b.presetId ?? b.dsSymbol));
+        // Catalog IDs are stable choices. Sorting them numerically keeps
+        // numbered family variants in natural order (1, 2, ... 10, 11)
+        // regardless of varying descriptive display names.
+        const natural = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+        node.entries.sort((a, b) =>
+            natural.compare(a.presetId ?? a.displayName, b.presetId ?? b.displayName)
+            || natural.compare(a.displayName, b.displayName));
         for (const child of node.categories) sort(child);
     };
     sort(root);
