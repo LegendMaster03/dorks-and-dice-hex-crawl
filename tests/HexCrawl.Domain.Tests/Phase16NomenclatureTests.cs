@@ -149,6 +149,52 @@ public sealed class Phase16NomenclatureTests
     }
 
     [Fact]
+    public void EquilateralCairoType2DistinguishesMetricRealizationsOfTheSameTopology()
+    {
+        var entries = CrawlTilingNames.Catalog.ListEntries();
+        var type2 = Assert.Single(entries, e => e.PresetId == "convex-pentagon-type-2");
+        var type4 = Assert.Single(entries, e => e.PresetId == "convex-pentagon-type-4");
+        Assert.Equal(type4.CanonicalDsSymbol, type2.CanonicalDsSymbol);
+        var topology = Assert.IsType<PeriodicTopologyWitness>(type2.RepresentativeTopology);
+        var geometry = Assert.IsType<PeriodicMetricRealization>(type2.RepresentativeRealization);
+        var world = new PeriodicWorldTiling(Guid.NewGuid(), topology, geometry, new WorldPoint(0, 0));
+        world.Validate();
+
+        foreach (var polygon in geometry.Polygons.Values)
+        {
+            Assert.Equal(5, polygon.Count);
+            var sides = Enumerable.Range(0, 5).Select(i =>
+            {
+                var a = polygon[i];
+                var b = polygon[(i + 1) % 5];
+                return Math.Sqrt((a.X - b.X) * (a.X - b.X) + (a.Y - b.Y) * (a.Y - b.Y));
+            }).ToArray();
+            Assert.True(sides.Max() - sides.Min() < 1e-9,
+                "The Type 2 example must be an equilateral convex pentagon.");
+            var angles = Enumerable.Range(0, 5).Select(i =>
+            {
+                var a = polygon[(i + 4) % 5];
+                var b = polygon[i];
+                var d = polygon[(i + 1) % 5];
+                var ux = a.X - b.X; var uy = a.Y - b.Y;
+                var vx = d.X - b.X; var vy = d.Y - b.Y;
+                return Math.Acos(Math.Clamp((ux * vx + uy * vy)
+                    / (Math.Sqrt(ux * ux + uy * uy) * Math.Sqrt(vx * vx + vy * vy)), -1, 1))
+                    * 180 / Math.PI;
+            }).ToArray();
+            Assert.Equal(2, angles.Count(angle => Math.Abs(angle - 90) < 1e-8));
+            Assert.True(Enumerable.Range(0, 5).Any(i =>
+                Math.Abs(angles[i] - 90) < 1e-8 && Math.Abs(angles[(i + 2) % 5] - 90) < 1e-8));
+        }
+
+        Assert.Equal(type2.PreferredName,
+            CrawlTilingNames.Catalog.Describe(type2.CanonicalDsSymbol, geometry)!.Label);
+        Assert.Equal(type4.PreferredName,
+            CrawlTilingNames.Catalog.Describe(type4.CanonicalDsSymbol, type4.RepresentativeRealization)!.Label);
+        Assert.NotEqual(type2.PreferredName, type4.PreferredName);
+    }
+
+    [Fact]
     public void CairoType4IsCongruentConvexAndPlayableThroughGenericPeriodicGeometry()
     {
         var entry = Assert.Single(CrawlTilingNames.Catalog.ListEntries(),
