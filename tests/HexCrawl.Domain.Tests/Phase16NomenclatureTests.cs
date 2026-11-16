@@ -244,8 +244,8 @@ public sealed class Phase16NomenclatureTests
                     * 180 / Math.PI;
             }).ToArray();
             Assert.Equal(2, angles.Count(angle => Math.Abs(angle - 90) < 1e-8));
-            Assert.True(Enumerable.Range(0, 5).Any(i =>
-                Math.Abs(angles[i] - 90) < 1e-8 && Math.Abs(angles[(i + 2) % 5] - 90) < 1e-8));
+            Assert.Contains(Enumerable.Range(0, 5), i =>
+                Math.Abs(angles[i] - 90) < 1e-8 && Math.Abs(angles[(i + 2) % 5] - 90) < 1e-8);
         }
 
         Assert.Equal(type2.PreferredName,
