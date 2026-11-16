@@ -25,6 +25,7 @@ public sealed class PentagonalCatalogWorldEndpointsTests
     [InlineData("convex-pentagon-type-9", 8, "P09-00", 5)]
     [InlineData("convex-pentagon-type-12", 8, "P12-00", 6)]
     [InlineData("convex-pentagon-type-13", 8, "P13-00", 5)]
+    [InlineData("convex-pentagon-type-14", 6, "P14-00", 5)]
     [InlineData("convex-pentagon-type-15", 12, "T15-01", 5)]
     public async Task ConvexCatalogGeometryCreatesAndReloadsAnOrdinaryPeriodicWorld(
         string presetId, int motifCellCount, string startMotifCellId, int atomicInterfaceCount)
