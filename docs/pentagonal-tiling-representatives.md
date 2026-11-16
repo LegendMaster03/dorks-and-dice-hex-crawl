@@ -4,8 +4,8 @@
 convex pentagon families as ordinary catalog data. The generic periodic topology,
 metric validator, map renderer and traversal engine remain authoritative.
 
-**Current state:** the hierarchical catalog and Types 1, 3, and 4 have concrete
-periodic representative definitions and automated tests. Types 2, 5–15 remain
+**Current state:** the hierarchical catalog and Types 1–4 have concrete
+periodic representative definitions and automated tests. Types 5–15 remain
 pending. Do not manufacture preview geometry from an illustration or add a
 name-only selector entry.
 
@@ -23,7 +23,7 @@ similarity. See https://mathworld.wolfram.com/PentagonTiling.html.
 | Type | Source's defining conditions | Verified motif |
 | --- | --- | --- |
 | 1 | D + E = 180° | Implemented: two congruent half-hexagon pentagons, two cells per primitive motif |
-| 2 | C + E = 180°; a = d | Pending |
+| 2 | C + E = 180°; a = d | Implemented: distinct equilateral Cairo realization, eight congruent pentagons per motif |
 | 3 | A = C = D = 120°; a = b; d = c + e | Implemented: 3 congruent pentagons per hexagon; six atomic interfaces and five geometric sides |
 | 4 | A = C = 90°; a = b; c = d | Implemented: standard Cairo tiling; eight congruent pentagons per square translation motif |
 | 5 | C = 2A = 90°; a = b; c = d | Pending |
@@ -58,16 +58,36 @@ The construction is independent of the particular pentagonal gallery
 illustrations; the Type 1 classification is supported by the cited general
 family definition.
 
+## Implemented Type 2 equilateral Cairo example
+
+A second, distinctly realized Cairo pattern uses the same verified
+eight-cell periodic topology but a different metric. Put the bar offset at
+`(sqrt(7) - 1) / 6` of a square unit. Each pentagon then has four long
+edges of length `sqrt(1/4 + (1/2 - offset)^2)` and a fifth edge of
+length `2 * offset`; these are equal at precisely this value. The pentagon
+has two nonadjacent right angles. Under the Type 2 family relabeling
+`C + E = 180°`, and `a = d` holds because all sides are equal.
+
+This special metric lies in the **intersection of Types 2 and 4**.
+The catalog labels it Type 2 while retaining the non-equilateral Cairo
+metric as the separate Type 4 example. These are distinct previews and
+world geometries, even though they share one canonical D-symbol.
+
+The presentation vocabulary compares scale-invariant geometric shapes
+when multiple catalog entries share a D-symbol. This is a general
+ambiguity-resolution improvement, not a new topology mechanism.
+
 ## Implemented Cairo Type 4 example
 
 The eight-pentagon Cairo motif has a square translation basis and uses
 alternating horizontal and vertical short segments centered within a square
 grid. Its pentagons have two nonadjacent right angles and three 120° angles.
 The four longer sides are equal; the remaining shorter side has length
-(1 - 1/\sqrt{3}) relative to a square unit. This specific symmetric Cairo
-shape also satisfies the Type 2 family conditions. It is **cataloged as Type 4
-only**, so a distinct Type 2 construction can be supplied rather than showing
-two identical selections. The implementation uses no Cairo-specific runtime.
+(1 - 1/\sqrt{3}) relative to a square unit. It is cataloged as Type 4.
+An earlier assumption that this exact metric also satisfies Type 2 was not
+established from the defining length conditions; the separate Type 2
+representative below establishes those conditions explicitly.
+The implementation uses no Cairo-specific runtime.
 
 Reference: https://doi.org/10.1038/s41598-025-17010-4
 
