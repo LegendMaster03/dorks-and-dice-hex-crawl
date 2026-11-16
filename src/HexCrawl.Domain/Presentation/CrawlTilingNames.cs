@@ -28,8 +28,67 @@ public static class CrawlTilingNames
             "Rhombille tiling", "Rhombille tessellation", ["rhombus tiling"],
             "A periodic tessellation of rhombi", "Phase 16 metric fixture",
             Geometry: new(4, EqualSideLengths: true),
-            CategoryPath: ["Quadrilaterals", "Rhombi"], PresetId: "rhombille")
+            CategoryPath: ["Quadrilaterals", "Rhombi"], PresetId: "rhombille"),
+        VerifiedPentagonType1()
     ]);
+
+    /// <summary>
+    /// Data-only Type 1 example: split each centrally symmetric regular
+    /// hexagon at midpoints of opposite edges. Each of the two convex halves
+    /// has five sides and the adjacent two 90° angles required by Type 1.
+    /// All boundary contacts and translations use the general witness format.
+    /// </summary>
+    private static TilingNameEntry VerifiedPentagonType1()
+    {
+        const string symbol = "<20:2 7 6 10 12 14 16 17 19 20,3 5 9 12 11 13 15 18 19 20,4 6 8 11 12 13 16 17 20 19:5 5,3 3 4>";
+        var topology = new PeriodicTopologyWitness(
+            PeriodicTopologyContractVersion.Current, symbol, symbol,
+            [
+                new PeriodicMotifCell("pentagon-a",
+                [
+                    new(0, 0, "pentagon-a", new(1, 0), 3),
+                    new(1, 1, "pentagon-b", new(0, 1), 1),
+                    new(2, 2, "pentagon-b", new(-1, 1), 2),
+                    new(3, 3, "pentagon-a", new(-1, 0), 0),
+                    new(4, 4, "pentagon-b", new(0, 0), 4)
+                ]),
+                new PeriodicMotifCell("pentagon-b",
+                [
+                    new(0, 0, "pentagon-b", new(-1, 0), 3),
+                    new(1, 1, "pentagon-a", new(0, -1), 1),
+                    new(2, 2, "pentagon-a", new(1, -1), 2),
+                    new(3, 3, "pentagon-b", new(1, 0), 0),
+                    new(4, 4, "pentagon-a", new(0, 0), 4)
+                ])
+            ],
+            "Periodic bisected regular-hexagon construction (convex pentagon Type 1).");
+        double root3 = Math.Sqrt(3);
+        var metric = new PeriodicMetricRealization(
+            "world-unit", new(1.5, root3 / 2), new(0, root3),
+            new Dictionary<string, IReadOnlyList<TilingWorldPoint>>
+            {
+                ["pentagon-a"] =
+                [
+                    new(.75, root3 / 4), new(.5, root3 / 2),
+                    new(-.5, root3 / 2), new(-1, 0),
+                    new(-.75, -root3 / 4)
+                ],
+                ["pentagon-b"] =
+                [
+                    new(-.75, -root3 / 4), new(-.5, -root3 / 2),
+                    new(.5, -root3 / 2), new(1, 0),
+                    new(.75, root3 / 4)
+                ]
+            }, []);
+        return new TilingNameEntry(
+            symbol, "Convex pentagonal tiling — Type 1", null,
+            ["pentagonal tiling type 1"], "A periodic tiling by congruent convex pentagons",
+            "Two congruent halves of a translated centrally symmetric regular hexagon",
+            Geometry: new(5),
+            CategoryPath: ["Pentagons", "Convex"],
+            PresetId: "convex-pentagon-type-1",
+            RepresentativeTopology: topology, RepresentativeRealization: metric);
+    }
 
     /// <summary>
     /// Supplies a verified Euclidean period for a named regular tiling when no
@@ -54,6 +113,7 @@ public static class CrawlTilingNames
     /// <summary>Finds a verified geometric representative; never infers regularity from topology alone.</summary>
     public static PeriodicMetricRealization? RepresentativePreview(TilingNameEntry entry)
     {
+        if (entry.RepresentativeRealization is { } supplied) return supplied;
         var candidates = new (double U, double V, double Angle)[]
         {
             (1, 1, 90), (1, 1, 60), (1, 1, 120),
