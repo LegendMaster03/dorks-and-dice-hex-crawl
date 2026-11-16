@@ -58,12 +58,13 @@ test("tiling categories group arbitrary nested paths without changing identities
     const square = { dsSymbol: "square", presetId: "square-main", displayName: "Square", categoryPath: ["Squares"] };
     const pentagon = { dsSymbol: "shared", presetId: "pentagon-1", displayName: "Type 1", categoryPath: ["Pentagons", "Convex"] };
     const another = { dsSymbol: "shared", presetId: "pentagon-2", displayName: "Type 2", categoryPath: ["Pentagons", "Convex"] };
+    const tenth = { dsSymbol: "shared", presetId: "pentagon-10", displayName: "Other pattern, Type 10", categoryPath: ["Pentagons", "Convex"] };
     const custom = { dsSymbol: "custom", displayName: "Unnamed example" };
-    const root = tilingCategoryTree([pentagon, square, custom, hex, another]);
+    const root = tilingCategoryTree([tenth, pentagon, square, custom, hex, another]);
     assert.deepEqual(root.categories.map(group => group.label), ["Hexagons", "Other tilings", "Pentagons", "Squares"]);
     const convex = root.categories[2].categories[0];
     assert.equal(convex.label, "Convex");
-    assert.deepEqual(convex.entries.map(entry => entry.presetId), ["pentagon-1", "pentagon-2"]);
+    assert.deepEqual(convex.entries.map(entry => entry.presetId), ["pentagon-1", "pentagon-2", "pentagon-10"]);
     assert.equal(convex.entries[0].dsSymbol, convex.entries[1].dsSymbol);
     assert.equal(root.categories[1].entries[0], custom);
     assert.equal(root.categories[0].entries[0], hex);
