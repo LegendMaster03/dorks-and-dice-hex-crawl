@@ -33,7 +33,11 @@ public static class CrawlTilingNames
         PentagonalRepresentativeCatalog.EquilateralCairoType2(),
         PentagonalRepresentativeCatalog.CairoType4(),
         PentagonalRepresentativeCatalog.HexagonalSubdivisionType3(),
-        PentagonalRepresentativeCatalog.MannMcLoudVonDerauType15()
+        PentagonalRepresentativeCatalog.MannMcLoudVonDerauType15(),
+        PentagonalRepresentativeCatalog.Type5(),
+        PentagonalRepresentativeCatalog.Type8(),
+        PentagonalRepresentativeCatalog.Type10(),
+        PentagonalRepresentativeCatalog.Type11()
     ]);
 
     /// <summary>
