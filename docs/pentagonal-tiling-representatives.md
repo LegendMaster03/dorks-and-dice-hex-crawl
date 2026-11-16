@@ -4,9 +4,10 @@
 convex pentagon families as ordinary catalog data. The generic periodic topology,
 metric validator, map renderer and traversal engine remain authoritative.
 
-**Current state:** the hierarchical catalog UI and the Type 1 pentagonal representative
-are implemented. Types 2–15 remain pending; do not manufacture preview geometry from
-an illustration or add a name-only selector entry.
+**Current state:** the hierarchical catalog and Types 1, 3, and 4 have concrete
+periodic representative definitions and automated tests. Types 2, 5–15 remain
+pending. Do not manufacture preview geometry from an illustration or add a
+name-only selector entry.
 
 ## Mathematical source
 
@@ -23,8 +24,8 @@ similarity. See https://mathworld.wolfram.com/PentagonTiling.html.
 | --- | --- | --- |
 | 1 | D + E = 180° | Implemented: two congruent half-hexagon pentagons, two cells per primitive motif |
 | 2 | C + E = 180°; a = d | Pending |
-| 3 | A = C = D = 120°; a = b; d = c + e | Pending |
-| 4 | A = C = 90°; a = b; c = d | Pending |
+| 3 | A = C = D = 120°; a = b; d = c + e | Implemented: 3 congruent pentagons per hexagon; six atomic interfaces and five geometric sides |
+| 4 | A = C = 90°; a = b; c = d | Implemented: standard Cairo tiling; eight congruent pentagons per square translation motif |
 | 5 | C = 2A = 90°; a = b; c = d | Pending |
 | 6 | C + E = 180°; A = 2C; a = b = e; c = d | Pending |
 | 7 | 2B + C = 360°; 2D + A = 360°; a = b = c = d | Pending |
@@ -56,6 +57,34 @@ delivery, finite-bounds world creation, expedition startup and reload.
 The construction is independent of the particular pentagonal gallery
 illustrations; the Type 1 classification is supported by the cited general
 family definition.
+
+## Implemented Cairo Type 4 example
+
+The eight-pentagon Cairo motif has a square translation basis and uses
+alternating horizontal and vertical short segments centered within a square
+grid. Its pentagons have two nonadjacent right angles and three 120° angles.
+The four longer sides are equal; the remaining shorter side has length
+(1 - 1/\sqrt{3}) relative to a square unit. This specific symmetric Cairo
+shape also satisfies the Type 2 family conditions. It is **cataloged as Type 4
+only**, so a distinct Type 2 construction can be supplied rather than showing
+two identical selections. The implementation uses no Cairo-specific runtime.
+
+Reference: https://doi.org/10.1038/s41598-025-17010-4
+
+## Implemented Type 3 hexagonal subdivision
+
+A regular hexagon is divided into three congruent convex pentagons by
+joining the hexagon center to the midpoints of alternating boundary edges.
+In one pentagon, three angles are 120° and two are 90°; the two inward
+radial sides are equal and the full outer hexagon side is the sum of its
+two half-side neighbors. This is an explicit Type 3 construction.
+
+The shared edges cross the periodic hexagon boundary: a five-sided pentagon
+has **six atomic edge interfaces** because one geometric side contains a
+T-junction midpoint. No special movement mode is needed. The Type 3 fixture
+tests both generic edge subdivision and geometry-aware naming.
+
+Reference: https://commons.wikimedia.org/wiki/File:Pent-Hex-Type3-3.svg
 
 ## Requirements for admitting a representative
 
