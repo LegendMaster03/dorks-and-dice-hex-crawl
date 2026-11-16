@@ -42,7 +42,8 @@ public static class CrawlTilingNames
         PentagonalRepresentativeCatalog.Type7(),
         PentagonalRepresentativeCatalog.Type9(),
         PentagonalRepresentativeCatalog.Type12(),
-        PentagonalRepresentativeCatalog.Type13()
+        PentagonalRepresentativeCatalog.Type13(),
+        PentagonalRepresentativeCatalog.SteinType14()
     ]);
 
     /// <summary>
