@@ -45,7 +45,9 @@ public sealed class ProcedureComposerModule : IHexCrawlModule
         string DisplayName,
         bool ShowInRulesetSelector,
         PeriodicMetricRealization? Realization,
-        bool SupportsVertexOnlyAdjacency);
+        bool SupportsVertexOnlyAdjacency,
+        IReadOnlyList<string> CategoryPath,
+        string? PresetId);
 
     private static readonly Lazy<IReadOnlyList<NamedTilingOption>> TilingOptions =
         new(BuildTilingOptions);
@@ -58,7 +60,8 @@ public sealed class ProcedureComposerModule : IHexCrawlModule
                 var preview = CrawlTilingNames.RepresentativePreview(entry);
                 return new NamedTilingOption(
                     entry.CanonicalDsSymbol, entry.PreferredName, entry.ShowInRulesetSelector,
-                    preview, HasVertexOnlyContacts(entry.CanonicalDsSymbol));
+                    preview, HasVertexOnlyContacts(entry.CanonicalDsSymbol),
+                    entry.CategoryPath ?? ["Other tilings"], entry.PresetId);
             }).ToList();
         var known = result.Select(entry => entry.DsSymbol).ToHashSet(StringComparer.Ordinal);
         // A new preset need not be present in the friendly-name vocabulary to be usable.
@@ -71,7 +74,7 @@ public sealed class ProcedureComposerModule : IHexCrawlModule
             var label = CrawlTilingNames.Catalog.Describe(symbol, metric)?.Label
                 ?? "Unlisted repeating tile pattern";
             result.Add(new NamedTilingOption(symbol, label, false, metric,
-                HasVertexOnlyContacts(symbol)));
+                HasVertexOnlyContacts(symbol), ["Other tilings"], null));
         }
         return result;
     }
