@@ -13,6 +13,7 @@ public sealed class PentagonalCatalogWorldEndpointsTests
 {
     [Theory]
     [InlineData("convex-pentagon-type-1", 2, "pentagon-a", 5)]
+    [InlineData("convex-pentagon-type-2", 8, "H00", 5)]
     [InlineData("convex-pentagon-type-3", 3, "A", 6)]
     [InlineData("convex-pentagon-type-4", 8, "H00", 5)]
     public async Task ConvexCatalogGeometryCreatesAndReloadsAnOrdinaryPeriodicWorld(
