@@ -4,10 +4,11 @@
 convex pentagon families as ordinary catalog data. The generic periodic topology,
 metric validator, map renderer and traversal engine remain authoritative.
 
-**Current state:** the hierarchical catalog and Types 1–5, 8, 10, 11 and 15
-have concrete periodic representative definitions and automated tests.
-Types 6, 7, 9, 12, 13 and 14 remain pending. Do not add unverified
-preview geometry or name-only selector entries.
+**Current state:** all fifteen classified convex pentagon tiling families
+have one static periodic representative and are registered in the general
+catalog. Automated domain and PostgreSQL HTTP acceptance tests cover each.
+The branch must pass its complete CI and independent live browser review
+before it is considered ready for merge.
 
 ## Mathematical source
 
@@ -27,15 +28,15 @@ similarity. See https://mathworld.wolfram.com/PentagonTiling.html.
 | 3 | A = C = D = 120°; a = b; d = c + e | Implemented: 3 congruent pentagons per hexagon; six atomic interfaces and five geometric sides |
 | 4 | A = C = 90°; a = b; c = d | Implemented: standard Cairo tiling; eight congruent pentagons per square translation motif |
 | 5 | A = 60°, C = 120° (source discrepancy below); a = b, c = d | Implemented: six congruent pentagons per motif |
-| 6 | C + E = 180°; A = 2C; a = b = e; c = d | Pending |
-| 7 | 2B + C = 360°; 2D + A = 360°; a = b = c = d | Pending |
+| 6 | C + E = 180°; A = 2C; a = b = e; c = d | Implemented: Kershner six-family construction: four congruent pentagons, five atomic edges per tile |
+| 7 | 2B + C = 360°; 2D + A = 360°; a = b = c = d | Implemented: Kershner construction: eight congruent pentagons, five atomic edges per tile |
 | 8 | 2A + B = 360°, 2D + C = 360°; a = b = c = d | Implemented: eight congruent pentagons, four equal sides |
-| 9 | 2E + B = 360°; 2D + C = 360°; a = b = c = d | Pending |
+| 9 | 2E + B = 360°; 2D + C = 360°; a = b = c = d | Implemented: Rice construction: eight congruent pentagons, five atomic edges per tile |
 | 10 | E = 90°, A + D = 180°, 2B − D = 180°, 2C + D = 360°; a = e = b + d | Implemented: six congruent pentagons, two with seven atomic interfaces |
 | 11 | A = 90°, C + E = 180°, 2B + C = 360°; d = e = 2a + c | Implemented: eight congruent pentagons, four with seven atomic interfaces |
-| 12 | A = 90°; C + E = 180°; 2B + C = 360°; 2a = c + e = d | Pending |
-| 13 | A = C = 90°; 2B = 2E = 360° − D; c = d; 2c = e | Pending |
-| 14 | D = 90°; 2E + A = 360°; A + C = 180°; b = c = 2a = 2d | Pending |
+| 12 | A = 90°; C + E = 180°; 2B + C = 360°; 2a = c + e = d | Implemented: Rice construction: eight congruent pentagons, each having six atomic interfaces on five sides |
+| 13 | A = C = 90°; 2B = 2E = 360° − D; c = d; 2c = e | Implemented: Rice construction: eight congruent pentagons, four with six atomic interfaces |
+| 14 | D = 90°; 2E + A = 360°; A + C = 180°; b = c = 2a = 2d | Implemented: Stein fixed-shape construction: six congruent pentagons, exact algebraic reconstruction of rounded source coordinates |
 | 15 | A = 60°; B = 135°; C = 105°; D = 90°; E = 150°; a = 2b = 2d = 2e | Implemented: 12 congruent pentagons per period, four with six atomic interfaces |
 
 ## Implemented Type 1 example
@@ -162,6 +163,63 @@ Sugimoto and Ogawa's
 use the angles 60° and 120° with equal neighboring side pairs.
 The implemented Type 5 realizes the latter conditions. We preserve
 this discrepancy rather than treating the two formulas as equivalent.
+
+## Remaining six source-derived representatives
+
+The [Apache-2.0-licensed OpenSCAD implementation](https://github.com/pinkfish/openscad_boardgame_toolkit/blob/master/pentagon_tilings.scad)
+provides polygon coordinates and two translation vectors for the remaining
+Type 6, 7, 9, 12, 13, and 14 constructions, based on Ed Pegg Jr's
+Wolfram Demonstrations.
+
+| Type | Source parameters | Motif cells | Atomic boundaries per cell |
+| --- | --- | ---: | --- |
+| 6 | AA = 120° | 4 | all 5 |
+| 7 | AA = 150° | 8 | all 5 |
+| 9 | b = 1.573 | 8 | all 5 |
+| 12 | AA = 125° | 8 | all 6 |
+| 13 | AA = 135° | 8 | four 5, four 6 |
+| 14 | Fixed Stein pentagon | 6 | two 5, two 6, two 7 |
+
+The source's trigonometric expressions were evaluated with angles in
+degrees, and resulting polygon coordinates were oriented and normalized
+to the fundamental lattice. We independently derived the atomic
+boundary adjacencies, including T-junction subdivisions, then obtained
+canonical translation D-symbols and primitive Z² lattice witnesses.
+All six use the unchanged generic periodic topology and metric
+contracts.
+
+### Type 14 numeric precision correction
+
+The published OpenSCAD Type 14 example truncates some vertex
+coordinates and periods to approximately five or six significant digits,
+which produces area and edge-closure errors. We reconstructed the
+exact algebraic quantities using the pentagon's known side lengths.
+With
+
+`a = (sqrt(57) - 3) / 8`,
+`k = sqrt(1 - a²)`, and
+`h = sqrt(4 - (3a - 1)²)`,
+
+the approximate source values have exact equivalents:
+
+| Rounded value | Exact expression |
+| ---: | --- |
+| 0.822525 | k |
+| 1.87118 | h |
+| 1.64505 | 2k |
+| 2.6937 | h + k |
+| 3.51623 | h + 2k |
+| 4.33875 | h + 3k |
+| 2.46757 | 3k |
+| 0.935588 | h / 2 |
+| 2.80676 | 3h / 2 |
+| 5.27434 | 3h / 2 + 3k |
+
+The corrected six-cell geometry closes exactly at the double-precision
+tolerance used by the existing validator. Four cells have subdivided
+straight boundaries. The Stein prototile has two equal short edges,
+two edges twice their length, one distinct side, and a right angle.
+No new runtime handling is necessary.
 
 ## Requirements for admitting a representative
 
