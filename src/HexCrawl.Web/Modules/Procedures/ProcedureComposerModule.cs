@@ -47,7 +47,8 @@ public sealed class ProcedureComposerModule : IHexCrawlModule
         PeriodicMetricRealization? Realization,
         bool SupportsVertexOnlyAdjacency,
         IReadOnlyList<string> CategoryPath,
-        string? PresetId);
+        string? PresetId,
+        PeriodicTopologyWitness? TopologyWitness);
 
     private static readonly Lazy<IReadOnlyList<NamedTilingOption>> TilingOptions =
         new(BuildTilingOptions);
@@ -60,8 +61,9 @@ public sealed class ProcedureComposerModule : IHexCrawlModule
                 var preview = CrawlTilingNames.RepresentativePreview(entry);
                 return new NamedTilingOption(
                     entry.CanonicalDsSymbol, entry.PreferredName, entry.ShowInRulesetSelector,
-                    preview, HasVertexOnlyContacts(entry.CanonicalDsSymbol),
-                    entry.CategoryPath ?? ["Other tilings"], entry.PresetId);
+                    preview, HasVertexOnlyContacts(entry.CanonicalDsSymbol, entry.RepresentativeTopology, preview),
+                    entry.CategoryPath ?? ["Other tilings"], entry.PresetId,
+                    entry.RepresentativeTopology);
             }).ToList();
         var known = result.Select(entry => entry.DsSymbol).ToHashSet(StringComparer.Ordinal);
         // A new preset need not be present in the friendly-name vocabulary to be usable.
@@ -74,18 +76,24 @@ public sealed class ProcedureComposerModule : IHexCrawlModule
             var label = CrawlTilingNames.Catalog.Describe(symbol, metric)?.Label
                 ?? "Unlisted repeating tile pattern";
             result.Add(new NamedTilingOption(symbol, label, false, metric,
-                HasVertexOnlyContacts(symbol), ["Other tilings"], null));
+                HasVertexOnlyContacts(symbol), ["Other tilings"], null, null));
         }
         return result;
     }
 
-    private static bool HasVertexOnlyContacts(string symbol)
+    private static bool HasVertexOnlyContacts(
+        string symbol, PeriodicTopologyWitness? topology = null, PeriodicMetricRealization? realization = null)
     {
-        var generated = DelaneyDressHarmonicMetricRealization.Construct(symbol, 1, "unit");
-        if (generated.Status != "realized" || generated.Topology is null || generated.Realization is null)
-            return false;
+        if (topology is null || realization is null)
+        {
+            var generated = DelaneyDressHarmonicMetricRealization.Construct(symbol, 1, "unit");
+            if (generated.Status != "realized" || generated.Topology is null || generated.Realization is null)
+                return false;
+            topology = generated.Topology;
+            realization = generated.Realization;
+        }
         var world = new PeriodicWorldTiling(Guid.NewGuid(),
-            generated.Topology, generated.Realization, new WorldPoint(0, 0));
+            topology, realization, new WorldPoint(0, 0));
         world.Validate();
         return world.HasVertexOnlyContacts();
     }
