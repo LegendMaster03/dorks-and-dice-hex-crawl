@@ -94,9 +94,15 @@ public sealed class TilingNomenclatureCatalog
         if (inspected.Status != DelaneyDressStatus.Euclidean) return null;
         var canonical = inspected.Symbol!.Canonical;
         var applicable = entries.TryGetValue(canonical, out var names)
-            ? names.Where(name => name.Geometry is null || (realization is not null
-                && realization.Polygons.Count > 0
-                && realization.Polygons.Values.All(poly => Matches(poly, name.Geometry)))).ToArray()
+            ? names.Where(name =>
+                (name.Geometry is null || (realization is not null
+                    && realization.Polygons.Count > 0
+                    && realization.Polygons.Values.All(poly => Matches(poly, name.Geometry))))
+                && (name.RepresentativeRealization is null || (realization is not null
+                    && realization.Polygons.Count > 0
+                    && name.RepresentativeRealization.Polygons.Count > 0
+                    && realization.Polygons.Values.All(poly => CongruentUpToScale(
+                        poly, name.RepresentativeRealization.Polygons.Values.First()))))).ToArray()
             : [];
         if (applicable.Length == 1)
             return new(applicable[0].PreferredName, true, canonical);
@@ -127,6 +133,61 @@ public sealed class TilingNomenclatureCatalog
             result.Add(current);
         }
         return result;
+    }
+
+    /// <summary>
+    /// Presentation-only shape equivalence for named geometric representatives:
+    /// translations, rotations, reflections and uniform scaling are allowed.
+    /// A common D-symbol does not establish metric identity.
+    /// </summary>
+    private static bool CongruentUpToScale(
+        IReadOnlyList<TilingWorldPoint> candidate, IReadOnlyList<TilingWorldPoint> reference)
+    {
+        var a = GeometricCorners(candidate);
+        var b = GeometricCorners(reference);
+        int count = a.Count;
+        if (count != b.Count || count < 3) return false;
+        static double Distance(TilingWorldPoint p, TilingWorldPoint q) =>
+            Math.Sqrt((p.X - q.X) * (p.X - q.X) + (p.Y - q.Y) * (p.Y - q.Y));
+        static double[] InteriorCosines(IReadOnlyList<TilingWorldPoint> vertices) =>
+            Enumerable.Range(0, vertices.Count).Select(i =>
+            {
+                var p = vertices[(i + vertices.Count - 1) % vertices.Count];
+                var q = vertices[i];
+                var r = vertices[(i + 1) % vertices.Count];
+                double ux = p.X - q.X, uy = p.Y - q.Y;
+                double vx = r.X - q.X, vy = r.Y - q.Y;
+                return (ux * vx + uy * vy) /
+                    (Math.Sqrt(ux * ux + uy * uy) * Math.Sqrt(vx * vx + vy * vy));
+            }).ToArray();
+        double[] lengthsA = Enumerable.Range(0, count)
+            .Select(i => Distance(a[i], a[(i + 1) % count])).ToArray();
+        double[] lengthsB = Enumerable.Range(0, count)
+            .Select(i => Distance(b[i], b[(i + 1) % count])).ToArray();
+        double perimeterA = lengthsA.Sum(), perimeterB = lengthsB.Sum();
+        if (!(perimeterA > 0) || !(perimeterB > 0)) return false;
+        double[] cosA = InteriorCosines(a), cosB = InteriorCosines(b);
+        const double tolerance = 1e-6;
+        for (int shift = 0; shift < count; shift++)
+        {
+            for (int direction = -1; direction <= 1; direction += 2)
+            {
+                bool match = true;
+                for (int i = 0; i < count; i++)
+                {
+                    int vertex = (shift + direction * i + count * count) % count;
+                    int edge = direction == 1 ? vertex : (vertex + count - 1) % count;
+                    if (Math.Abs(cosA[i] - cosB[vertex]) > tolerance
+                        || Math.Abs(lengthsA[i] / perimeterA - lengthsB[edge] / perimeterB) > tolerance)
+                    {
+                        match = false;
+                        break;
+                    }
+                }
+                if (match) return true;
+            }
+        }
+        return false;
     }
 
     private static bool Matches(IReadOnlyList<TilingWorldPoint> polygon, TilingGeometryQualifier required)
