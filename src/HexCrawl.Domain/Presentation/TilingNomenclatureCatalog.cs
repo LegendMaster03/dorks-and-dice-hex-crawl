@@ -103,13 +103,40 @@ public sealed class TilingNomenclatureCatalog
         return new(Fallback(realization), false, canonical);
     }
 
+    /// <summary>
+    /// Presentation counts geometric corners, not atomic adjacency splits.
+    /// A straight side may contain additional verified interfaces from T-junctions.
+    /// No change to the authoritative topology or metric polygon is made.
+    /// </summary>
+    private static IReadOnlyList<TilingWorldPoint> GeometricCorners(
+        IReadOnlyList<TilingWorldPoint> polygon)
+    {
+        if (polygon.Count < 3) return polygon;
+        var result = new List<TilingWorldPoint>(polygon.Count);
+        for (int i = 0; i < polygon.Count; i++)
+        {
+            var prev = polygon[(i + polygon.Count - 1) % polygon.Count];
+            var current = polygon[i];
+            var next = polygon[(i + 1) % polygon.Count];
+            double ax = current.X - prev.X, ay = current.Y - prev.Y;
+            double bx = next.X - current.X, by = next.Y - current.Y;
+            double lenA = Math.Sqrt(ax * ax + ay * ay), lenB = Math.Sqrt(bx * bx + by * by);
+            if (lenA > 0 && lenB > 0 && ax * bx + ay * by > 0
+                && Math.Abs(ax * by - ay * bx) <= 1e-8 * lenA * lenB)
+                continue;
+            result.Add(current);
+        }
+        return result;
+    }
+
     private static bool Matches(IReadOnlyList<TilingWorldPoint> polygon, TilingGeometryQualifier required)
     {
-        if (polygon.Count != required.Sides || required.Tolerance <= 0 || !double.IsFinite(required.Tolerance))
-            return false;
-        var vectors = Enumerable.Range(0, polygon.Count).Select(i => new TilingWorldPoint(
-            polygon[(i + 1) % polygon.Count].X - polygon[i].X,
-            polygon[(i + 1) % polygon.Count].Y - polygon[i].Y)).ToArray();
+        if (required.Tolerance <= 0 || !double.IsFinite(required.Tolerance)) return false;
+        var corners = GeometricCorners(polygon);
+        if (corners.Count != required.Sides) return false;
+        var vectors = Enumerable.Range(0, corners.Count).Select(i => new TilingWorldPoint(
+            corners[(i + 1) % corners.Count].X - corners[i].X,
+            corners[(i + 1) % corners.Count].Y - corners[i].Y)).ToArray();
         static double Length(TilingWorldPoint value) => Math.Sqrt(value.X * value.X + value.Y * value.Y);
         var lengths = vectors.Select(Length).ToArray();
         if (lengths.Any(l => l <= 0 || !double.IsFinite(l))) return false;
@@ -134,7 +161,7 @@ public sealed class TilingNomenclatureCatalog
     {
         if (realization is null || realization.Polygons.Count == 0)
             return "a repeating pattern of tiles with unspecified geometry";
-        var sides = realization.Polygons.Values.Select(p => p.Count).Distinct().OrderBy(x => x)
+        var sides = realization.Polygons.Values.Select(p => GeometricCorners(p).Count).Distinct().OrderBy(x => x)
             .Select(n => n switch
             {
                 3 => "triangles",
