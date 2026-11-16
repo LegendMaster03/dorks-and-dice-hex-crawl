@@ -210,6 +210,36 @@ public sealed class Phase16NomenclatureTests
     }
 
     [Fact]
+    public void Type3PentagonsKeepFiveGeometricSidesAndSixAtomicInterfaces()
+    {
+        var entry = Assert.Single(CrawlTilingNames.Catalog.ListEntries(),
+            item => item.PresetId == "convex-pentagon-type-3");
+        var topology = Assert.IsType<PeriodicTopologyWitness>(entry.RepresentativeTopology);
+        var realization = Assert.IsType<PeriodicMetricRealization>(entry.RepresentativeRealization);
+        var world = new PeriodicWorldTiling(Guid.NewGuid(), topology, realization, new WorldPoint(0, 0));
+        world.Validate();
+        Assert.Equal(3, topology.MotifCells.Count);
+        Assert.All(topology.MotifCells, motif =>
+        {
+            Assert.Equal(6, motif.Boundary.Count);
+            Assert.Equal(5, motif.Boundary.Select(edge => edge.BoundarySideIndex).Distinct().Count());
+            Assert.Equal(new[] { 0, 1, 2, 2, 3, 4 },
+                motif.Boundary.Select(edge => edge.BoundarySideIndex));
+        });
+        // The long side equals the sum of its two half-edges; the
+        // topological split is not an extra geometric corner.
+        var points = realization.Polygons["A"];
+        Assert.Equal(6, points.Count);
+        double Dist(TilingWorldPoint a, TilingWorldPoint b) =>
+            Math.Sqrt(Math.Pow(a.X - b.X, 2) + Math.Pow(a.Y - b.Y, 2));
+        Assert.InRange(Math.Abs(Dist(points[2], points[4]) -
+            Dist(points[2], points[3]) - Dist(points[3], points[4])), 0, 1e-10);
+        Assert.Equal(6, world.Boundaries(new("A", new(0, 0))).Count);
+        Assert.Equal(entry.PreferredName,
+            CrawlTilingNames.Catalog.Describe(entry.CanonicalDsSymbol, realization)!.Label);
+    }
+
+    [Fact]
     public void CategoryPathsAndCatalogIdentitiesDoNotRestrictGeometry()
     {
         var square = Assert.Single(CrawlTilingNames.Catalog.ListEntries(),
