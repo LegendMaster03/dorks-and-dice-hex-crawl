@@ -13,8 +13,8 @@ internal static partial class PentagonalRepresentativeCatalog
     /// The square-period Cairo pattern. Eight congruent convex pentagons form
     /// an ordinary translational motif; their two nonadjacent right angles and
     /// the equal pairs of sides meeting there meet the Type 4 conditions.
-    /// This symmetric Cairo example also belongs to Type 2, illustrating
-    /// that the mathematical families overlap.
+    /// The equilateral Cairo example below lies in both Types 2 and 4.
+    /// The present non-equilateral Type 4 realization is a different shape.
     /// Reference: https://doi.org/10.1038/s41598-025-17010-4
     /// </summary>
     internal static TilingNameEntry CairoType4()
