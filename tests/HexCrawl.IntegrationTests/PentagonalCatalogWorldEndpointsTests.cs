@@ -12,10 +12,11 @@ namespace HexCrawl.IntegrationTests;
 public sealed class PentagonalCatalogWorldEndpointsTests
 {
     [Theory]
-    [InlineData("convex-pentagon-type-1", 2, "pentagon-a")]
-    [InlineData("convex-pentagon-type-4", 8, "H00")]
+    [InlineData("convex-pentagon-type-1", 2, "pentagon-a", 5)]
+    [InlineData("convex-pentagon-type-3", 3, "A", 6)]
+    [InlineData("convex-pentagon-type-4", 8, "H00", 5)]
     public async Task ConvexCatalogGeometryCreatesAndReloadsAnOrdinaryPeriodicWorld(
-        string presetId, int motifCellCount, string startMotifCellId)
+        string presetId, int motifCellCount, string startMotifCellId, int atomicInterfaceCount)
     {
         var entry = Assert.Single(CrawlTilingNames.Catalog.ListEntries(),
             choice => choice.PresetId == presetId);
@@ -61,7 +62,7 @@ public sealed class PentagonalCatalogWorldEndpointsTests
                 var cells = (await viewport.Content.ReadFromJsonAsync<JsonElement>())
                     .EnumerateArray().ToArray();
                 Assert.Equal(motifCellCount * 9, cells.Length);
-                Assert.All(cells, cell => Assert.Equal(5,
+                Assert.All(cells, cell => Assert.Equal(atomicInterfaceCount,
                     cell.GetProperty("polygon").GetArrayLength()));
 
                 using var generated = await client.PostAsJsonAsync(
@@ -91,7 +92,7 @@ public sealed class PentagonalCatalogWorldEndpointsTests
                     $"/api/expeditions/{expedition.GetProperty("id").GetGuid():D}/cell-topology");
                 navigation.EnsureSuccessStatusCode();
                 var topology = await navigation.Content.ReadFromJsonAsync<JsonElement>();
-                Assert.Equal(5, topology.GetProperty("interfaces").GetArrayLength());
+                Assert.Equal(atomicInterfaceCount, topology.GetProperty("interfaces").GetArrayLength());
             }
 
             var reloaded = await new PostgresHexCrawlStore(database)
