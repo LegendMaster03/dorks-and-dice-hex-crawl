@@ -61,6 +61,9 @@ export async function renderProcedureAuthoringWorkspace(
     let tilings: TilingCatalogEntry[] = [];
     let tilingFilter = "all";
     let tilingOverride: string | null = null;
+    // The campaign procedure persists topology, not an arbitrary metric preview.
+    // Retain a chosen catalog example locally when several share one D-symbol.
+    let selectedTilingPresetId: string | null = null;
     let boundsOverride: { width?: number; height?: number; minU?: number; minV?: number } | null = null;
     let baselineTiling: string | null = null;
     let savedProcedures: SavedProcedureSummary[] = [];
@@ -111,6 +114,7 @@ export async function renderProcedureAuthoringWorkspace(
         moduleSelections.clear();
         nameOverride = null;
         tilingOverride = null;
+        selectedTilingPresetId = null;
         boundsOverride = null;
         jsonText = "";
         jsonBaseline = "";
@@ -728,7 +732,10 @@ export async function renderProcedureAuthoringWorkspace(
             const tilingField = document.createElement("div");
             tilingField.className = "hc-procedure-tiling-picker";
             tilingField.append(textElement("h3", "Map tiling"));
-            const selected = tilings.find(t => t.dsSymbol === draft!.tilingDsSymbol);
+            const selected = tilings.find(t =>
+                t.dsSymbol === draft!.tilingDsSymbol && selectedTilingPresetId !== null
+                && t.presetId === selectedTilingPresetId)
+                ?? tilings.find(t => t.dsSymbol === draft!.tilingDsSymbol);
             const selectedRow = document.createElement("div");
             selectedRow.className = "hc-procedure-tiling-selected";
             selectedRow.append(textElement("span", selected?.displayName ?? "Custom tiling"), tilingPreview(selected));
@@ -739,8 +746,22 @@ export async function renderProcedureAuthoringWorkspace(
             choices.append(summary);
             choices.append(tilingCategoryChoices(
                 selectableTilings(tilings), draft!.tilingDsSymbol,
-                tiling => void changeTiling(tiling.dsSymbol),
-                historical() || savePending || tilingPending
+                tiling => {
+                    const previous = selectedTilingPresetId;
+                    selectedTilingPresetId = tiling.presetId ?? null;
+                    if (tiling.dsSymbol === draft?.tilingDsSymbol) {
+                        render();
+                        return;
+                    }
+                    void changeTiling(tiling.dsSymbol).then(() => {
+                        if (draft?.tilingDsSymbol !== tiling.dsSymbol && !disposed) {
+                            selectedTilingPresetId = previous;
+                            render();
+                        }
+                    });
+                },
+                historical() || savePending || tilingPending,
+                selected?.presetId ?? null
             ));
             tilingField.append(choices);
             const mapBounds = draft!.playableBounds;
