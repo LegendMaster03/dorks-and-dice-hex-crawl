@@ -149,6 +149,67 @@ public sealed class Phase16NomenclatureTests
     }
 
     [Fact]
+    public void Type15TwelveCellMotifPreservesSourcePentagonAnglesAndGenericInterfaces()
+    {
+        var entry = Assert.Single(CrawlTilingNames.Catalog.ListEntries(),
+            e => e.PresetId == "convex-pentagon-type-15");
+        var topology = Assert.IsType<PeriodicTopologyWitness>(entry.RepresentativeTopology);
+        var geometry = Assert.IsType<PeriodicMetricRealization>(entry.RepresentativeRealization);
+        Assert.Equal(12, topology.MotifCells.Count);
+        Assert.Equal(64, topology.MotifCells.Sum(cell => cell.Boundary.Count));
+        Assert.Equal(4, topology.MotifCells.Count(cell => cell.Boundary.Count == 6));
+        Assert.All(topology.MotifCells, cell =>
+            Assert.Equal(5, cell.Boundary.Select(e => e.BoundarySideIndex).Distinct().Count()));
+
+        var world = new PeriodicWorldTiling(Guid.NewGuid(), topology, geometry, new WorldPoint(0, 0));
+        world.Validate();
+        static double Length(TilingWorldPoint a, TilingWorldPoint b) =>
+            Math.Sqrt((a.X - b.X) * (a.X - b.X) + (a.Y - b.Y) * (a.Y - b.Y));
+        foreach (var poly in geometry.Polygons.Values)
+        {
+            var corners = Enumerable.Range(0, poly.Count).Where(i =>
+            {
+                var a = poly[(i + poly.Count - 1) % poly.Count];
+                var b = poly[i];
+                var d = poly[(i + 1) % poly.Count];
+                return Math.Abs((b.X - a.X) * (d.Y - b.Y)
+                    - (b.Y - a.Y) * (d.X - b.X)) > 1e-8;
+            }).Select(i => poly[i]).ToArray();
+            Assert.Equal(5, corners.Length);
+            var angles = new double[5];
+            var sides = new double[5];
+            for (int i = 0; i < 5; i++)
+            {
+                var a = corners[(i + 4) % 5];
+                var b = corners[i];
+                var d = corners[(i + 1) % 5];
+                double ax = a.X - b.X, ay = a.Y - b.Y;
+                double dx = d.X - b.X, dy = d.Y - b.Y;
+                angles[i] = Math.Acos(Math.Clamp(
+                    (ax * dx + ay * dy) / (Length(a,b) * Length(b,d)), -1, 1)) * 180 / Math.PI;
+                sides[i] = Length(b, d);
+            }
+            var expectedAngles = new[] { 60.0, 90.0, 105.0, 135.0, 150.0 };
+            var expectedSides = new[] { .5, .5, .5, Math.Cos(Math.PI / 12), 1.0 };
+            Assert.All(angles.Order(), (angle) =>
+                Assert.Contains(expectedAngles, expected => Math.Abs(expected - angle) < 1e-7));
+            Assert.All(expectedAngles.Zip(angles.Order()), pair =>
+                Assert.InRange(Math.Abs(pair.First - pair.Second), 0, 1e-7));
+            Assert.All(expectedSides.Zip(sides.Order()), pair =>
+                Assert.InRange(Math.Abs(pair.First - pair.Second), 0, 1e-7));
+        }
+        foreach (var cell in topology.MotifCells)
+        {
+            var boundaries = world.Boundaries(new(cell.Id, new(0, 0)));
+            Assert.Equal(cell.Boundary.Count, boundaries.Count);
+            foreach (var edge in boundaries)
+                Assert.Equal(edge.From, world.Reciprocal(edge).To);
+        }
+        Assert.Equal(entry.PreferredName,
+            CrawlTilingNames.Catalog.Describe(entry.CanonicalDsSymbol, geometry)!.Label);
+    }
+
+    [Fact]
     public void EquilateralCairoType2DistinguishesMetricRealizationsOfTheSameTopology()
     {
         var entries = CrawlTilingNames.Catalog.ListEntries();
