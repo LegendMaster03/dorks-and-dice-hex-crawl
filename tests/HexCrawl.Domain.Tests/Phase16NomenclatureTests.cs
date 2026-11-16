@@ -148,6 +148,99 @@ public sealed class Phase16NomenclatureTests
             CrawlTilingNames.Catalog.Describe(entry.CanonicalDsSymbol, metric)!.Label);
     }
 
+    [Theory]
+    [InlineData(5, 6, 0)]
+    [InlineData(8, 8, 0)]
+    [InlineData(10, 6, 2)]
+    [InlineData(11, 8, 4)]
+    public void FormulaDerivedPentagonalFamiliesUseGeneralTopologyAndCongruentGeometry(
+        int type, int motifSize, int subdividedCells)
+    {
+        var entry = Assert.Single(CrawlTilingNames.Catalog.ListEntries(),
+            item => item.PresetId == $"convex-pentagon-type-{type}");
+        var topology = Assert.IsType<PeriodicTopologyWitness>(entry.RepresentativeTopology);
+        var geometry = Assert.IsType<PeriodicMetricRealization>(entry.RepresentativeRealization);
+        var world = new PeriodicWorldTiling(Guid.NewGuid(), topology, geometry, new WorldPoint(0, 0));
+        world.Validate();
+
+        Assert.Equal(motifSize, topology.MotifCells.Count);
+        Assert.Equal(subdividedCells,
+            topology.MotifCells.Count(cell => cell.Boundary.Count > 5));
+        Assert.All(topology.MotifCells, cell =>
+        {
+            Assert.Equal(5, cell.Boundary.Select(edge => edge.BoundarySideIndex).Distinct().Count());
+            Assert.Equal(cell.Boundary.Count, world.Boundaries(new(cell.Id, new(0, 0))).Count);
+        });
+
+        static double Distance(TilingWorldPoint a, TilingWorldPoint b) =>
+            Math.Sqrt(Math.Pow(a.X - b.X, 2) + Math.Pow(a.Y - b.Y, 2));
+        static (double[] Sides, double[] Angles) Shape(
+            PeriodicMotifCell cell, IReadOnlyList<TilingWorldPoint> polygon)
+        {
+            var count = polygon.Count;
+            var geometric = Enumerable.Range(0, count)
+                .Where(i => cell.Boundary[i].BoundarySideIndex !=
+                    cell.Boundary[(i + count - 1) % count].BoundarySideIndex)
+                .Select(i => polygon[i]).ToArray();
+            Assert.Equal(5, geometric.Length);
+            var sides = new double[5];
+            var angles = new double[5];
+            for (int i = 0; i < 5; i++)
+            {
+                var a = geometric[(i + 4) % 5];
+                var b = geometric[i];
+                var d = geometric[(i + 1) % 5];
+                sides[i] = Distance(b, d);
+                double ux = a.X - b.X, uy = a.Y - b.Y;
+                double vx = d.X - b.X, vy = d.Y - b.Y;
+                angles[i] = Math.Acos(Math.Clamp(
+                    (ux * vx + uy * vy) / (Distance(a, b) * Distance(b, d)), -1, 1))
+                    * 180 / Math.PI;
+            }
+            return (sides, angles);
+        }
+
+        var reference = Shape(topology.MotifCells[0],
+            geometry.Polygons[topology.MotifCells[0].Id]);
+        foreach (var cell in topology.MotifCells)
+        {
+            var current = Shape(cell, geometry.Polygons[cell.Id]);
+            Assert.Contains(Enumerable.Range(0, 5), shift =>
+                Enumerable.Range(0, 5).All(i =>
+                    Math.Abs(current.Sides[i] - reference.Sides[(i + shift) % 5]) < 1e-7
+                    && Math.Abs(current.Angles[i] - reference.Angles[(i + shift) % 5]) < 1e-7)
+                || Enumerable.Range(0, 5).All(i =>
+                    Math.Abs(current.Sides[i] -
+                        reference.Sides[(shift - i + 4) % 5]) < 1e-7
+                    && Math.Abs(current.Angles[i] -
+                        reference.Angles[(shift - i + 5) % 5]) < 1e-7));
+        }
+
+        if (type == 5)
+        {
+            Assert.Contains(reference.Angles, angle => Math.Abs(angle - 60) < 1e-7);
+            Assert.Contains(reference.Angles, angle => Math.Abs(angle - 120) < 1e-7);
+        }
+        if (type == 8)
+            Assert.Equal(4, reference.Sides.Count(length => Math.Abs(length - 1) < 1e-7));
+        if (type == 10)
+        {
+            Assert.Contains(reference.Angles, angle => Math.Abs(angle - 90) < 1e-7);
+            Assert.Contains(reference.Sides, length => Math.Abs(length - 1) < 1e-7);
+        }
+        if (type == 11)
+        {
+            Assert.InRange(Math.Abs(reference.Angles[0] - 90), 0, 1e-7);
+            Assert.InRange(Math.Abs(reference.Angles[2] + reference.Angles[4] - 180), 0, 1e-7);
+            Assert.InRange(Math.Abs(2 * reference.Angles[1] + reference.Angles[2] - 360), 0, 1e-7);
+            Assert.InRange(Math.Abs(2 * reference.Sides[4] + reference.Sides[1] -
+                reference.Sides[2]), 0, 1e-7);
+        }
+
+        Assert.Equal(entry.PreferredName,
+            CrawlTilingNames.Catalog.Describe(entry.CanonicalDsSymbol, geometry)!.Label);
+    }
+
     [Fact]
     public void Type15TwelveCellMotifPreservesSourcePentagonAnglesAndGenericInterfaces()
     {
