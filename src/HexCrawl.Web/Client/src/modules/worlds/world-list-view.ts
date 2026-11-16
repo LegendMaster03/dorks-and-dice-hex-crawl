@@ -1,5 +1,6 @@
 import type { HexCrawlApi } from "../../api";
 import { ProcedureComposerApi } from "../../procedure-composer-api";
+import type { TilingCatalogEntry } from "../../procedure-composer-types";
 import { tilingPreview } from "../procedures/tiling-preview";
 import { tilingCategoryChoices } from "../procedures/tiling-category-choices";
 import { clearUiError, showUiError } from "../../ui-error";
@@ -69,6 +70,7 @@ export async function renderWorldList(
     let disposed = false;
     let busy = false;
     let worldCount = 0;
+    let selectedTiling: TilingCatalogEntry | null = null;
     try {
         const catalog = await (await ProcedureComposerApi.create(root)).listTilings();
         if (!disposed) {
@@ -77,7 +79,8 @@ export async function renderWorldList(
             const available = catalog.filter(item =>
                 item.showInRulesetSelector && item.realization !== null);
             const renderChoices = (): void => {
-                const selected = available.find(item => item.dsSymbol === field.value);
+                const selected = selectedTiling ?? available.find(item => item.dsSymbol === field.value);
+                selectedTiling = selected ?? null;
                 const current = document.createElement("div");
                 current.className = "hc-procedure-tiling-selected";
                 const label = document.createElement("span");
@@ -89,9 +92,10 @@ export async function renderWorldList(
                 choices.append(summary, tilingCategoryChoices(
                     available, field.value,
                     tiling => {
+                        selectedTiling = tiling;
                         field.value = tiling.dsSymbol;
                         renderChoices();
-                    }));
+                    }, false, selected?.presetId ?? null));
                 host.replaceChildren(current, choices);
             };
             renderChoices();
@@ -229,6 +233,12 @@ export async function renderWorldList(
                     worldUnitsPerAbstractPeriod: 1,
                     origin: { x: 0, y: 0 },
                     rotationDegrees: 0,
+                    // Reuse the existing explicit world-geometry admission path
+                    // for catalog fixtures that include a proved metric witness.
+                    ...(selectedTiling?.topologyWitness && selectedTiling.realization ? {
+                        topologyWitness: selectedTiling.topologyWitness,
+                        metricRealization: selectedTiling.realization
+                    } : {}),
                     ...(width === null || height === null ? {} : {
                         playableBounds: { width, height, minU: minU!, minV: minV! }
                     }),
