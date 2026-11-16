@@ -113,6 +113,42 @@ public sealed class Phase16NomenclatureTests
     }
 
     [Fact]
+    public void ConvexPentagonalType1UsesExistingPeriodicTopologyAndMetricValidation()
+    {
+        var entry = Assert.Single(CrawlTilingNames.Catalog.ListEntries(),
+            item => item.PresetId == "convex-pentagon-type-1");
+        Assert.Equal(new[] { "Pentagons", "Convex" }, entry.CategoryPath);
+        var topology = Assert.IsType<PeriodicTopologyWitness>(entry.RepresentativeTopology);
+        var metric = Assert.IsType<PeriodicMetricRealization>(entry.RepresentativeRealization);
+        var world = new PeriodicWorldTiling(Guid.NewGuid(), topology, metric, new WorldPoint(0, 0));
+        world.Validate();
+
+        Assert.Equal(2, topology.MotifCells.Count);
+        var first = metric.Polygons["pentagon-a"];
+        var second = metric.Polygons["pentagon-b"];
+        Assert.Equal(5, first.Count);
+        Assert.Equal(5, second.Count);
+        // Both cells are the same convex pentagon under a 180° rotation.
+        for (var i = 0; i < 5; i++)
+        {
+            Assert.InRange(Math.Abs(first[i].X + second[i].X), 0, 1e-9);
+            Assert.InRange(Math.Abs(first[i].Y + second[i].Y), 0, 1e-9);
+        }
+
+        var address = new PeriodicCellAddress("pentagon-a", new(0, 0));
+        Assert.Equal(5, world.Neighbors(address).Count);
+        foreach (var boundary in world.Boundaries(address))
+        {
+            var reverse = world.Reciprocal(boundary);
+            Assert.Equal(boundary.From, reverse.To);
+            Assert.Equal(boundary.To, reverse.From);
+        }
+
+        Assert.Equal(entry.PreferredName,
+            CrawlTilingNames.Catalog.Describe(entry.CanonicalDsSymbol, metric)!.Label);
+    }
+
+    [Fact]
     public void CategoryPathsAndCatalogIdentitiesDoNotRestrictGeometry()
     {
         var square = Assert.Single(CrawlTilingNames.Catalog.ListEntries(),
