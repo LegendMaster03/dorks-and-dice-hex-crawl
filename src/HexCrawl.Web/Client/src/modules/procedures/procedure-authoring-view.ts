@@ -16,7 +16,7 @@ import type { ProcedurePreset } from "../../types";
 import { clearUiError, showUiError } from "../../ui-error";
 import { badge, openWorkspaceDrawer, textElement, type WorkspaceDrawer } from "../../ui/workspace";
 import { applyGuidedExperience, guidedCallout, guidedDisclosure, guidancePreferenceButton } from "../../ui/guidance";
-import { executionSummary, inputSourceLabel, saveBlocked, withBehavior, withParameter, selectableTilings, hasSaveableComposerChanges, supportsVertexAdjacency, visibleMovementParameter } from "./procedure-composer-model";
+import { executionSummary, inputSourceLabel, saveBlocked, withBehavior, withParameter, selectableTilings, tilingCategoryTree, hasSaveableComposerChanges, supportsVertexAdjacency, visibleMovementParameter } from "./procedure-composer-model";
 import { presetGuidance } from "./preset-guidance";
 import { tilingPreview } from "./tiling-preview";
 import { tilingCategoryChoices } from "./tiling-category-choices";
@@ -505,14 +505,32 @@ export async function renderProcedureAuthoringWorkspace(
         tilingField.className = "hc-compact-field";
         tilingField.append(textElement("span", "Filter by tiling"));
         const tilingSelect = document.createElement("select");
-        for (const [symbol, name] of [["all", "All tilings"], ...tilings.map(t => [t.dsSymbol, t.displayName])]) {
-            if (tilingSelect.querySelectorAll("option").length > 0 &&
-                [...tilingSelect.options].some(option => option.value === symbol)) continue;
-            const option = document.createElement("option");
-            option.value = symbol;
-            option.textContent = name;
-            tilingSelect.append(option);
-        }
+        const anyTiling = document.createElement("option");
+        anyTiling.value = "all";
+        anyTiling.textContent = "All tilings";
+        tilingSelect.append(anyTiling);
+        // A ruleset filter is about topology, so duplicate geometric examples
+        // with one D-symbol remain one filter choice.
+        const seenSymbols = new Set<string>();
+        const appendCategoryOptions = (
+            node: ReturnType<typeof tilingCategoryTree>, path: string[]
+        ): void => {
+            if (node.entries.length > 0) {
+                const group = document.createElement("optgroup");
+                group.label = path.join(" / ") || "Other tilings";
+                for (const entry of node.entries) {
+                    if (!seenSymbols.add(entry.dsSymbol)) continue;
+                    const option = document.createElement("option");
+                    option.value = entry.dsSymbol;
+                    option.textContent = entry.displayName;
+                    group.append(option);
+                }
+                if (group.children.length > 0) tilingSelect.append(group);
+            }
+            for (const category of node.categories)
+                appendCategoryOptions(category, [...path, category.label]);
+        };
+        appendCategoryOptions(tilingCategoryTree(tilings), []);
         tilingSelect.value = tilingFilter;
         tilingSelect.addEventListener("change", () => { tilingFilter = tilingSelect.value; render(); });
         tilingField.append(tilingSelect);
