@@ -19,6 +19,7 @@ import { applyGuidedExperience, guidedCallout, guidedDisclosure, guidancePrefere
 import { executionSummary, inputSourceLabel, saveBlocked, withBehavior, withParameter, selectableTilings, hasSaveableComposerChanges, supportsVertexAdjacency, visibleMovementParameter } from "./procedure-composer-model";
 import { presetGuidance } from "./preset-guidance";
 import { tilingPreview } from "./tiling-preview";
+import { tilingCategoryChoices } from "./tiling-category-choices";
 import {
     compactParameter,
     compactRule,
@@ -717,22 +718,11 @@ export async function renderProcedureAuthoringWorkspace(
             const summary = document.createElement("summary");
             summary.textContent = "Change tiling";
             choices.append(summary);
-            for (const tiling of selectableTilings(tilings)) {
-                const option = document.createElement("button");
-                option.type = "button";
-                option.className = "hc-panel";
-                option.style.display = "flex";
-                option.style.alignItems = "center";
-                option.style.justifyContent = "space-between";
-                option.style.gap = "1rem";
-                option.style.width = "100%";
-                option.style.marginTop = ".4rem";
-                option.append(textElement("span", tiling.displayName), tilingPreview(tiling));
-                option.setAttribute("aria-pressed", String(tiling.dsSymbol === draft!.tilingDsSymbol));
-                option.disabled = historical() || savePending || tilingPending;
-                option.addEventListener("click", () => void changeTiling(tiling.dsSymbol));
-                choices.append(option);
-            }
+            choices.append(tilingCategoryChoices(
+                selectableTilings(tilings), draft!.tilingDsSymbol,
+                tiling => void changeTiling(tiling.dsSymbol),
+                historical() || savePending || tilingPending
+            ));
             tilingField.append(choices);
             const mapBounds = draft!.playableBounds;
             tilingField.append(textElement("p", mapBounds
