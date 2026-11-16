@@ -158,6 +158,7 @@ public sealed class Phase16NomenclatureTests
     [InlineData(9, 8, 0)]
     [InlineData(12, 8, 8)]
     [InlineData(13, 8, 4)]
+    [InlineData(14, 6, 4)]
     public void FormulaDerivedPentagonalFamiliesUseGeneralTopologyAndCongruentGeometry(
         int type, int motifSize, int subdividedCells)
     {
@@ -232,6 +233,16 @@ public sealed class Phase16NomenclatureTests
         {
             Assert.Contains(reference.Angles, angle => Math.Abs(angle - 90) < 1e-7);
             Assert.Contains(reference.Sides, length => Math.Abs(length - 1) < 1e-7);
+        }
+        if (type == 14)
+        {
+            var lengths = reference.Sides.Order().ToArray();
+            // Exact Stein side constraints: two short equal sides,
+            // two longer sides twice their length, one distinct side.
+            Assert.InRange(Math.Abs(lengths[0] - lengths[1]), 0, 1e-7);
+            Assert.InRange(Math.Abs(lengths[2] - 2 * lengths[0]), 0, 1e-7);
+            Assert.InRange(Math.Abs(lengths[3] - 2 * lengths[0]), 0, 1e-7);
+            Assert.Contains(reference.Angles, angle => Math.Abs(angle - 90) < 1e-7);
         }
         if (type == 11)
         {
