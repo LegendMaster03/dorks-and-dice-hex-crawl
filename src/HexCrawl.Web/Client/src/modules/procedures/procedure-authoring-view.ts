@@ -740,6 +740,8 @@ export async function renderProcedureAuthoringWorkspace(
             selectedRow.className = "hc-procedure-tiling-selected";
             selectedRow.append(textElement("span", selected?.displayName ?? "Custom tiling"), tilingPreview(selected));
             tilingField.append(selectedRow);
+            tilingField.append(textElement("p",
+                "Rulesets save tiling topology. When two examples share a topology, the selected example here is a preview; choose the specific geometry when creating a world."));
             const choices = document.createElement("details");
             const summary = document.createElement("summary");
             summary.textContent = "Change tiling";
