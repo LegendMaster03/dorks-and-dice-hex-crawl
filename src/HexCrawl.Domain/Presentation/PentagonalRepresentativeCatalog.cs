@@ -7,7 +7,7 @@ namespace HexCrawl.Domain.Presentation;
 /// these witnesses enter the same generic periodic topology and metric
 /// admission paths as every other catalog polygon.
 /// </summary>
-internal static class PentagonalRepresentativeCatalog
+internal static partial class PentagonalRepresentativeCatalog
 {
     /// <summary>
     /// The square-period Cairo pattern. Eight congruent convex pentagons form
