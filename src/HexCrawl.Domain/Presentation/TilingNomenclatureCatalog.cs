@@ -20,7 +20,9 @@ public sealed record TilingNameEntry(
     string Provenance,
     string? LocalizationKey = null,
     TilingGeometryQualifier? Geometry = null,
-    bool ShowInRulesetSelector = true);
+    bool ShowInRulesetSelector = true,
+    IReadOnlyList<string>? CategoryPath = null,
+    string? PresetId = null);
 public sealed record TilingDisplayDescription(string Label, bool IsNamed, string CanonicalDsSymbol);
 
 public enum TilingNotationSurface { Normal, JsonEditor, MissingSupportedNameError }
@@ -42,6 +44,7 @@ public sealed class TilingNomenclatureCatalog
     public TilingNomenclatureCatalog(IEnumerable<TilingNameEntry> source)
     {
         var grouped = new Dictionary<string, List<TilingNameEntry>>(StringComparer.Ordinal);
+        var presetIds = new HashSet<string>(StringComparer.Ordinal);
         foreach (var entry in source)
         {
             var parsed = DelaneyDressTopology.Inspect(entry.CanonicalDsSymbol);
@@ -50,6 +53,12 @@ public sealed class TilingNomenclatureCatalog
                 || string.IsNullOrWhiteSpace(entry.PreferredName)
                 || string.IsNullOrWhiteSpace(entry.Provenance))
                 throw new ArgumentException("Invalid tiling nomenclature entry.", nameof(source));
+            if (entry.CategoryPath is { } path
+                && (path.Count == 0 || path.Any(part => string.IsNullOrWhiteSpace(part))))
+                throw new ArgumentException("Category paths must contain nonempty labels.", nameof(source));
+            if (entry.PresetId is { } presetId
+                && (string.IsNullOrWhiteSpace(presetId) || !presetIds.Add(presetId)))
+                throw new ArgumentException("Catalog preset IDs must be nonempty and unique.", nameof(source));
             if (!grouped.TryGetValue(entry.CanonicalDsSymbol, out var names))
                 grouped[entry.CanonicalDsSymbol] = names = [];
             names.Add(entry);
