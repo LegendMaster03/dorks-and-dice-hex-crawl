@@ -113,6 +113,42 @@ public sealed class Phase16NomenclatureTests
     }
 
     [Fact]
+    public void CategoryPathsAndCatalogIdentitiesDoNotRestrictGeometry()
+    {
+        var square = Assert.Single(CrawlTilingNames.Catalog.ListEntries(),
+            value => value.PreferredName == "Square tiling");
+        Assert.Equal(new[] { "Squares" }, square.CategoryPath);
+        Assert.Equal("regular-square", square.PresetId);
+        Assert.Equal(Square, square.CanonicalDsSymbol);
+        Assert.NotNull(CrawlTilingNames.RepresentativePreview(square));
+
+        // A D-symbol can have more than one presentation entry or category.
+        var catalog = new TilingNomenclatureCatalog([
+            new(Square, "Square choice A", null, [], "First", "Test",
+                CategoryPath: ["Quadrilaterals", "Squares"], PresetId: "square-a"),
+            new(Square, "Square choice B", null, [], "Second", "Test",
+                CategoryPath: ["Legacy", "Square grids"], PresetId: "square-b")
+        ]);
+        Assert.Equal(2, catalog.ListEntries().Count);
+        Assert.All(catalog.ListEntries(), entry => Assert.Equal(Square, entry.CanonicalDsSymbol));
+    }
+
+    [Fact]
+    public void CatalogRejectsMalformedCategoriesAndDuplicatePresetIds()
+    {
+        Assert.Throws<ArgumentException>(() => new TilingNomenclatureCatalog([
+            new(Square, "Invalid", null, [], "Description", "Test",
+                CategoryPath: ["Squares", " "])
+        ]));
+        Assert.Throws<ArgumentException>(() => new TilingNomenclatureCatalog([
+            new(Square, "First", null, [], "Description", "Test",
+                CategoryPath: ["Squares"], PresetId: "duplicate"),
+            new(Square, "Second", null, [], "Description", "Test",
+                CategoryPath: ["Quadrilaterals"], PresetId: "duplicate")
+        ]));
+    }
+
+    [Fact]
     public void NotationIsSuppressedOutsideExplicitlyAuthorizedSurfaces()
     {
         Assert.Null(TilingNotationPresentationPolicy.Display(Square, TilingNotationSurface.Normal, true, false));
