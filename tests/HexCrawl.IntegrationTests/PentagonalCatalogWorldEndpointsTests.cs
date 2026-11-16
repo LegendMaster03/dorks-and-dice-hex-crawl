@@ -16,6 +16,7 @@ public sealed class PentagonalCatalogWorldEndpointsTests
     [InlineData("convex-pentagon-type-2", 8, "H00", 5)]
     [InlineData("convex-pentagon-type-3", 3, "A", 6)]
     [InlineData("convex-pentagon-type-4", 8, "H00", 5)]
+    [InlineData("convex-pentagon-type-15", 12, "T15-01", 5)]
     public async Task ConvexCatalogGeometryCreatesAndReloadsAnOrdinaryPeriodicWorld(
         string presetId, int motifCellCount, string startMotifCellId, int atomicInterfaceCount)
     {
@@ -58,7 +59,7 @@ public sealed class PentagonalCatalogWorldEndpointsTests
                     .GetProperty("id").GetGuid();
 
                 using var viewport = await client.GetAsync(
-                    $"/api/overworlds/{worldId:D}/cells/viewport?minX=-5&minY=-5&maxX=5&maxY=5");
+                    $"/api/overworlds/{worldId:D}/cells/viewport?minX=-30&minY=-30&maxX=30&maxY=30");
                 viewport.EnsureSuccessStatusCode();
                 var cells = (await viewport.Content.ReadFromJsonAsync<JsonElement>())
                     .EnumerateArray().ToArray();
