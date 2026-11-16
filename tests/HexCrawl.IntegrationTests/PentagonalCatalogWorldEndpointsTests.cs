@@ -44,7 +44,7 @@ public sealed class PentagonalCatalogWorldEndpointsTests
                     tilingDsSymbol = entry.CanonicalDsSymbol,
                     worldUnitsPerAbstractPeriod = 1.0,
                     origin = new { x = 0.0, y = 0.0 },
-                    playableBounds = new { width = 3, height = 2, minU = -1, minV = -1 },
+                    playableBounds = new { width = 3, height = 3, minU = -1, minV = -1 },
                     topologyWitness = entry.RepresentativeTopology,
                     metricRealization = entry.RepresentativeRealization
                 });
@@ -57,7 +57,7 @@ public sealed class PentagonalCatalogWorldEndpointsTests
                 viewport.EnsureSuccessStatusCode();
                 var cells = (await viewport.Content.ReadFromJsonAsync<JsonElement>())
                     .EnumerateArray().ToArray();
-                Assert.Equal(12, cells.Length);
+                Assert.Equal(18, cells.Length);
                 Assert.All(cells, cell => Assert.Equal(5,
                     cell.GetProperty("polygon").GetArrayLength()));
 
@@ -73,7 +73,14 @@ public sealed class PentagonalCatalogWorldEndpointsTests
                         procedureId = procedure.GetProperty("procedureId").GetGuid(),
                         procedureRevision = procedure.GetProperty("revision").GetInt32(),
                         presentationKey = "dm-controlled",
-                        startCell = cells[0].GetProperty("id").GetProperty("address")
+                        // Interior cells retain all five exits; finite boundaries intentionally hide invalid exits.
+                        startCell = cells.Single(cell =>
+                            cell.GetProperty("id").GetProperty("address").GetProperty("translation")
+                                .GetProperty("u").GetInt64() == 0 &&
+                            cell.GetProperty("id").GetProperty("address").GetProperty("translation")
+                                .GetProperty("v").GetInt64() == 0 &&
+                            cell.GetProperty("id").GetProperty("address").GetProperty("motifCellId")
+                                .GetString() == "pentagon-a").GetProperty("id").GetProperty("address")
                     });
                 Assert.True(started.IsSuccessStatusCode, await started.Content.ReadAsStringAsync());
                 var expedition = await started.Content.ReadFromJsonAsync<JsonElement>();
