@@ -30,7 +30,8 @@ public static class CrawlTilingNames
             Geometry: new(4, EqualSideLengths: true),
             CategoryPath: ["Quadrilaterals", "Rhombi"], PresetId: "rhombille"),
         VerifiedPentagonType1(),
-        PentagonalRepresentativeCatalog.CairoType4()
+        PentagonalRepresentativeCatalog.CairoType4(),
+        PentagonalRepresentativeCatalog.HexagonalSubdivisionType3()
     ]);
 
     /// <summary>
