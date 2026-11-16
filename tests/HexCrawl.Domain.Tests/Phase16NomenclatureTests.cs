@@ -153,6 +153,11 @@ public sealed class Phase16NomenclatureTests
     [InlineData(8, 8, 0)]
     [InlineData(10, 6, 2)]
     [InlineData(11, 8, 4)]
+    [InlineData(6, 4, 0)]
+    [InlineData(7, 8, 0)]
+    [InlineData(9, 8, 0)]
+    [InlineData(12, 8, 8)]
+    [InlineData(13, 8, 4)]
     public void FormulaDerivedPentagonalFamiliesUseGeneralTopologyAndCongruentGeometry(
         int type, int motifSize, int subdividedCells)
     {
