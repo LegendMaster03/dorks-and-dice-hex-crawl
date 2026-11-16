@@ -11,11 +11,14 @@ namespace HexCrawl.IntegrationTests;
 /// </summary>
 public sealed class PentagonalCatalogWorldEndpointsTests
 {
-    [Fact]
-    public async Task ConvexType1CatalogGeometryCreatesAndReloadsAnOrdinaryPeriodicWorld()
+    [Theory]
+    [InlineData("convex-pentagon-type-1", 2, "pentagon-a")]
+    [InlineData("convex-pentagon-type-4", 8, "H00")]
+    public async Task ConvexCatalogGeometryCreatesAndReloadsAnOrdinaryPeriodicWorld(
+        string presetId, int motifCellCount, string startMotifCellId)
     {
         var entry = Assert.Single(CrawlTilingNames.Catalog.ListEntries(),
-            choice => choice.PresetId == "convex-pentagon-type-1");
+            choice => choice.PresetId == presetId);
         var database = TestWebHost.NewDatabasePath();
         try
         {
@@ -31,11 +34,11 @@ public sealed class PentagonalCatalogWorldEndpointsTests
                     .GetProperty("presetId").GetString() == entry.PresetId);
                 Assert.Equal("Pentagons", option.GetProperty("categoryPath")[0].GetString());
                 Assert.Equal("Convex", option.GetProperty("categoryPath")[1].GetString());
-                Assert.Equal(2, option.GetProperty("realization")
+                Assert.Equal(motifCellCount, option.GetProperty("realization")
                     .GetProperty("polygons").EnumerateObject().Count());
                 Assert.Equal("world-unit", option.GetProperty("realization")
                     .GetProperty("units").GetString());
-                Assert.Equal(2, option.GetProperty("topologyWitness")
+                Assert.Equal(motifCellCount, option.GetProperty("topologyWitness")
                     .GetProperty("motifCells").GetArrayLength());
 
                 using var created = await client.PostAsJsonAsync("/api/overworlds/periodic", new
@@ -57,7 +60,7 @@ public sealed class PentagonalCatalogWorldEndpointsTests
                 viewport.EnsureSuccessStatusCode();
                 var cells = (await viewport.Content.ReadFromJsonAsync<JsonElement>())
                     .EnumerateArray().ToArray();
-                Assert.Equal(18, cells.Length);
+                Assert.Equal(motifCellCount * 9, cells.Length);
                 Assert.All(cells, cell => Assert.Equal(5,
                     cell.GetProperty("polygon").GetArrayLength()));
 
@@ -80,7 +83,7 @@ public sealed class PentagonalCatalogWorldEndpointsTests
                             cell.GetProperty("id").GetProperty("address").GetProperty("translation")
                                 .GetProperty("v").GetInt64() == 0 &&
                             cell.GetProperty("id").GetProperty("address").GetProperty("motifCellId")
-                                .GetString() == "pentagon-a").GetProperty("id").GetProperty("address")
+                                .GetString() == startMotifCellId).GetProperty("id").GetProperty("address")
                     });
                 Assert.True(started.IsSuccessStatusCode, await started.Content.ReadAsStringAsync());
                 var expedition = await started.Content.ReadFromJsonAsync<JsonElement>();
@@ -95,7 +98,7 @@ public sealed class PentagonalCatalogWorldEndpointsTests
                 .GetOverworldAsync(worldId, "alice");
             Assert.NotNull(reloaded);
             reloaded!.World.SpatialTiling.Validate();
-            Assert.Equal(2, reloaded.World.SpatialTiling.Topology.MotifCells.Count);
+            Assert.Equal(motifCellCount, reloaded.World.SpatialTiling.Topology.MotifCells.Count);
             Assert.Equal(3, reloaded.World.SpatialTiling.PlayableBounds!.Value.Width);
         }
         finally { TestWebHost.DeleteDatabase(database); }
