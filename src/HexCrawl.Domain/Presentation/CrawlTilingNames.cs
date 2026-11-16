@@ -98,7 +98,8 @@ public static class CrawlTilingNames
     public static (double U, double V, double AngleDegrees)? VerifiedDefaultPeriod(string symbol)
     {
         var entry = Catalog.ListEntries()
-            .FirstOrDefault(value => value.CanonicalDsSymbol == symbol && value.Geometry is not null);
+            .FirstOrDefault(value => value.CanonicalDsSymbol == symbol
+                && value.Geometry is not null && value.RepresentativeRealization is null);
         if (entry is null) return null;
         var preview = RepresentativePreview(entry);
         if (preview is null) return null;
