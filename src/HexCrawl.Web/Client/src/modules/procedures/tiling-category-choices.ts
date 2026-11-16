@@ -29,7 +29,15 @@ export function tilingCategoryChoices(
             group.append(label);
             const content = document.createElement("div");
             content.className = "hc-tiling-category-content";
-            appendNode(category, content);
+            // Closed categories do not create or paint potentially expensive motifs.
+            let populated = false;
+            const populate = (): void => {
+                if (populated) return;
+                populated = true;
+                appendNode(category, content);
+            };
+            if (group.open) populate();
+            group.addEventListener("toggle", () => { if (group.open) populate(); });
             group.append(content);
             parent.append(group);
         }
