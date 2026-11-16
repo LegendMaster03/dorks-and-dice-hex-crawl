@@ -64,8 +64,17 @@ public sealed class PentagonalCatalogWorldEndpointsTests
                 var cells = (await viewport.Content.ReadFromJsonAsync<JsonElement>())
                     .EnumerateArray().ToArray();
                 Assert.Equal(motifCellCount * 9, cells.Length);
-                Assert.All(cells, cell => Assert.Equal(atomicInterfaceCount,
-                    cell.GetProperty("polygon").GetArrayLength()));
+                // Mixed atomic boundary counts in one monohedral motif are valid:
+                // geometric pentagons can have T-junction subdivisions.
+                var interfaceCounts = entry.RepresentativeTopology!.MotifCells
+                    .ToDictionary(motif => motif.Id, motif => motif.Boundary.Count);
+                Assert.All(cells, cell =>
+                {
+                    var motifId = cell.GetProperty("id").GetProperty("address")
+                        .GetProperty("motifCellId").GetString()!;
+                    Assert.Equal(interfaceCounts[motifId],
+                        cell.GetProperty("polygon").GetArrayLength());
+                });
 
                 using var generated = await client.PostAsJsonAsync(
                     $"/api/overworlds/{worldId:D}/cell-procedures", new { });
