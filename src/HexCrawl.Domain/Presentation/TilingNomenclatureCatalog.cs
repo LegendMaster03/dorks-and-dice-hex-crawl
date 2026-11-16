@@ -22,7 +22,9 @@ public sealed record TilingNameEntry(
     TilingGeometryQualifier? Geometry = null,
     bool ShowInRulesetSelector = true,
     IReadOnlyList<string>? CategoryPath = null,
-    string? PresetId = null);
+    string? PresetId = null,
+    PeriodicTopologyWitness? RepresentativeTopology = null,
+    PeriodicMetricRealization? RepresentativeRealization = null);
 public sealed record TilingDisplayDescription(string Label, bool IsNamed, string CanonicalDsSymbol);
 
 public enum TilingNotationSurface { Normal, JsonEditor, MissingSupportedNameError }
@@ -59,6 +61,16 @@ public sealed class TilingNomenclatureCatalog
             if (entry.PresetId is { } presetId
                 && (string.IsNullOrWhiteSpace(presetId) || !presetIds.Add(presetId)))
                 throw new ArgumentException("Catalog preset IDs must be nonempty and unique.", nameof(source));
+            // A named example may supply explicit geometry; it is still just
+            // data for the same generic periodic validator and runtime.
+            if ((entry.RepresentativeTopology is null) != (entry.RepresentativeRealization is null))
+                throw new ArgumentException("A representative requires both topology and geometry.", nameof(source));
+            if (entry.RepresentativeTopology is { } topology)
+            {
+                if (topology.QuotientDsSymbol != entry.CanonicalDsSymbol)
+                    throw new ArgumentException("Representative topology does not match its catalog identity.", nameof(source));
+                PeriodicMetricWitnessValidator.Validate(topology, entry.RepresentativeRealization!);
+            }
             if (!grouped.TryGetValue(entry.CanonicalDsSymbol, out var names))
                 grouped[entry.CanonicalDsSymbol] = names = [];
             names.Add(entry);
