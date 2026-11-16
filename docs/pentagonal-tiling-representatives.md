@@ -4,10 +4,10 @@
 convex pentagon families as ordinary catalog data. The generic periodic topology,
 metric validator, map renderer and traversal engine remain authoritative.
 
-**Current state:** the hierarchical catalog and Types 1, 2, 3, 4 and 15
-have concrete periodic representatives and automated domain/integration tests.
-Types 5–14 remain pending. Do not manufacture preview geometry from an
-illustration or add a name-only selector entry.
+**Current state:** the hierarchical catalog and Types 1–5, 8, 10, 11 and 15
+have concrete periodic representative definitions and automated tests.
+Types 6, 7, 9, 12, 13 and 14 remain pending. Do not add unverified
+preview geometry or name-only selector entries.
 
 ## Mathematical source
 
@@ -26,13 +26,13 @@ similarity. See https://mathworld.wolfram.com/PentagonTiling.html.
 | 2 | C + E = 180°; a = d | Implemented: distinct equilateral Cairo realization, eight congruent pentagons per motif |
 | 3 | A = C = D = 120°; a = b; d = c + e | Implemented: 3 congruent pentagons per hexagon; six atomic interfaces and five geometric sides |
 | 4 | A = C = 90°; a = b; c = d | Implemented: standard Cairo tiling; eight congruent pentagons per square translation motif |
-| 5 | C = 2A = 90°; a = b; c = d | Pending |
+| 5 | A = 60°, C = 120° (source discrepancy below); a = b, c = d | Implemented: six congruent pentagons per motif |
 | 6 | C + E = 180°; A = 2C; a = b = e; c = d | Pending |
 | 7 | 2B + C = 360°; 2D + A = 360°; a = b = c = d | Pending |
-| 8 | 2A + B = 360°; 2D + C = 360°; a = b = c = d | Pending |
+| 8 | 2A + B = 360°, 2D + C = 360°; a = b = c = d | Implemented: eight congruent pentagons, four equal sides |
 | 9 | 2E + B = 360°; 2D + C = 360°; a = b = c = d | Pending |
-| 10 | E = 90°; A + D = 180°; 2B − D = 180°; 2C + D = 360°; a = e = b + d | Pending |
-| 11 | A = 90°; C + E = 180°; 2B + C = 360°; d = e = 2a + c | Pending |
+| 10 | E = 90°, A + D = 180°, 2B − D = 180°, 2C + D = 360°; a = e = b + d | Implemented: six congruent pentagons, two with seven atomic interfaces |
+| 11 | A = 90°, C + E = 180°, 2B + C = 360°; d = e = 2a + c | Implemented: eight congruent pentagons, four with seven atomic interfaces |
 | 12 | A = 90°; C + E = 180°; 2B + C = 360°; 2a = c + e = d | Pending |
 | 13 | A = C = 90°; 2B = 2E = 360° − D; c = d; 2c = e | Pending |
 | 14 | D = 90°; 2E + A = 360°; A + C = 180°; b = c = 2a = 2d | Pending |
@@ -130,16 +130,38 @@ finite bounds, expedition startup and persisted world reload.
 
 No Type 15 logic was added to the general spatial engine.
 
-## Source classification discrepancy to resolve before Type 5
+## Formula-derived Types 5, 8, 10 and 11
 
-The introductory Frontiers for Young Minds figure and the 2018
-i-block-transitive paper have been indexed as Type 5 with
-`C = 2A = 90°`. Other mathematical sources, including Sugimoto and Ogawa,
-*Forma* (2005), state the Type 5 conditions as `A = 120°, C = 60°,
-a = b, c = d`. Those statements are mathematically different.
-Verify the primary diagrams and consistent labeling before admitting a
-Type 5 representative; do not select a geometry solely from an
-inconsistent secondary transcription.
+Maxie D. Schmidt's [WXML Tilings Programming HOWTO](https://github.com/maxieds/WXMLTilingsHOWTO/blob/master/Pentagons.py)
+provides polygon-coordinate formulas and two independent translation vectors
+for numbered pentagon tilings, based on Ed Pegg Jr's Wolfram Demonstrations.
+We evaluated those formulas with the
+[published example parameters](https://github.com/maxieds/WXMLTilingsHOWTO/blob/master/tiling_pc_plots.py),
+oriented the polygons counterclockwise, normalized them by whole lattice
+translations, and independently derived periodic adjacency from segment matches.
+
+| Type | Parameters (radians) | Motif cells | Atomic boundary counts |
+| --- | --- | ---: | --- |
+| 5 | AA = 2.356, b = 0.5 | 6 | all 5 |
+| 8 | AA = π/2 | 8 | all 5 |
+| 10 | AA = 1.4 | 6 | four 5, two 7 |
+| 11 | AA = 2.113 | 8 | four 5, four 7 |
+
+All examples use the existing domain validator to establish reciprocal edge
+geometry, positive area, nonoverlapping interiors and a primitive Z² cover.
+Independent tests check convexity, congruence, five geometric sides,
+and the defining angle and side relationships.
+
+**Type 5 source discrepancy:** The Frontiers for Young Minds
+[Figure 2](https://doi.org/10.3389/frym.2023.953114) states
+`C = 2A = 90°`, but Ed Pegg Jr's
+[classification](https://mathpuzzle.com/tilepent.html), the
+[Fano lecture](https://www.fano.co.uk/talks/Pentagonal.pdf), and
+Sugimoto and Ogawa's
+[Forma paper](https://forma.katachi-jp.com/pdf/2403/24030093.pdf)
+use the angles 60° and 120° with equal neighboring side pairs.
+The implemented Type 5 realizes the latter conditions. We preserve
+this discrepancy rather than treating the two formulas as equivalent.
 
 ## Requirements for admitting a representative
 
