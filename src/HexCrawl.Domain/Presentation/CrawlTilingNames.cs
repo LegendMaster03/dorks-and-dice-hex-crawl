@@ -29,7 +29,8 @@ public static class CrawlTilingNames
             "A periodic tessellation of rhombi", "Phase 16 metric fixture",
             Geometry: new(4, EqualSideLengths: true),
             CategoryPath: ["Quadrilaterals", "Rhombi"], PresetId: "rhombille"),
-        VerifiedPentagonType1()
+        VerifiedPentagonType1(),
+        PentagonalRepresentativeCatalog.CairoType4()
     ]);
 
     /// <summary>
