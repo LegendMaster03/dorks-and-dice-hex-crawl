@@ -48,7 +48,7 @@ console errors, failed network requests and the created world IDs.
 
 1. In world creation, expand **Pentagons → Convex**. Confirm Types 1–15
    appear in numeric order. Expand/collapse other polygon categories.
-   Existing square, hexagon, triangle and mixed-polygon options must remain.
+   Existing square, hexagon and triangle options must remain. Mixed-polygon\n   fixtures currently marked nonselectable must retain that visibility policy.
 2. For all fifteen, verify the existing preview is nonblank, recognizable
    as a pentagonal tessellation, not clipped incorrectly, and responsive.
    Type 3 and Types 10–15 include collinear atomic subdivisions and should
