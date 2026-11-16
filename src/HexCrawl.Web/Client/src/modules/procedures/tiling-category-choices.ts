@@ -1,40 +1,6 @@
 import type { TilingCatalogEntry } from "../../procedure-composer-types";
 import { tilingPreview } from "./tiling-preview";
-
-export type TilingCategoryNode = {
-    label: string;
-    categories: TilingCategoryNode[];
-    entries: TilingCatalogEntry[];
-};
-
-/**
- * Category paths are presentation metadata, not part of a D-symbol or a
- * ruleset. A valid unlisted tiling never depends on membership in this tree.
- */
-export function tilingCategoryTree(entries: readonly TilingCatalogEntry[]): TilingCategoryNode {
-    const root: TilingCategoryNode = { label: "", categories: [], entries: [] };
-    for (const entry of entries) {
-        const path = entry.categoryPath?.filter(part => part.trim().length > 0) ?? [];
-        let node = root;
-        for (const label of path.length > 0 ? path : ["Other tilings"]) {
-            let child = node.categories.find(category => category.label === label);
-            if (!child) {
-                child = { label, categories: [], entries: [] };
-                node.categories.push(child);
-            }
-            node = child;
-        }
-        node.entries.push(entry);
-    }
-    const sort = (node: TilingCategoryNode): void => {
-        node.categories.sort((a, b) => a.label.localeCompare(b.label));
-        node.entries.sort((a, b) => a.displayName.localeCompare(b.displayName)
-            || (a.presetId ?? a.dsSymbol).localeCompare(b.presetId ?? b.dsSymbol));
-        for (const child of node.categories) sort(child);
-    };
-    sort(root);
-    return root;
-}
+import { tilingCategoryTree, type TilingCategoryNode } from "./procedure-composer-model";
 
 /** Reusable, arbitrary-depth category menu using the existing polygon preview. */
 export function tilingCategoryChoices(
