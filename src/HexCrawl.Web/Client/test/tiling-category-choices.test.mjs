@@ -84,3 +84,34 @@ test("catalog preset IDs distinguish entries sharing a D-symbol", t => {
     assert.deepEqual(buttons.map(button => button.getAttribute("aria-pressed")), ["false", "true"]);
     assert.ok(buttons.every(button => button.disabled));
 });
+
+test("ambiguous stored topologies expand their category without selecting a metric", t => {
+    const dom = new JSDOM("<!doctype html><body></body>");
+    const before = { document: globalThis.document, window: globalThis.window };
+    globalThis.document = dom.window.document;
+    globalThis.window = dom.window;
+    dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+    t.after(() => {
+        globalThis.document = before.document;
+        globalThis.window = before.window;
+        dom.window.close();
+    });
+
+    const entries = [
+        fixture("Equilateral Type 2", ["Pentagons", "Convex"], "pentagon-2", "shared"),
+        fixture("Cairo Type 4", ["Pentagons", "Convex"], "pentagon-4", "shared"),
+        fixture("Square", ["Squares"], "square", "square")
+    ];
+    const choices = tilingCategoryChoices(entries, "shared", () => {});
+    const pentagons = choices.querySelector("details");
+    const convex = pentagons.querySelector("details");
+    assert.equal(pentagons.open, true);
+    assert.equal(convex.open, true);
+    const buttons = [...choices.querySelectorAll("button")];
+    assert.equal(buttons.length, 2);
+    assert.ok(buttons.every(button => button.getAttribute("aria-pressed") === "false"));
+
+    const exact = tilingCategoryChoices(entries, "shared", () => {}, false, "pentagon-4");
+    const selected = [...exact.querySelectorAll("button")];
+    assert.deepEqual(selected.map(button => button.getAttribute("aria-pressed")), ["false", "true"]);
+});
