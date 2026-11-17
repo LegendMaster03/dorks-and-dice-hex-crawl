@@ -19,7 +19,8 @@ export function tilingCategoryChoices(
     const isSelected = (entry: TilingCatalogEntry): boolean => entry === selected;
     const containsSelection = (node: TilingCategoryNode): boolean =>
         node.entries.some(entry => isSelected(entry)
-            || (selectedPresetId === null && selectedSymbol !== null && entry.dsSymbol === selectedSymbol))
+            || (selected === null && selectedPresetId === null
+                && selectedSymbol !== null && entry.dsSymbol === selectedSymbol))
         || node.categories.some(containsSelection);
     const appendNode = (node: TilingCategoryNode, parent: HTMLElement): void => {
         for (const category of node.categories) {
