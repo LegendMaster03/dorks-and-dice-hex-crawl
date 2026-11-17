@@ -94,7 +94,11 @@ export async function renderWorldList(
                     tiling => {
                         selectedTiling = tiling;
                         field.value = tiling.dsSymbol;
-                        renderChoices();
+                        // Update only the selected preview. Replacing the full
+                        // category tree would collapse folders and discard the
+                        // focused choice, preventing keyboard comparison.
+                        label.textContent = tiling.displayName;
+                        current.replaceChildren(label, tilingPreview(tiling));
                     }, false, selected?.presetId ?? null));
                 host.replaceChildren(current, choices);
             };
