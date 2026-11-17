@@ -1,6 +1,6 @@
 import type { TilingCatalogEntry } from "../../procedure-composer-types";
 import { tilingPreview } from "./tiling-preview";
-import { tilingCategoryTree, type TilingCategoryNode } from "./procedure-composer-model";
+import { resolveTilingCatalogChoice, tilingCategoryTree, type TilingCategoryNode } from "./procedure-composer-model";
 
 /** Reusable, arbitrary-depth category menu using the existing polygon preview. */
 export function tilingCategoryChoices(
@@ -13,12 +13,14 @@ export function tilingCategoryChoices(
     const root = document.createElement("div");
     root.className = "hc-tiling-category-choices";
     const tree = tilingCategoryTree(entries);
-    const isSelected = (entry: TilingCatalogEntry): boolean =>
-        selectedPresetId !== null && entry.presetId !== null
-            ? entry.presetId === selectedPresetId
-            : selectedPresetId === null && entry.dsSymbol === selectedSymbol;
+    // Distinct metrics can share a D-symbol. A stored procedure does not
+    // retain the catalog preset ID, so do not mark multiple examples pressed.
+    const selected = resolveTilingCatalogChoice(entries, selectedSymbol, selectedPresetId);
+    const isSelected = (entry: TilingCatalogEntry): boolean => entry === selected;
     const containsSelection = (node: TilingCategoryNode): boolean =>
-        node.entries.some(isSelected) || node.categories.some(containsSelection);
+        node.entries.some(entry => isSelected(entry)
+            || (selectedPresetId === null && selectedSymbol !== null && entry.dsSymbol === selectedSymbol))
+        || node.categories.some(containsSelection);
     const appendNode = (node: TilingCategoryNode, parent: HTMLElement): void => {
         for (const category of node.categories) {
             const group = document.createElement("details");
