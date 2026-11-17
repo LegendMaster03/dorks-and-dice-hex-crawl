@@ -64,6 +64,8 @@ export async function renderProcedureAuthoringWorkspace(
     // The campaign procedure persists topology, not an arbitrary metric preview.
     // Retain a chosen catalog example locally when several share one D-symbol.
     let selectedTilingPresetId: string | null = null;
+    let tilingChooserOpen = false;
+    let focusedTilingChoice: string | null = null;
     let boundsOverride: { width?: number; height?: number; minU?: number; minV?: number } | null = null;
     let baselineTiling: string | null = null;
     let savedProcedures: SavedProcedureSummary[] = [];
@@ -115,6 +117,8 @@ export async function renderProcedureAuthoringWorkspace(
         nameOverride = null;
         tilingOverride = null;
         selectedTilingPresetId = null;
+        tilingChooserOpen = false;
+        focusedTilingChoice = null;
         boundsOverride = null;
         jsonText = "";
         jsonBaseline = "";
@@ -189,6 +193,14 @@ export async function renderProcedureAuthoringWorkspace(
             tilingPending = false;
             if (!disposed) {
                 render();
+                // A topology change recomposes the ruleset and replaces the
+                // controls. Return focus to its selected choice once enabled.
+                if (focusedTilingChoice !== null && !tilingPending) {
+                    const desired = focusedTilingChoice;
+                    focusedTilingChoice = null;
+                    const options = root.querySelectorAll<HTMLButtonElement>(".hc-tiling-category-choice");
+                    [...options].find(option => option.dataset.tilingChoiceKey === desired)?.focus();
+                }
                 const target = root.querySelector<HTMLElement>("[data-error]");
                 if (failure !== null && target) showUiError(target, failure);
             }
@@ -750,15 +762,26 @@ export async function renderProcedureAuthoringWorkspace(
             const summary = document.createElement("summary");
             summary.textContent = "Change tiling";
             choices.append(summary);
+            choices.open = tilingChooserOpen;
+            choices.addEventListener("toggle", () => {
+                // Detached details can still dispatch a queued toggle event.
+                // Only the live picker controls persistent expansion state.
+                if (choices.isConnected) tilingChooserOpen = choices.open;
+            });
             choices.append(tilingCategoryChoices(
                 selectableTilings(tilings), draft!.tilingDsSymbol,
                 tiling => {
                     const previous = selectedTilingPresetId;
                     selectedTilingPresetId = tiling.presetId ?? null;
                     if (tiling.dsSymbol === draft?.tilingDsSymbol) {
-                        render();
+                        // A preview-only change does not affect persisted
+                        // topology. Preserve focus and the open chooser rather
+                        // than rebuilding the complete authoring workspace.
+                        selectedRow.replaceChildren(textElement("span", tiling.displayName), tilingPreview(tiling));
                         return;
                     }
+                    tilingChooserOpen = choices.open;
+                    focusedTilingChoice = tiling.presetId ?? tiling.dsSymbol;
                     void changeTiling(tiling.dsSymbol).then(() => {
                         if (draft?.tilingDsSymbol !== tiling.dsSymbol && !disposed) {
                             selectedTilingPresetId = previous;
