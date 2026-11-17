@@ -48,6 +48,8 @@ export function tilingCategoryChoices(
             const option = document.createElement("button");
             option.type = "button";
             option.className = "hc-panel hc-tiling-category-choice";
+            // Stable focus target when ruleset recomposition replaces the menu.
+            option.dataset.tilingChoiceKey = entry.presetId ?? entry.dsSymbol;
             const preview = tilingPreview(entry);
             // The button text already names this choice. A second accessible
             // name on its decorative preview would announce the name twice.
