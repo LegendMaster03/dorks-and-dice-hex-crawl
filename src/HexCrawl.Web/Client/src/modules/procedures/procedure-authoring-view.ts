@@ -16,7 +16,7 @@ import type { ProcedurePreset } from "../../types";
 import { clearUiError, showUiError } from "../../ui-error";
 import { badge, openWorkspaceDrawer, textElement, type WorkspaceDrawer } from "../../ui/workspace";
 import { applyGuidedExperience, guidedCallout, guidedDisclosure, guidancePreferenceButton } from "../../ui/guidance";
-import { executionSummary, inputSourceLabel, saveBlocked, withBehavior, withParameter, selectableTilings, tilingCategoryTree, hasSaveableComposerChanges, supportsVertexAdjacency, visibleMovementParameter } from "./procedure-composer-model";
+import { executionSummary, inputSourceLabel, saveBlocked, withBehavior, withParameter, selectableTilings, tilingCategoryTree, resolveTilingCatalogChoice, hasSaveableComposerChanges, supportsVertexAdjacency, visibleMovementParameter } from "./procedure-composer-model";
 import { presetGuidance } from "./preset-guidance";
 import { tilingPreview } from "./tiling-preview";
 import { tilingCategoryChoices } from "./tiling-category-choices";
@@ -732,13 +732,16 @@ export async function renderProcedureAuthoringWorkspace(
             const tilingField = document.createElement("div");
             tilingField.className = "hc-procedure-tiling-picker";
             tilingField.append(textElement("h3", "Map tiling"));
-            const selected = tilings.find(t =>
-                t.dsSymbol === draft!.tilingDsSymbol && selectedTilingPresetId !== null
-                && t.presetId === selectedTilingPresetId)
-                ?? tilings.find(t => t.dsSymbol === draft!.tilingDsSymbol);
+            const selected = resolveTilingCatalogChoice(
+                tilings, draft!.tilingDsSymbol, selectedTilingPresetId);
+            const ambiguous = selected === null && tilings.some(t => t.dsSymbol === draft!.tilingDsSymbol);
             const selectedRow = document.createElement("div");
             selectedRow.className = "hc-procedure-tiling-selected";
-            selectedRow.append(textElement("span", selected?.displayName ?? "Custom tiling"), tilingPreview(selected));
+            // Saved procedures have no metric identity: never show a specific
+            // pentagon preview merely because it shares the persisted D-symbol.
+            selectedRow.append(textElement("span", selected?.displayName
+                ?? (ambiguous ? "Shared topology — no geometric example selected" : "Custom tiling")));
+            if (selected) selectedRow.append(tilingPreview(selected));
             tilingField.append(selectedRow);
             tilingField.append(textElement("p",
                 "Rulesets save tiling topology. When two examples share a topology, the selected example here is a preview; choose the specific geometry when creating a world."));
