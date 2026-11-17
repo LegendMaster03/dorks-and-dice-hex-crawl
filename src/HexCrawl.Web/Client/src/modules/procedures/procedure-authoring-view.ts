@@ -16,9 +16,10 @@ import type { ProcedurePreset } from "../../types";
 import { clearUiError, showUiError } from "../../ui-error";
 import { badge, openWorkspaceDrawer, textElement, type WorkspaceDrawer } from "../../ui/workspace";
 import { applyGuidedExperience, guidedCallout, guidedDisclosure, guidancePreferenceButton } from "../../ui/guidance";
-import { executionSummary, inputSourceLabel, saveBlocked, withBehavior, withParameter, selectableTilings, hasSaveableComposerChanges, supportsVertexAdjacency, visibleMovementParameter } from "./procedure-composer-model";
+import { executionSummary, inputSourceLabel, saveBlocked, withBehavior, withParameter, selectableTilings, tilingCategoryTree, resolveTilingCatalogChoice, hasSaveableComposerChanges, supportsVertexAdjacency, visibleMovementParameter } from "./procedure-composer-model";
 import { presetGuidance } from "./preset-guidance";
 import { tilingPreview } from "./tiling-preview";
+import { tilingCategoryChoices } from "./tiling-category-choices";
 import {
     compactParameter,
     compactRule,
@@ -60,6 +61,11 @@ export async function renderProcedureAuthoringWorkspace(
     let tilings: TilingCatalogEntry[] = [];
     let tilingFilter = "all";
     let tilingOverride: string | null = null;
+    // The campaign procedure persists topology, not an arbitrary metric preview.
+    // Retain a chosen catalog example locally when several share one D-symbol.
+    let selectedTilingPresetId: string | null = null;
+    let tilingChooserOpen = false;
+    let focusedTilingChoice: string | null = null;
     let boundsOverride: { width?: number; height?: number; minU?: number; minV?: number } | null = null;
     let baselineTiling: string | null = null;
     let savedProcedures: SavedProcedureSummary[] = [];
@@ -110,6 +116,9 @@ export async function renderProcedureAuthoringWorkspace(
         moduleSelections.clear();
         nameOverride = null;
         tilingOverride = null;
+        selectedTilingPresetId = null;
+        tilingChooserOpen = false;
+        focusedTilingChoice = null;
         boundsOverride = null;
         jsonText = "";
         jsonBaseline = "";
@@ -184,6 +193,14 @@ export async function renderProcedureAuthoringWorkspace(
             tilingPending = false;
             if (!disposed) {
                 render();
+                // A topology change recomposes the ruleset and replaces the
+                // controls. Return focus to its selected choice once enabled.
+                if (focusedTilingChoice !== null && !tilingPending) {
+                    const desired = focusedTilingChoice;
+                    focusedTilingChoice = null;
+                    const options = root.querySelectorAll<HTMLButtonElement>(".hc-tiling-category-choice");
+                    [...options].find(option => option.dataset.tilingChoiceKey === desired)?.focus();
+                }
                 const target = root.querySelector<HTMLElement>("[data-error]");
                 if (failure !== null && target) showUiError(target, failure);
             }
@@ -504,14 +521,33 @@ export async function renderProcedureAuthoringWorkspace(
         tilingField.className = "hc-compact-field";
         tilingField.append(textElement("span", "Filter by tiling"));
         const tilingSelect = document.createElement("select");
-        for (const [symbol, name] of [["all", "All tilings"], ...tilings.map(t => [t.dsSymbol, t.displayName])]) {
-            if (tilingSelect.querySelectorAll("option").length > 0 &&
-                [...tilingSelect.options].some(option => option.value === symbol)) continue;
-            const option = document.createElement("option");
-            option.value = symbol;
-            option.textContent = name;
-            tilingSelect.append(option);
-        }
+        const anyTiling = document.createElement("option");
+        anyTiling.value = "all";
+        anyTiling.textContent = "All tilings";
+        tilingSelect.append(anyTiling);
+        // A ruleset filter is about topology, so duplicate geometric examples
+        // with one D-symbol remain one filter choice.
+        const seenSymbols = new Set<string>();
+        const appendCategoryOptions = (
+            node: ReturnType<typeof tilingCategoryTree>, path: string[]
+        ): void => {
+            if (node.entries.length > 0) {
+                const group = document.createElement("optgroup");
+                group.label = path.join(" / ") || "Other tilings";
+                for (const entry of node.entries) {
+                    if (seenSymbols.has(entry.dsSymbol)) continue;
+                    seenSymbols.add(entry.dsSymbol);
+                    const option = document.createElement("option");
+                    option.value = entry.dsSymbol;
+                    option.textContent = entry.displayName;
+                    group.append(option);
+                }
+                if (group.children.length > 0) tilingSelect.append(group);
+            }
+            for (const category of node.categories)
+                appendCategoryOptions(category, [...path, category.label]);
+        };
+        appendCategoryOptions(tilingCategoryTree(tilings), []);
         tilingSelect.value = tilingFilter;
         tilingSelect.addEventListener("change", () => { tilingFilter = tilingSelect.value; render(); });
         tilingField.append(tilingSelect);
@@ -708,31 +744,54 @@ export async function renderProcedureAuthoringWorkspace(
             const tilingField = document.createElement("div");
             tilingField.className = "hc-procedure-tiling-picker";
             tilingField.append(textElement("h3", "Map tiling"));
-            const selected = tilings.find(t => t.dsSymbol === draft!.tilingDsSymbol);
+            const selected = resolveTilingCatalogChoice(
+                tilings, draft!.tilingDsSymbol, selectedTilingPresetId);
+            const ambiguous = selected === null
+                && tilings.filter(t => t.dsSymbol === draft!.tilingDsSymbol).length > 1;
             const selectedRow = document.createElement("div");
             selectedRow.className = "hc-procedure-tiling-selected";
-            selectedRow.append(textElement("span", selected?.displayName ?? "Custom tiling"), tilingPreview(selected));
+            // Saved procedures have no metric identity: never show a specific
+            // pentagon preview merely because it shares the persisted D-symbol.
+            selectedRow.append(textElement("span", selected?.displayName
+                ?? (ambiguous ? "Shared topology — no geometric example selected" : "Custom tiling")));
+            if (selected) selectedRow.append(tilingPreview(selected));
             tilingField.append(selectedRow);
+            tilingField.append(textElement("p",
+                "Rulesets save tiling topology. When two examples share a topology, the selected example here is a preview; choose the specific geometry when creating a world."));
             const choices = document.createElement("details");
             const summary = document.createElement("summary");
             summary.textContent = "Change tiling";
             choices.append(summary);
-            for (const tiling of selectableTilings(tilings)) {
-                const option = document.createElement("button");
-                option.type = "button";
-                option.className = "hc-panel";
-                option.style.display = "flex";
-                option.style.alignItems = "center";
-                option.style.justifyContent = "space-between";
-                option.style.gap = "1rem";
-                option.style.width = "100%";
-                option.style.marginTop = ".4rem";
-                option.append(textElement("span", tiling.displayName), tilingPreview(tiling));
-                option.setAttribute("aria-pressed", String(tiling.dsSymbol === draft!.tilingDsSymbol));
-                option.disabled = historical() || savePending || tilingPending;
-                option.addEventListener("click", () => void changeTiling(tiling.dsSymbol));
-                choices.append(option);
-            }
+            choices.open = tilingChooserOpen;
+            choices.addEventListener("toggle", () => {
+                // Detached details can still dispatch a queued toggle event.
+                // Only the live picker controls persistent expansion state.
+                if (choices.isConnected) tilingChooserOpen = choices.open;
+            });
+            choices.append(tilingCategoryChoices(
+                selectableTilings(tilings), draft!.tilingDsSymbol,
+                tiling => {
+                    const previous = selectedTilingPresetId;
+                    selectedTilingPresetId = tiling.presetId ?? null;
+                    if (tiling.dsSymbol === draft?.tilingDsSymbol) {
+                        // A preview-only change does not affect persisted
+                        // topology. Preserve focus and the open chooser rather
+                        // than rebuilding the complete authoring workspace.
+                        selectedRow.replaceChildren(textElement("span", tiling.displayName), tilingPreview(tiling));
+                        return;
+                    }
+                    tilingChooserOpen = choices.open;
+                    focusedTilingChoice = tiling.presetId ?? tiling.dsSymbol;
+                    void changeTiling(tiling.dsSymbol).then(() => {
+                        if (draft?.tilingDsSymbol !== tiling.dsSymbol && !disposed) {
+                            selectedTilingPresetId = previous;
+                            render();
+                        }
+                    });
+                },
+                historical() || savePending || tilingPending,
+                selected?.presetId ?? null
+            ));
             tilingField.append(choices);
             const mapBounds = draft!.playableBounds;
             tilingField.append(textElement("p", mapBounds

@@ -5,6 +5,20 @@ export function ensureStyles(): void {
     const style = document.createElement("style");
     style.id = STYLE_ID;
     style.textContent = `
+        /* Shared, data-driven tiling hierarchy in world and ruleset authoring. */
+        #tool-root.hex-crawl-app .hc-world-tiling-field { display:grid; gap:.45rem; min-width:0; }
+        #tool-root.hex-crawl-app .hc-world-tiling-field > span { font-weight:600; }
+        #tool-root.hex-crawl-app .hc-world-tiling-field .hc-procedure-tiling-selected { display:flex; align-items:center; justify-content:space-between; gap:.75rem; min-width:0; }
+        #tool-root.hex-crawl-app .hc-world-tiling-field [data-world-tiling-choices] { display:grid; gap:.4rem; }
+        #tool-root.hex-crawl-app .hc-tiling-category-choices { display:grid; gap:.35rem; min-width:0; margin-block:.35rem; }
+        #tool-root.hex-crawl-app .hc-tiling-category-group { min-width:0; border:1px solid var(--hc-border); border-radius:.45rem; padding:.35rem .55rem; }
+        #tool-root.hex-crawl-app .hc-tiling-category-group > summary { cursor:pointer; font-weight:600; color:var(--hc-text-strong); }
+        #tool-root.hex-crawl-app .hc-tiling-category-content { display:grid; gap:.35rem; margin-block:.45rem .1rem; padding-inline-start:.45rem; min-width:0; }
+        #tool-root.hex-crawl-app button.hc-tiling-category-choice { display:flex; align-items:center; justify-content:space-between; gap:.75rem; width:100%; min-width:0; text-align:left; cursor:pointer; padding:.5rem .7rem; background:var(--hc-surface); color:var(--hc-text); }
+        #tool-root.hex-crawl-app button.hc-tiling-category-choice[aria-pressed="true"] { border-color:var(--hc-primary); font-weight:650; }
+        #tool-root.hex-crawl-app button.hc-tiling-category-choice:disabled { opacity:.7; cursor:default; }
+        #tool-root.hex-crawl-app .hc-tiling-category-group > summary:focus-visible,
+        #tool-root.hex-crawl-app button.hc-tiling-category-choice:focus-visible { outline:3px solid var(--hc-focus); outline-offset:2px; }
         #tool-root.hex-crawl-app {
             --hc-page-bg: #f7f8fb;
             --hc-text: #242938;

@@ -1,10 +1,10 @@
 import { CanvasMapRenderer } from "./canvas-renderer";
-import type { HexCrawlApi } from "./api";
+import { HexCrawlApiError, type HexCrawlApi } from "./api";
 import { RenderLifecycle } from "./render-lifecycle";
 import { resolveLatestWorldCellSelection } from "./map-selection-policy";
 import type { EnvironmentAnnotation } from "./environment-types";
 import type { Overworld, WorldPoint, WorldCellGeometry, PlayerMapPreview } from "./types";
-import { Viewport } from "./viewport";
+import { Viewport, nextBoundedEnumerationZoom } from "./viewport";
 
 export class MapSurface {
     private static nextAccessibilityId = 0;
@@ -378,6 +378,7 @@ export class MapSurface {
         this.requestedCellsKey = null;
         this.pendingCellsKey = queryKey;
         const generation = ++this.cellRequestGeneration;
+        let shouldRetryAtCloserZoom = false;
         void this.api.listVisibleCells(world.id, bounds).then(cells => {
             if (this.disposed || generation !== this.cellRequestGeneration) return;
             this.loadedCells = { worldKey, bounds };
@@ -385,8 +386,22 @@ export class MapSurface {
             this.accessibilityStatus.className = "hc-sr-only";
             this.accessibilityStatus.textContent = `${cells.length} cells available in the visible map area.`;
             this.requestRender();
-        }).catch(() => {
+        }).catch(error => {
             if (this.disposed || generation !== this.cellRequestGeneration) return;
+            // Overly dense periodic grids can exceed the server's bounded
+            // candidate budget at the default zoom (even with valid geometry).
+            // Recover by requesting a smaller region, preserving its center.
+            // Never retry authorization, network or unrelated validation errors.
+            const nextZoom = error instanceof HexCrawlApiError && error.status === 400
+                && error.message.includes("Region exceeds bounded cell enumeration.")
+                ? nextBoundedEnumerationZoom(this.viewport.zoom) : null;
+            if (nextZoom !== null) {
+                this.viewport.zoom = nextZoom;
+                shouldRetryAtCloserZoom = true;
+                this.accessibilityStatus.className = "hc-sr-only";
+                this.accessibilityStatus.textContent = "Map zoom increased to keep cell boundaries available.";
+                return;
+            }
             this.accessibilityStatus.className = "hc-hint";
             this.accessibilityStatus.textContent =
                 "Cell boundaries are unavailable at this zoom. Zoom in or retry the map.";
@@ -395,7 +410,10 @@ export class MapSurface {
         }).finally(() => {
             if (generation === this.cellRequestGeneration) {
                 this.pendingCellsKey = null;
-                this.requestedCellsKey = queryKey;
+                // Only another *zoom level* may retry an enumeration failure.
+                // An unrelated failure remains cached until view/user change.
+                this.requestedCellsKey = shouldRetryAtCloserZoom ? null : queryKey;
+                if (shouldRetryAtCloserZoom) this.requestRender();
             }
         });
     }

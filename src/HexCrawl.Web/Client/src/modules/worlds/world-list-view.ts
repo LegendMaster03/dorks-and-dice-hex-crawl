@@ -1,5 +1,8 @@
 import type { HexCrawlApi } from "../../api";
 import { ProcedureComposerApi } from "../../procedure-composer-api";
+import type { TilingCatalogEntry } from "../../procedure-composer-types";
+import { tilingPreview } from "../procedures/tiling-preview";
+import { tilingCategoryChoices } from "../procedures/tiling-category-choices";
 import { clearUiError, showUiError } from "../../ui-error";
 import { canonicalDistanceUnit } from "./world-form";
 import type { DistanceUnitKind } from "./world-form";
@@ -26,7 +29,11 @@ export async function renderWorldList(
                     <h2>New world / map</h2>
 
                     <form data-create-world class="hc-form">
-                        <label>Map tiling <select name="tilingDsSymbol"><option value="<1:1,1,1:6,3>">Hexagonal tiling</option></select></label>
+                        <div class="hc-world-tiling-field">
+                            <span>Map tiling</span>
+                            <input type="hidden" name="tilingDsSymbol" value="<1:1,1,1:6,3>">
+                            <div data-world-tiling-choices></div>
+                        </div>
                         <label>Name <input name="name" required value="New overworld" autocomplete="off"></label>
                         <fieldset class="hc-field-group hc-map-scale-field">
                             <legend>Physical map scale</legend>
@@ -63,19 +70,39 @@ export async function renderWorldList(
     let disposed = false;
     let busy = false;
     let worldCount = 0;
+    let selectedTiling: TilingCatalogEntry | null = null;
     try {
         const catalog = await (await ProcedureComposerApi.create(root)).listTilings();
         if (!disposed) {
-            const picker = select(form, "tilingDsSymbol");
-            picker.replaceChildren();
-            for (const tiling of catalog.filter(item =>
-                item.showInRulesetSelector && item.realization !== null)) {
-                const option = document.createElement("option");
-                option.value = tiling.dsSymbol;
-                option.textContent = tiling.displayName;
-                picker.append(option);
-            }
-            picker.value = "<1:1,1,1:6,3>";
+            const field = input(form, "tilingDsSymbol");
+            const host = required<HTMLElement>(form, "[data-world-tiling-choices]");
+            const available = catalog.filter(item =>
+                item.showInRulesetSelector && item.realization !== null);
+            const renderChoices = (): void => {
+                const selected = selectedTiling ?? available.find(item => item.dsSymbol === field.value);
+                selectedTiling = selected ?? null;
+                const current = document.createElement("div");
+                current.className = "hc-procedure-tiling-selected";
+                const label = document.createElement("span");
+                label.textContent = selected?.displayName ?? "Custom tiling";
+                current.append(label, tilingPreview(selected));
+                const choices = document.createElement("details");
+                const summary = document.createElement("summary");
+                summary.textContent = "Change tiling";
+                choices.append(summary, tilingCategoryChoices(
+                    available, field.value,
+                    tiling => {
+                        selectedTiling = tiling;
+                        field.value = tiling.dsSymbol;
+                        // Update only the selected preview. Replacing the full
+                        // category tree would collapse folders and discard the
+                        // focused choice, preventing keyboard comparison.
+                        label.textContent = tiling.displayName;
+                        current.replaceChildren(label, tilingPreview(tiling));
+                    }, false, selected?.presetId ?? null));
+                host.replaceChildren(current, choices);
+            };
+            renderChoices();
         }
     } catch (catalogError) {
         if (!disposed) showUiError(error, catalogError);
@@ -206,10 +233,16 @@ export async function renderWorldList(
                     throw new Error("Map offsets and their complete finite ranges must be safe whole numbers.");
                 const world = await api.createPeriodicOverworld({
                     name: input(form, "name").value.trim(),
-                    tilingDsSymbol: select(form, "tilingDsSymbol").value,
+                    tilingDsSymbol: input(form, "tilingDsSymbol").value,
                     worldUnitsPerAbstractPeriod: 1,
                     origin: { x: 0, y: 0 },
                     rotationDegrees: 0,
+                    // Reuse the existing explicit world-geometry admission path
+                    // for catalog fixtures that include a proved metric witness.
+                    ...(selectedTiling?.topologyWitness && selectedTiling.realization ? {
+                        topologyWitness: selectedTiling.topologyWitness,
+                        metricRealization: selectedTiling.realization
+                    } : {}),
                     ...(width === null || height === null ? {} : {
                         playableBounds: { width, height, minU: minU!, minV: minV! }
                     }),

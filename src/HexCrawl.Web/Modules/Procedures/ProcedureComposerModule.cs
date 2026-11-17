@@ -45,7 +45,10 @@ public sealed class ProcedureComposerModule : IHexCrawlModule
         string DisplayName,
         bool ShowInRulesetSelector,
         PeriodicMetricRealization? Realization,
-        bool SupportsVertexOnlyAdjacency);
+        bool SupportsVertexOnlyAdjacency,
+        IReadOnlyList<string> CategoryPath,
+        string? PresetId,
+        PeriodicTopologyWitness? TopologyWitness);
 
     private static readonly Lazy<IReadOnlyList<NamedTilingOption>> TilingOptions =
         new(BuildTilingOptions);
@@ -58,8 +61,14 @@ public sealed class ProcedureComposerModule : IHexCrawlModule
                 var preview = CrawlTilingNames.RepresentativePreview(entry);
                 return new NamedTilingOption(
                     entry.CanonicalDsSymbol, entry.PreferredName, entry.ShowInRulesetSelector,
-                    preview, HasVertexOnlyContacts(entry.CanonicalDsSymbol));
+                    preview, HasVertexOnlyContacts(entry.CanonicalDsSymbol, entry.RepresentativeTopology, preview),
+                    entry.CategoryPath ?? ["Other tilings"], entry.PresetId,
+                    entry.RepresentativeTopology);
             }).ToList();
+        // Preserve every catalog entry even when multiple geometric examples
+        // have the same D-symbol (for example, Cairo Types 2 and 4).
+        // D-symbol deduplication applies only to *additional* preset fallbacks:
+        // those provide no independent metric or presentation identity.
         var known = result.Select(entry => entry.DsSymbol).ToHashSet(StringComparer.Ordinal);
         // A new preset need not be present in the friendly-name vocabulary to be usable.
         foreach (var preset in CrawlProcedureCatalog.Catalog)
@@ -71,18 +80,29 @@ public sealed class ProcedureComposerModule : IHexCrawlModule
             var label = CrawlTilingNames.Catalog.Describe(symbol, metric)?.Label
                 ?? "Unlisted repeating tile pattern";
             result.Add(new NamedTilingOption(symbol, label, false, metric,
-                HasVertexOnlyContacts(symbol)));
+                HasVertexOnlyContacts(symbol), ["Other tilings"], null, null));
         }
         return result;
     }
 
-    private static bool HasVertexOnlyContacts(string symbol)
+    /// <summary>
+    /// Query the actual realized geometry for vertex contacts. The harmonic
+    /// fallback exists only for legacy D-symbol-only entries; catalog examples
+    /// with explicit metrics do not need a separate geometry-specific detector.
+    /// </summary>
+    private static bool HasVertexOnlyContacts(
+        string symbol, PeriodicTopologyWitness? topology = null, PeriodicMetricRealization? realization = null)
     {
-        var generated = DelaneyDressHarmonicMetricRealization.Construct(symbol, 1, "unit");
-        if (generated.Status != "realized" || generated.Topology is null || generated.Realization is null)
-            return false;
+        if (topology is null || realization is null)
+        {
+            var generated = DelaneyDressHarmonicMetricRealization.Construct(symbol, 1, "unit");
+            if (generated.Status != "realized" || generated.Topology is null || generated.Realization is null)
+                return false;
+            topology = generated.Topology;
+            realization = generated.Realization;
+        }
         var world = new PeriodicWorldTiling(Guid.NewGuid(),
-            generated.Topology, generated.Realization, new WorldPoint(0, 0));
+            topology, realization, new WorldPoint(0, 0));
         world.Validate();
         return world.HasVertexOnlyContacts();
     }

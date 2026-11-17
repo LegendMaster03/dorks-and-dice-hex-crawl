@@ -1,5 +1,18 @@
 import type { WorldPoint } from "./types";
 
+/**
+ * A periodic viewport request has a finite candidate-enumeration budget.
+ * An overflow can be recovered by reducing visible world area while keeping
+ * the map center fixed. Never increase the server limit or loop at max zoom.
+ */
+export function nextBoundedEnumerationZoom(currentZoom: number): number | null {
+    const maxZoom = 220;
+    if (!Number.isFinite(currentZoom) || currentZoom <= 0 || currentZoom >= maxZoom)
+        return null;
+    const next = Math.min(maxZoom, currentZoom * 1.4);
+    return next > currentZoom ? next : null;
+}
+
 export class Viewport {
     public center: WorldPoint = { x: 0, y: 0 };
     public zoom = 56;

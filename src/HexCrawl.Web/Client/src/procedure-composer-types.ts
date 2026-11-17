@@ -209,7 +209,15 @@ export type TilingCatalogEntry = {
     displayName: string;
     showInRulesetSelector: boolean;
     supportsVertexOnlyAdjacency: boolean;
+    /** Presentation-only hierarchy; no geometric or runtime significance. */
+    categoryPath?: string[];
+    /** Stable catalog choice identity; independent of the canonical D-symbol. */
+    presetId?: string | null;
+    /** Optional proved topology for an explicit representative of this geometry. */
+    topologyWitness?: unknown | null;
     realization: {
+        units?: string;
+        constraints?: { key: string; unit: string; min: number; max: number }[];
         translationU: { x: number; y: number };
         translationV: { x: number; y: number };
         polygons: Record<string, { x: number; y: number }[]>;

@@ -113,6 +113,385 @@ public sealed class Phase16NomenclatureTests
     }
 
     [Fact]
+    public void ConvexPentagonalType1UsesExistingPeriodicTopologyAndMetricValidation()
+    {
+        var entry = Assert.Single(CrawlTilingNames.Catalog.ListEntries(),
+            item => item.PresetId == "convex-pentagon-type-1");
+        Assert.Equal(new[] { "Pentagons", "Convex" }, entry.CategoryPath);
+        var topology = Assert.IsType<PeriodicTopologyWitness>(entry.RepresentativeTopology);
+        var metric = Assert.IsType<PeriodicMetricRealization>(entry.RepresentativeRealization);
+        var world = new PeriodicWorldTiling(Guid.NewGuid(), topology, metric, new WorldPoint(0, 0));
+        world.Validate();
+
+        Assert.Equal(2, topology.MotifCells.Count);
+        var first = metric.Polygons["pentagon-a"];
+        var second = metric.Polygons["pentagon-b"];
+        Assert.Equal(5, first.Count);
+        Assert.Equal(5, second.Count);
+        // Both cells are the same convex pentagon under a 180° rotation.
+        for (var i = 0; i < 5; i++)
+        {
+            Assert.InRange(Math.Abs(first[i].X + second[i].X), 0, 1e-9);
+            Assert.InRange(Math.Abs(first[i].Y + second[i].Y), 0, 1e-9);
+        }
+
+        var address = new PeriodicCellAddress("pentagon-a", new(0, 0));
+        Assert.Equal(5, world.Neighbors(address).Count);
+        foreach (var boundary in world.Boundaries(address))
+        {
+            var reverse = world.Reciprocal(boundary);
+            Assert.Equal(boundary.From, reverse.To);
+            Assert.Equal(boundary.To, reverse.From);
+        }
+
+        Assert.Equal(entry.PreferredName,
+            CrawlTilingNames.Catalog.Describe(entry.CanonicalDsSymbol, metric)!.Label);
+    }
+
+    [Theory]
+    [InlineData(5, 6, 0)]
+    [InlineData(8, 8, 0)]
+    [InlineData(10, 6, 2)]
+    [InlineData(11, 8, 4)]
+    [InlineData(6, 4, 0)]
+    [InlineData(7, 8, 0)]
+    [InlineData(9, 8, 0)]
+    [InlineData(12, 8, 8)]
+    [InlineData(13, 8, 4)]
+    [InlineData(14, 6, 4)]
+    public void FormulaDerivedPentagonalFamiliesUseGeneralTopologyAndCongruentGeometry(
+        int type, int motifSize, int subdividedCells)
+    {
+        var entry = Assert.Single(CrawlTilingNames.Catalog.ListEntries(),
+            item => item.PresetId == $"convex-pentagon-type-{type}");
+        var topology = Assert.IsType<PeriodicTopologyWitness>(entry.RepresentativeTopology);
+        var geometry = Assert.IsType<PeriodicMetricRealization>(entry.RepresentativeRealization);
+        var world = new PeriodicWorldTiling(Guid.NewGuid(), topology, geometry, new WorldPoint(0, 0));
+        world.Validate();
+
+        Assert.Equal(motifSize, topology.MotifCells.Count);
+        Assert.Equal(subdividedCells,
+            topology.MotifCells.Count(cell => cell.Boundary.Count > 5));
+        Assert.All(topology.MotifCells, cell =>
+        {
+            Assert.Equal(5, cell.Boundary.Select(edge => edge.BoundarySideIndex).Distinct().Count());
+            Assert.Equal(cell.Boundary.Count, world.Boundaries(new(cell.Id, new(0, 0))).Count);
+        });
+
+        static double Distance(TilingWorldPoint a, TilingWorldPoint b) =>
+            Math.Sqrt(Math.Pow(a.X - b.X, 2) + Math.Pow(a.Y - b.Y, 2));
+        static (double[] Sides, double[] Angles) Shape(
+            PeriodicMotifCell cell, IReadOnlyList<TilingWorldPoint> polygon)
+        {
+            var count = polygon.Count;
+            var geometric = Enumerable.Range(0, count)
+                .Where(i => cell.Boundary[i].BoundarySideIndex !=
+                    cell.Boundary[(i + count - 1) % count].BoundarySideIndex)
+                .Select(i => polygon[i]).ToArray();
+            Assert.Equal(5, geometric.Length);
+            var sides = new double[5];
+            var angles = new double[5];
+            for (int i = 0; i < 5; i++)
+            {
+                var a = geometric[(i + 4) % 5];
+                var b = geometric[i];
+                var d = geometric[(i + 1) % 5];
+                sides[i] = Distance(b, d);
+                double ux = a.X - b.X, uy = a.Y - b.Y;
+                double vx = d.X - b.X, vy = d.Y - b.Y;
+                angles[i] = Math.Acos(Math.Clamp(
+                    (ux * vx + uy * vy) / (Distance(a, b) * Distance(b, d)), -1, 1))
+                    * 180 / Math.PI;
+            }
+            return (sides, angles);
+        }
+
+        var reference = Shape(topology.MotifCells[0],
+            geometry.Polygons[topology.MotifCells[0].Id]);
+        foreach (var cell in topology.MotifCells)
+        {
+            var current = Shape(cell, geometry.Polygons[cell.Id]);
+            Assert.Contains(Enumerable.Range(0, 5), shift =>
+                Enumerable.Range(0, 5).All(i =>
+                    Math.Abs(current.Sides[i] - reference.Sides[(i + shift) % 5]) < 1e-7
+                    && Math.Abs(current.Angles[i] - reference.Angles[(i + shift) % 5]) < 1e-7)
+                || Enumerable.Range(0, 5).All(i =>
+                    Math.Abs(current.Sides[i] -
+                        reference.Sides[(shift - i + 4) % 5]) < 1e-7
+                    && Math.Abs(current.Angles[i] -
+                        reference.Angles[(shift - i + 5) % 5]) < 1e-7));
+        }
+
+        if (type == 5)
+        {
+            Assert.Contains(reference.Angles, angle => Math.Abs(angle - 60) < 1e-7);
+            Assert.Contains(reference.Angles, angle => Math.Abs(angle - 120) < 1e-7);
+        }
+        if (type == 8)
+            Assert.Equal(4, reference.Sides.Count(length => Math.Abs(length - 1) < 1e-7));
+        if (type == 10)
+        {
+            Assert.Contains(reference.Angles, angle => Math.Abs(angle - 90) < 1e-7);
+            Assert.Contains(reference.Sides, length => Math.Abs(length - 1) < 1e-7);
+        }
+        if (type == 14)
+        {
+            var lengths = reference.Sides.Order().ToArray();
+            // Exact Stein side constraints: two short equal sides,
+            // two longer sides twice their length, one distinct side.
+            Assert.InRange(Math.Abs(lengths[0] - lengths[1]), 0, 1e-7);
+            Assert.InRange(Math.Abs(lengths[2] - 2 * lengths[0]), 0, 1e-7);
+            Assert.InRange(Math.Abs(lengths[3] - 2 * lengths[0]), 0, 1e-7);
+            Assert.Contains(reference.Angles, angle => Math.Abs(angle - 90) < 1e-7);
+        }
+        if (type == 11)
+        {
+            Assert.InRange(Math.Abs(reference.Angles[0] - 90), 0, 1e-7);
+            Assert.InRange(Math.Abs(reference.Angles[2] + reference.Angles[4] - 180), 0, 1e-7);
+            Assert.InRange(Math.Abs(2 * reference.Angles[1] + reference.Angles[2] - 360), 0, 1e-7);
+            Assert.InRange(Math.Abs(2 * reference.Sides[4] + reference.Sides[1] -
+                reference.Sides[2]), 0, 1e-7);
+        }
+
+        Assert.Equal(entry.PreferredName,
+            CrawlTilingNames.Catalog.Describe(entry.CanonicalDsSymbol, geometry)!.Label);
+    }
+
+    [Fact]
+    public void Type15TwelveCellMotifPreservesSourcePentagonAnglesAndGenericInterfaces()
+    {
+        var entry = Assert.Single(CrawlTilingNames.Catalog.ListEntries(),
+            e => e.PresetId == "convex-pentagon-type-15");
+        var topology = Assert.IsType<PeriodicTopologyWitness>(entry.RepresentativeTopology);
+        var geometry = Assert.IsType<PeriodicMetricRealization>(entry.RepresentativeRealization);
+        Assert.Equal(12, topology.MotifCells.Count);
+        Assert.Equal(64, topology.MotifCells.Sum(cell => cell.Boundary.Count));
+        Assert.Equal(4, topology.MotifCells.Count(cell => cell.Boundary.Count == 6));
+        Assert.All(topology.MotifCells, cell =>
+            Assert.Equal(5, cell.Boundary.Select(e => e.BoundarySideIndex).Distinct().Count()));
+
+        var world = new PeriodicWorldTiling(Guid.NewGuid(), topology, geometry, new WorldPoint(0, 0));
+        world.Validate();
+        static double Length(TilingWorldPoint a, TilingWorldPoint b) =>
+            Math.Sqrt((a.X - b.X) * (a.X - b.X) + (a.Y - b.Y) * (a.Y - b.Y));
+        foreach (var poly in geometry.Polygons.Values)
+        {
+            var corners = Enumerable.Range(0, poly.Count).Where(i =>
+            {
+                var a = poly[(i + poly.Count - 1) % poly.Count];
+                var b = poly[i];
+                var d = poly[(i + 1) % poly.Count];
+                return Math.Abs((b.X - a.X) * (d.Y - b.Y)
+                    - (b.Y - a.Y) * (d.X - b.X)) > 1e-8;
+            }).Select(i => poly[i]).ToArray();
+            Assert.Equal(5, corners.Length);
+            var angles = new double[5];
+            var sides = new double[5];
+            for (int i = 0; i < 5; i++)
+            {
+                var a = corners[(i + 4) % 5];
+                var b = corners[i];
+                var d = corners[(i + 1) % 5];
+                double ax = a.X - b.X, ay = a.Y - b.Y;
+                double dx = d.X - b.X, dy = d.Y - b.Y;
+                angles[i] = Math.Acos(Math.Clamp(
+                    (ax * dx + ay * dy) / (Length(a,b) * Length(b,d)), -1, 1)) * 180 / Math.PI;
+                sides[i] = Length(b, d);
+            }
+            var expectedAngles = new[] { 60.0, 90.0, 105.0, 135.0, 150.0 };
+            var expectedSides = new[] { .5, .5, .5, Math.Cos(Math.PI / 12), 1.0 };
+            Assert.All(angles.Order(), (angle) =>
+                Assert.Contains(expectedAngles, expected => Math.Abs(expected - angle) < 1e-7));
+            Assert.All(expectedAngles.Zip(angles.Order()), pair =>
+                Assert.InRange(Math.Abs(pair.First - pair.Second), 0, 1e-7));
+            Assert.All(expectedSides.Zip(sides.Order()), pair =>
+                Assert.InRange(Math.Abs(pair.First - pair.Second), 0, 1e-7));
+        }
+        foreach (var cell in topology.MotifCells)
+        {
+            var boundaries = world.Boundaries(new(cell.Id, new(0, 0)));
+            Assert.Equal(cell.Boundary.Count, boundaries.Count);
+            foreach (var edge in boundaries)
+                Assert.Equal(edge.From, world.Reciprocal(edge).To);
+        }
+        Assert.Equal(entry.PreferredName,
+            CrawlTilingNames.Catalog.Describe(entry.CanonicalDsSymbol, geometry)!.Label);
+    }
+
+    [Fact]
+    public void EquilateralCairoType2DistinguishesMetricRealizationsOfTheSameTopology()
+    {
+        var entries = CrawlTilingNames.Catalog.ListEntries();
+        var type2 = Assert.Single(entries, e => e.PresetId == "convex-pentagon-type-2");
+        var type4 = Assert.Single(entries, e => e.PresetId == "convex-pentagon-type-4");
+        Assert.Equal(type4.CanonicalDsSymbol, type2.CanonicalDsSymbol);
+        var topology = Assert.IsType<PeriodicTopologyWitness>(type2.RepresentativeTopology);
+        var geometry = Assert.IsType<PeriodicMetricRealization>(type2.RepresentativeRealization);
+        var world = new PeriodicWorldTiling(Guid.NewGuid(), topology, geometry, new WorldPoint(0, 0));
+        world.Validate();
+
+        foreach (var polygon in geometry.Polygons.Values)
+        {
+            Assert.Equal(5, polygon.Count);
+            var sides = Enumerable.Range(0, 5).Select(i =>
+            {
+                var a = polygon[i];
+                var b = polygon[(i + 1) % 5];
+                return Math.Sqrt((a.X - b.X) * (a.X - b.X) + (a.Y - b.Y) * (a.Y - b.Y));
+            }).ToArray();
+            Assert.True(sides.Max() - sides.Min() < 1e-9,
+                "The Type 2 example must be an equilateral convex pentagon.");
+            var angles = Enumerable.Range(0, 5).Select(i =>
+            {
+                var a = polygon[(i + 4) % 5];
+                var b = polygon[i];
+                var d = polygon[(i + 1) % 5];
+                var ux = a.X - b.X; var uy = a.Y - b.Y;
+                var vx = d.X - b.X; var vy = d.Y - b.Y;
+                return Math.Acos(Math.Clamp((ux * vx + uy * vy)
+                    / (Math.Sqrt(ux * ux + uy * uy) * Math.Sqrt(vx * vx + vy * vy)), -1, 1))
+                    * 180 / Math.PI;
+            }).ToArray();
+            Assert.Equal(2, angles.Count(angle => Math.Abs(angle - 90) < 1e-8));
+            Assert.Contains(Enumerable.Range(0, 5), i =>
+                Math.Abs(angles[i] - 90) < 1e-8 && Math.Abs(angles[(i + 2) % 5] - 90) < 1e-8);
+        }
+
+        Assert.Equal(type2.PreferredName,
+            CrawlTilingNames.Catalog.Describe(type2.CanonicalDsSymbol, geometry)!.Label);
+        Assert.Equal(type4.PreferredName,
+            CrawlTilingNames.Catalog.Describe(type4.CanonicalDsSymbol, type4.RepresentativeRealization)!.Label);
+        Assert.NotEqual(type2.PreferredName, type4.PreferredName);
+    }
+
+    [Fact]
+    public void CairoType4IsCongruentConvexAndPlayableThroughGenericPeriodicGeometry()
+    {
+        var entry = Assert.Single(CrawlTilingNames.Catalog.ListEntries(),
+            item => item.PresetId == "convex-pentagon-type-4");
+        var topology = Assert.IsType<PeriodicTopologyWitness>(entry.RepresentativeTopology);
+        var realization = Assert.IsType<PeriodicMetricRealization>(entry.RepresentativeRealization);
+        var world = new PeriodicWorldTiling(Guid.NewGuid(), topology, realization, new WorldPoint(0, 0));
+        world.Validate();
+        Assert.Equal(new[] { "Pentagons", "Convex" }, entry.CategoryPath);
+        Assert.Equal(8, topology.MotifCells.Count);
+        Assert.All(topology.MotifCells, cell => Assert.Equal(5, cell.Boundary.Count));
+
+        var exemplar = realization.Polygons["H00"];
+        static double Length(TilingWorldPoint left, TilingWorldPoint right) =>
+            Math.Sqrt(Math.Pow(left.X - right.X, 2) + Math.Pow(left.Y - right.Y, 2));
+        static (double[] Sides, double[] Angles) Signature(IReadOnlyList<TilingWorldPoint> points)
+        {
+            var sides = new double[5];
+            var angles = new double[5];
+            for (var i = 0; i < 5; i++)
+            {
+                var previous = points[(i + 4) % 5];
+                var current = points[i];
+                var next = points[(i + 1) % 5];
+                sides[i] = Length(current, next);
+                var dx1 = previous.X - current.X;
+                var dy1 = previous.Y - current.Y;
+                var dx2 = next.X - current.X;
+                var dy2 = next.Y - current.Y;
+                var cos = (dx1 * dx2 + dy1 * dy2)
+                    / (Length(current, previous) * Length(current, next));
+                angles[i] = Math.Acos(Math.Clamp(cos, -1, 1)) * 180 / Math.PI;
+            }
+            return (sides, angles);
+        }
+        var reference = Signature(exemplar);
+        foreach (var polygon in realization.Polygons.Values)
+        {
+            Assert.Equal(5, polygon.Count);
+            var current = Signature(polygon);
+            Assert.Equal(2, current.Angles.Count(value => Math.Abs(value - 90) < 1e-7));
+            Assert.Equal(3, current.Angles.Count(value => Math.Abs(value - 120) < 1e-7));
+            Assert.Equal(4, current.Sides.Count(value =>
+                Math.Abs(value - 1 / Math.Sqrt(3)) < 1e-7));
+            Assert.Single(current.Sides, value =>
+                Math.Abs(value - (1 - 1 / Math.Sqrt(3))) < 1e-7);
+            Assert.True(Enumerable.Range(0, 5).Any(offset =>
+                Enumerable.Range(0, 5).All(i =>
+                    Math.Abs(current.Sides[i] - reference.Sides[(i + offset) % 5]) < 1e-7
+                    && Math.Abs(current.Angles[i] - reference.Angles[(i + offset) % 5]) < 1e-7))
+                || Enumerable.Range(0, 5).Any(offset =>
+                    Enumerable.Range(0, 5).All(i =>
+                        Math.Abs(current.Sides[i] - reference.Sides[(offset - i + 4) % 5]) < 1e-7
+                        && Math.Abs(current.Angles[i] - reference.Angles[(offset - i) % 5]) < 1e-7)),
+                "Every pentagon in the motif must be a rotated or mirrored congruent copy.");
+        }
+        Assert.Equal(5, world.Neighbors(new("H00", new(0, 0))).Count);
+        Assert.Equal(5, world.Boundaries(new("V10", new(0, 0))).Count);
+    }
+
+    [Fact]
+    public void Type3PentagonsKeepFiveGeometricSidesAndSixAtomicInterfaces()
+    {
+        var entry = Assert.Single(CrawlTilingNames.Catalog.ListEntries(),
+            item => item.PresetId == "convex-pentagon-type-3");
+        var topology = Assert.IsType<PeriodicTopologyWitness>(entry.RepresentativeTopology);
+        var realization = Assert.IsType<PeriodicMetricRealization>(entry.RepresentativeRealization);
+        var world = new PeriodicWorldTiling(Guid.NewGuid(), topology, realization, new WorldPoint(0, 0));
+        world.Validate();
+        Assert.Equal(3, topology.MotifCells.Count);
+        Assert.All(topology.MotifCells, motif =>
+        {
+            Assert.Equal(6, motif.Boundary.Count);
+            Assert.Equal(5, motif.Boundary.Select(edge => edge.BoundarySideIndex).Distinct().Count());
+            Assert.Equal(new[] { 0, 1, 2, 2, 3, 4 },
+                motif.Boundary.Select(edge => edge.BoundarySideIndex));
+        });
+        // The long side equals the sum of its two half-edges; the
+        // topological split is not an extra geometric corner.
+        var points = realization.Polygons["A"];
+        Assert.Equal(6, points.Count);
+        double Dist(TilingWorldPoint a, TilingWorldPoint b) =>
+            Math.Sqrt(Math.Pow(a.X - b.X, 2) + Math.Pow(a.Y - b.Y, 2));
+        Assert.InRange(Math.Abs(Dist(points[2], points[4]) -
+            Dist(points[2], points[3]) - Dist(points[3], points[4])), 0, 1e-10);
+        Assert.Equal(6, world.Boundaries(new("A", new(0, 0))).Count);
+        Assert.Equal(entry.PreferredName,
+            CrawlTilingNames.Catalog.Describe(entry.CanonicalDsSymbol, realization)!.Label);
+    }
+
+    [Fact]
+    public void CategoryPathsAndCatalogIdentitiesDoNotRestrictGeometry()
+    {
+        var square = Assert.Single(CrawlTilingNames.Catalog.ListEntries(),
+            value => value.PreferredName == "Square tiling");
+        Assert.Equal(new[] { "Squares" }, square.CategoryPath);
+        Assert.Equal("regular-square", square.PresetId);
+        Assert.Equal(Square, square.CanonicalDsSymbol);
+        Assert.NotNull(CrawlTilingNames.RepresentativePreview(square));
+
+        // A D-symbol can have more than one presentation entry or category.
+        var catalog = new TilingNomenclatureCatalog([
+            new(Square, "Square choice A", null, [], "First", "Test",
+                CategoryPath: ["Quadrilaterals", "Squares"], PresetId: "square-a"),
+            new(Square, "Square choice B", null, [], "Second", "Test",
+                CategoryPath: ["Legacy", "Square grids"], PresetId: "square-b")
+        ]);
+        Assert.Equal(2, catalog.ListEntries().Count);
+        Assert.All(catalog.ListEntries(), entry => Assert.Equal(Square, entry.CanonicalDsSymbol));
+    }
+
+    [Fact]
+    public void CatalogRejectsMalformedCategoriesAndDuplicatePresetIds()
+    {
+        Assert.Throws<ArgumentException>(() => new TilingNomenclatureCatalog([
+            new(Square, "Invalid", null, [], "Description", "Test",
+                CategoryPath: ["Squares", " "])
+        ]));
+        Assert.Throws<ArgumentException>(() => new TilingNomenclatureCatalog([
+            new(Square, "First", null, [], "Description", "Test",
+                CategoryPath: ["Squares"], PresetId: "duplicate"),
+            new(Square, "Second", null, [], "Description", "Test",
+                CategoryPath: ["Quadrilaterals"], PresetId: "duplicate")
+        ]));
+    }
+
+    [Fact]
     public void NotationIsSuppressedOutsideExplicitlyAuthorizedSurfaces()
     {
         Assert.Null(TilingNotationPresentationPolicy.Display(Square, TilingNotationSurface.Normal, true, false));
