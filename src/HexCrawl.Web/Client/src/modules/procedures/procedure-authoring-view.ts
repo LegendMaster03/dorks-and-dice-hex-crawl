@@ -734,7 +734,8 @@ export async function renderProcedureAuthoringWorkspace(
             tilingField.append(textElement("h3", "Map tiling"));
             const selected = resolveTilingCatalogChoice(
                 tilings, draft!.tilingDsSymbol, selectedTilingPresetId);
-            const ambiguous = selected === null && tilings.some(t => t.dsSymbol === draft!.tilingDsSymbol);
+            const ambiguous = selected === null
+                && tilings.filter(t => t.dsSymbol === draft!.tilingDsSymbol).length > 1;
             const selectedRow = document.createElement("div");
             selectedRow.className = "hc-procedure-tiling-selected";
             // Saved procedures have no metric identity: never show a specific
