@@ -42,6 +42,7 @@ test("nested tiling choices reuse preview controls and invoke the selected catal
     ];
     let picked = null;
     const choices = tilingCategoryChoices(entries, "square", entry => { picked = entry; });
+    dom.window.document.body.append(choices);
     assert.deepEqual([...choices.querySelectorAll("summary")].map(node => node.textContent),
         ["Pentagons", "Squares"]);
     // Do not draw hidden polygon patches until the category is expanded.
@@ -59,8 +60,15 @@ test("nested tiling choices reuse preview controls and invoke the selected catal
     assert.equal(choices.querySelectorAll("canvas[role='img']").length, 3);
     const type2 = [...choices.querySelectorAll("button")]
         .find(button => button.textContent.includes("Type 2"));
+    type2.focus();
     type2.click();
     assert.equal(picked, entries[0]);
+    assert.equal(dom.window.document.activeElement, type2,
+        "switching a preview must not discard keyboard focus");
+    assert.equal(type2.getAttribute("aria-pressed"), "true");
+    assert.equal(squareButton.getAttribute("aria-pressed"), "false");
+    assert.equal(pentagons.open, true);
+    assert.equal(convex.open, true);
 });
 
 test("catalog preset IDs distinguish entries sharing a D-symbol", t => {
