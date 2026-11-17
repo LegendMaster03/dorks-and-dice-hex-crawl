@@ -15,7 +15,7 @@ export function tilingCategoryChoices(
     const tree = tilingCategoryTree(entries);
     // Distinct metrics can share a D-symbol. A stored procedure does not
     // retain the catalog preset ID, so do not mark multiple examples pressed.
-    const selected = resolveTilingCatalogChoice(entries, selectedSymbol, selectedPresetId);
+    let selected = resolveTilingCatalogChoice(entries, selectedSymbol, selectedPresetId);
     const isSelected = (entry: TilingCatalogEntry): boolean => entry === selected;
     const containsSelection = (node: TilingCategoryNode): boolean =>
         node.entries.some(entry => isSelected(entry)
@@ -50,7 +50,15 @@ export function tilingCategoryChoices(
             option.append(document.createTextNode(entry.displayName), tilingPreview(entry));
             option.setAttribute("aria-pressed", String(isSelected(entry)));
             option.disabled = disabled;
-            option.addEventListener("click", () => onSelect(entry));
+            option.addEventListener("click", () => {
+                // Preserve the current focus and expanded categories. A caller
+                // may replace the whole menu, but it need not do so merely to
+                // change the highlighted geometry in a world-creation form.
+                selected = entry;
+                root.querySelectorAll<HTMLButtonElement>(".hc-tiling-category-choice")
+                    .forEach(button => button.setAttribute("aria-pressed", String(button === option)));
+                onSelect(entry);
+            });
             parent.append(option);
         }
     };
