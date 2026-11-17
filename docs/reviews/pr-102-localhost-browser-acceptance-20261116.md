@@ -1,6 +1,6 @@
 # PR #102 localhost browser acceptance review
 
-**Recommendation: Incomplete.** Required browser acceptance could not be performed because the graphical browser and application command runtime are in separate environments with no verified localhost connection. This is an environment blocker, not a demonstrated application defect. Keep the PR in draft pending a complete browser review.
+**Recommendation: Incomplete.** The retry resolved localhost access and completed a partial graphical catalog review. Authentication prevents world creation, movement, and persistence testing. A minor preview-framing defect is recorded below. Keep the PR in draft pending complete acceptance.
 
 ## Implementation and environment
 
@@ -10,10 +10,10 @@
 - Source commit: `62f05012e14f9c6f62c77cace0ffbd98c922539e`.
 - Initial working tree: clean. No existing checkout or uncommitted user work was overwritten.
 - PR metadata independently confirmed: open, draft, unmerged, and matching the supplied head.
-- Server endpoint reported by Kestrel: `http://0.0.0.0:38315`; attempted browser URL: `http://127.0.0.1:38315`.
+- Initial endpoint: `http://0.0.0.0:38315` (unreachable from the browser). Retry endpoint: **`http://127.0.0.1:5099/worlds`**, reached in graphical Chromium.
 - Command runtime: Debian 13, .NET SDK 10.0.404 installed locally, Node/npm available.
 - Command-runtime Chromium reports version 156.0.8078.79. The graphical browser is a separate Chromium instance; its exact version was not verified.
-- Database: disposable PostgreSQL 17.11, local TCP only, database `hex_crawl_review`, temporary cluster `/tmp/hex-review-pg`, port 42405. This differs from CI's PostgreSQL 18 image.
+- Database: disposable PostgreSQL 17.11, local TCP only, database `hex_crawl_review`. Retry uses the browser machine's `/tmp/hex-desktop-pg` cluster on port 55433. This differs from CI's PostgreSQL 18 image.
 - No production database, shared deployment, or persistent user data was used.
 
 ## Setup and supporting verification
@@ -69,79 +69,109 @@ Content root path: /workspace/scratch/ce13fe7aeef6/hex-crawl/src/HexCrawl.Web
 
 These logs establish server startup, not graphical access, API correctness, or acceptance.
 
-## Environment blocker ENV-01
+## Retry: ENV-01 resolved
 
-**Classification:** environment blocker; prevents required acceptance.
+The earlier conclusion about filesystem separation was too broad. The browser machine shares `/workspace` with the command workspace, while its `/tmp` and loopback are separate.
 
-Reproduction and evidence:
+Copied the downloaded .NET and PostgreSQL runtimes into `/workspace/scratch/ce13fe7aeef6/local-review-runtime/`, then launched the existing compiled application and a fresh disposable database through the graphical desktop terminal:
 
-1. Build the exact feature commit and start the isolated database and application as above.
-2. Open the actual graphical Chromium window and navigate to `http://127.0.0.1:38315`.
-3. Browser visibly displays: “This site can’t be reached,” “127.0.0.1 refused to connect,” and `ERR_CONNECTION_REFUSED`.
-4. A direct supporting request from a separate command invocation also receives connection refused, while the original application session reports a running listener.
-5. Launch the desktop terminal and attempt `bash /tmp/hex-start-review.sh`, a startup script created in the command workspace.
-6. Desktop terminal reports `No such file or directory`. Its host prompt differs from the command environment, corroborating that these are separate environments rather than a shared local filesystem and loopback.
+```bash
+bash /workspace/scratch/ce13fe7aeef6/local-review-runtime/start.sh
+```
 
-Expected: the graphical browser reaches the feature-branch application and permits end-to-end interaction.
-Actual: no application document loads. No application console or frontend network evidence can therefore be collected.
+The script starts PostgreSQL on 127.0.0.1:55433, creates `hex_crawl_review`, and runs the feature-build DLL from the original checkout with:
 
-A browser reload after a verified connection was not possible. No application world was created. No screenshot artifact was saved; the error page and terminal error were directly observed in graphical screenshots during the review.
+```text
+ConnectionStrings__HexCrawl=Host=127.0.0.1;Port=55433;Database=hex_crawl_review;Username=agent
+ASPNETCORE_URLS=http://127.0.0.1:5099
+ASPNETCORE_ENVIRONMENT=Development
+```
 
-**Recommended environment correction:** run the checkout, .NET application, disposable PostgreSQL, and graphical browser in one shared environment, or provide a supported private forwarding route from the browser environment to this application. Verify readiness and current assets through that route before restarting acceptance. Do not substitute the public deployment.
+The application loaded in actual graphical Chromium at `http://127.0.0.1:5099` and its Worlds / maps view loaded the new catalog. Source checkout remains at `62f05012e14f9c6f62c77cace0ffbd98c922539e`; the prior report commit does not change application code. No public deployment or mock catalog was used.
+
+## Current environment blockers
+
+### ENV-02: authenticated world operations unavailable
+
+The browser shows: “Your Dorks & Dice session is no longer available. Refresh or sign in again, then retry.”
+
+The desktop application log shows HTTP 401 for `GET /api/overworlds` and `GET /api/procedures`. The catalog remains accessible, so preview/category interactions could be reviewed. No world was created and no protected data was accessed.
+
+The isolated standalone application has no configured Site host or interactive sign-in screen. The repository documents a standalone development identity, but it was not enabled because the acceptance assignment requests interactive sign-in rather than bypassing authentication. Completing protected tests requires an authenticated local environment or separate authorization to use that documented identity in this disposable review.
+
+This is a setup blocker, not a demonstrated authentication defect.
+
+### ENV-03: browser DevTools blocked
+
+Attempted Ctrl+Shift+J. Chromium displays “DevTools not allowed on this page” and “Your organization has blocked the use of DevTools on this page.” Dismissed the dialog without bypassing the restriction. Console inspection remains unavailable. HTTP status evidence above comes from the actual application log.
+
+## Browser finding UI-01: previews do not frame recognizable tiles
+
+- **Severity:** minor.
+- **Component:** shared tiling preview; clearest examples Types 1, 10, and 11.
+- **Steps:** open `/worlds`, expand Change tiling → Pentagons → Convex, inspect those thumbnails at 100% zoom. Also observed at 75% zoom.
+- **Expected:** previews show recognizable pentagonal tiles and enough surrounding geometry to compare the patterns.
+- **Actual:** Type 1 shows a cropped diagonal fragment. Types 10 and 11 show predominantly horizontal/vertical edge fragments, without a complete recognizable pentagon. The canvases are populated, but the framing does not satisfy the requested recognizable-pentagon preview check.
+- **Evidence:** directly observed graphical screenshots at 100% zoom in the 1050-pixel-wide browser window; no screenshot file was saved.
+- **Reload reproducibility:** not tested.
+- **Confirmed source observation:** `tiling-preview.ts` sets scale using the shortest polygon segment, `Math.min(22 / side, 220)`, then clips to a 74×52 canvas.
+- **Likely cause (hypothesis):** a short side or atomic boundary subdivision can drive magnification high enough to crop the actual tile shape. This does not establish invalid world geometry or a defect in the off-screen culling logic.
+- **Recommendation:** adjust shared preview framing to fit at least one complete tile and useful adjacent context, while respecting the actual geometry. No family-specific renderer is needed.
 
 ## Fifteen-family acceptance matrix
 
-**Blocked** means not executed in the application browser. It does not mean the family failed.
+**Visible** means its populated thumbnail was individually observed in the actual catalog; full geometry/alignment acceptance remains unverified. **Partial / UI-01** records the preview-framing issue. **Blocked** means the authenticated test was not performed.
 
 | Family | Preview | World creation | Adjacency / movement | Persistence |
 |---|---|---|---|---|
-| Type 1 | Blocked | Blocked | Blocked | Blocked |
-| Type 2 | Blocked | Blocked | Blocked | Blocked |
-| Type 3 | Blocked | Blocked | Blocked | Blocked |
-| Type 4 | Blocked | Blocked | Blocked | Blocked |
-| Type 5 | Blocked | Blocked | Blocked | Blocked |
-| Type 6 | Blocked | Blocked | Blocked | Blocked |
-| Type 7 | Blocked | Blocked | Blocked | Blocked |
-| Type 8 | Blocked | Blocked | Blocked | Blocked |
-| Type 9 | Blocked | Blocked | Blocked | Blocked |
-| Type 10 | Blocked | Blocked | Blocked | Blocked |
-| Type 11 | Blocked | Blocked | Blocked | Blocked |
-| Type 12 | Blocked | Blocked | Blocked | Blocked |
-| Type 13 | Blocked | Blocked | Blocked | Blocked |
-| Type 14 | Blocked | Blocked | Blocked | Blocked |
-| Type 15 | Blocked | Blocked | Blocked | Blocked |
+| Type 1 | Partial / UI-01 | Blocked: auth | Blocked: auth | Blocked: auth |
+| Type 2 | Visible; full acceptance pending | Blocked: auth | Blocked: auth | Blocked: auth |
+| Type 3 | Visible; full acceptance pending | Blocked: auth | Blocked: auth | Blocked: auth |
+| Type 4 | Visible; full acceptance pending | Blocked: auth | Blocked: auth | Blocked: auth |
+| Type 5 | Visible; full acceptance pending | Blocked: auth | Blocked: auth | Blocked: auth |
+| Type 6 | Visible; full acceptance pending | Blocked: auth | Blocked: auth | Blocked: auth |
+| Type 7 | Visible; full acceptance pending | Blocked: auth | Blocked: auth | Blocked: auth |
+| Type 8 | Visible; full acceptance pending | Blocked: auth | Blocked: auth | Blocked: auth |
+| Type 9 | Visible; full acceptance pending | Blocked: auth | Blocked: auth | Blocked: auth |
+| Type 10 | Partial / UI-01 | Blocked: auth | Blocked: auth | Blocked: auth |
+| Type 11 | Partial / UI-01 | Blocked: auth | Blocked: auth | Blocked: auth |
+| Type 12 | Visible; full acceptance pending | Blocked: auth | Blocked: auth | Blocked: auth |
+| Type 13 | Visible; full acceptance pending | Blocked: auth | Blocked: auth | Blocked: auth |
+| Type 14 | Visible; full acceptance pending | Blocked: auth | Blocked: auth | Blocked: auth |
+| Type 15 | Visible; full acceptance pending | Blocked: auth | Blocked: auth | Blocked: auth |
 
-## Remaining browser checks
+## Browser interactions and remaining checks
 
-| Required check | Result |
+| Check | Result |
 |---|---|
-| Feature assets and catalog API verified in loaded application | Blocked |
-| World creation and initial reload | Blocked |
-| Nested categories and numerical family ordering | Blocked |
-| Existing visibility rules and lazy previews | Blocked |
-| Selection state, focus preservation, and keyboard navigation | Blocked |
-| Narrow viewport, clipping, and overflow | Blocked |
-| Type 2 versus Type 4 independent selection and distinct geometry | Blocked |
-| Type 2 versus Type 4 save/reload and ruleset ambiguity | Blocked |
-| Finite bounds, edge/corner exits, and reciprocal movement | Blocked |
-| Hexagonal regression | Blocked |
-| Square regression | Blocked |
-| Fallout 5×5 regression | Blocked |
-| Fallout 9×9 regression | Blocked |
-| Triangular and mixed-polygon regressions | Blocked |
-| Preview culling, Type 15, zoom, pan, and interaction delays | Blocked |
-| Application console errors and failed API requests | Unavailable: application never loaded |
+| Feature catalog in loaded application | New categories and all 15 entries visible |
+| Nested categories and numerical ordering | Observed Pentagons → Convex, Types 1–15 in order |
+| Category expansion and selection | Expanded Hexagons and Pentagons/Convex; selecting choices retained the open tree |
+| Type 2 versus Type 4 | Clicked Type 2, then Tab twice and Enter selected Type 4; distinct previews and labels; prior choice lost its pressed styling |
+| Keyboard focus | Visible focus remained on Type 4 after Enter; limited to this sequence |
+| Type 15 | Selected Type 15; selected summary label and preview updated |
+| Initial hexagonal choice | Default hexagonal summary and preview rendered |
+| Other categories | Quadrilaterals, Squares, and Triangles visible; individual entries not reviewed |
+| Lazy rendering / screen-reader labels | Not established by graphical inspection |
+| Responsive layout | Observed at 1050-pixel window width and 100%/75% zoom; narrow viewport not tested |
+| Ruleset authoring | Not tested under authenticated identity |
+| Type 2/4 world geometry and reload | Blocked: authentication |
+| All family worlds, adjacency, movement, persistence | Blocked: authentication |
+| Finite bounds and all existing-grid runtime regressions | Blocked: authentication |
+| World pan, zoom, reload performance | Blocked: no test world |
+| Browser console | Blocked by DevTools policy |
+| Performance | No measured timing claim; expanded catalog remained interactive |
 
 ## Limited implementation inspection
 
-Inspected the branch diff summary and the category component, category/identity model, world picker changes, and catalog endpoint changes as supporting diagnostics. This is not a completed independent implementation review.
+Inspected the branch diff summary and the category component, category/identity model, world picker changes, catalog endpoint changes, and shared preview scale/clipping implementation as supporting diagnostics. This is not a completed independent implementation review.
 
 The inspected code uses preset identity to distinguish catalog choices, passes explicit topology and metric realization during world creation, avoids claiming a unique ruleset choice for ambiguous D-symbols, lazily populates categories, and updates pressed state without rebuilding the world picker. These are source observations only; their browser behavior and persistence remain unverified.
 
-The change summary shows catalog fixtures and shared presentation changes. No need for a pentagon-specific runtime was established. No application defect was confirmed within this limited review, which must not be read as evidence that none exist.
+The change summary shows catalog fixtures and shared presentation changes. No need for a pentagon-specific runtime was established. UI-01 is a preview usability finding; no world geometry or movement defect has been established.
 
 ## Disposition
 
-**Incomplete.** Acceptance has not passed. Required next work is the full graphical matrix and regressions after resolving ENV-01.
+**Incomplete.** Localhost access is resolved. Acceptance has not passed. Required next work is the authenticated world matrix, ruleset checks, and regressions after resolving ENV-02. ENV-03 also limits console evidence. UI-01 should be reviewed through the shared preview renderer.
 
 Only this report is to be committed to the existing feature branch. No gameplay fixes, engine changes, merge, deployment, main-branch modification, or production-data changes are part of this review.
