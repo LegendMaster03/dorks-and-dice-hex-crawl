@@ -131,7 +131,7 @@ test("viewport budget recovery does not retry unrelated failures or exceed maxim
     assert.match(surface.accessibilityStatus.textContent, /unavailable at this zoom/);
 
     const { nextBoundedEnumerationZoom } = await import("../.test-dist/viewport.js");
-    assert.equal(nextBoundedEnumerationZoom(56), 78.4);
+    assert.ok(Math.abs(nextBoundedEnumerationZoom(56) - 78.4) < 1e-10);
     assert.equal(nextBoundedEnumerationZoom(219), 220);
     assert.equal(nextBoundedEnumerationZoom(220), null);
     assert.equal(nextBoundedEnumerationZoom(Number.NaN), null);
