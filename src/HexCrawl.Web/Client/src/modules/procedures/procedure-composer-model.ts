@@ -9,6 +9,24 @@ export function selectableTilings(entries: TilingCatalogEntry[]): TilingCatalogE
     return entries.filter(entry => entry.showInRulesetSelector);
 }
 
+/**
+ * A procedure persists only its D-symbol. When more than one geometric example
+ * shares that topology, a reload can not recover which preview was clicked.
+ * Return no selection instead of inventing geometry or marking both choices
+ * as selected. The explicit preset ID is valid only for the current topology.
+ */
+export function resolveTilingCatalogChoice(
+    entries: readonly TilingCatalogEntry[],
+    symbol: string | null,
+    presetId: string | null = null
+): TilingCatalogEntry | null {
+    if (symbol === null) return null;
+    if (presetId !== null)
+        return entries.find(entry => entry.dsSymbol === symbol && entry.presetId === presetId) ?? null;
+    const matches = entries.filter(entry => entry.dsSymbol === symbol);
+    return matches.length === 1 ? matches[0] : null;
+}
+
 export type TilingCategoryNode = {
     label: string;
     categories: TilingCategoryNode[];
@@ -34,12 +52,11 @@ export function tilingCategoryTree(entries: readonly TilingCatalogEntry[]): Tili
         }
         node.entries.push(entry);
     }
+    // One numeric-aware comparator serves all nesting levels. Stable catalog
+    // IDs order numbered families naturally even when names differ by source.
+    const natural = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
     const sort = (node: TilingCategoryNode): void => {
         node.categories.sort((a, b) => a.label.localeCompare(b.label));
-        // Catalog IDs are stable choices. Sorting them numerically keeps
-        // numbered family variants in natural order (1, 2, ... 10, 11)
-        // regardless of varying descriptive display names.
-        const natural = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
         node.entries.sort((a, b) =>
             natural.compare(a.presetId ?? a.displayName, b.presetId ?? b.displayName)
             || natural.compare(a.displayName, b.displayName));
