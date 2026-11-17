@@ -48,7 +48,11 @@ export function tilingCategoryChoices(
             const option = document.createElement("button");
             option.type = "button";
             option.className = "hc-panel hc-tiling-category-choice";
-            option.append(document.createTextNode(entry.displayName), tilingPreview(entry));
+            const preview = tilingPreview(entry);
+            // The button text already names this choice. A second accessible
+            // name on its decorative preview would announce the name twice.
+            preview.setAttribute("aria-hidden", "true");
+            option.append(document.createTextNode(entry.displayName), preview);
             option.setAttribute("aria-pressed", String(isSelected(entry)));
             option.disabled = disabled;
             option.addEventListener("click", () => {
