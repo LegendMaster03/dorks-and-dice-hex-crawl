@@ -56,6 +56,47 @@ test("small previews trace only visible translations of the shared polygon reali
     assert.ok(fills < 60, `visible-area culling must avoid the 289 off-screen copies: ${fills}`);
 });
 
+test("a short atomic edge does not hide the complete representative polygon", t => {
+    const dom = new JSDOM("<!doctype html><body></body>");
+    const before = { document: globalThis.document, window: globalThis.window };
+    globalThis.document = dom.window.document;
+    globalThis.window = dom.window;
+    const visiblePaths = [];
+    let path = [];
+    dom.window.HTMLCanvasElement.prototype.getContext = () => ({
+        setTransform() {}, fillRect() {}, save() {}, beginPath() { path = []; },
+        rect() {}, clip() {}, closePath() {}, restore() {},
+        moveTo(x, y) { path.push({ x, y }); },
+        lineTo(x, y) { path.push({ x, y }); },
+        fill() { visiblePaths.push([...path]); }, stroke() {}
+    });
+    t.after(() => {
+        globalThis.document = before.document;
+        globalThis.window = before.window;
+        dom.window.close();
+    });
+    const representative = {
+        displayName: "Subdivided pentagon",
+        realization: {
+            translationU: { x: 100, y: 0 },
+            translationV: { x: 0, y: 100 },
+            polygons: { tile: [
+                { x: 0, y: 0 }, { x: 2, y: 0 },
+                { x: 2, y: 0.01 }, { x: 1.5, y: 1 },
+                { x: 0, y: 1 }
+            ] }
+        }
+    };
+    tilingPreview(representative);
+    assert.equal(visiblePaths.length, 1, "the isolated exemplar must be drawn once");
+    const xs = visiblePaths[0].map(p => p.x);
+    const ys = visiblePaths[0].map(p => p.y);
+    assert.ok(Math.min(...xs) > 8 && Math.max(...xs) < 66,
+        "complete tile must fit horizontally");
+    assert.ok(Math.min(...ys) > 5 && Math.max(...ys) < 47,
+        "complete tile must fit vertically");
+});
+
 test("an unavailable metric leaves a safe blank preview", t => {
     const dom = new JSDOM("<!doctype html><body></body>");
     const before = { document: globalThis.document, window: globalThis.window };
