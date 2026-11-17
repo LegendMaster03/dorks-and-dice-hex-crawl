@@ -4,6 +4,7 @@ import {
     composerSection,
     selectableTilings,
     tilingCategoryTree,
+    resolveTilingCatalogChoice,
     supportsVertexAdjacency,
     visibleMovementParameter,
     hasSaveableComposerChanges,
@@ -51,6 +52,20 @@ test("hidden tilings stay resolvable and filterable but never become selector ch
     assert.deepEqual(selectableTilings(catalog), [visible]);
     assert.equal(catalog.find(entry => entry.dsSymbol === "hidden"), hidden);
     assert.equal(catalog.length, 2);
+});
+
+test("a stored D-symbol does not claim a specific metric shared by two catalog choices", () => {
+    const type2 = { dsSymbol: "shared", presetId: "pentagon-2" };
+    const type4 = { dsSymbol: "shared", presetId: "pentagon-4" };
+    const hex = { dsSymbol: "hex", presetId: "regular-hexagon" };
+    const entries = [type2, type4, hex];
+    assert.equal(resolveTilingCatalogChoice(entries, "shared"), null);
+    assert.equal(resolveTilingCatalogChoice(entries, "shared", "pentagon-4"), type4);
+    assert.equal(resolveTilingCatalogChoice(entries, "shared", "pentagon-2"), type2);
+    assert.equal(resolveTilingCatalogChoice(entries, "hex"), hex);
+    assert.equal(resolveTilingCatalogChoice(entries, "hex", "pentagon-2"), null);
+    assert.equal(resolveTilingCatalogChoice(entries, "unknown"), null);
+    assert.equal(resolveTilingCatalogChoice(entries, null), null);
 });
 
 test("tiling categories group arbitrary nested paths without changing identities", () => {
