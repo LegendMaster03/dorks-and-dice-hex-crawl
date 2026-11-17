@@ -49,6 +49,8 @@ test("nested tiling choices reuse preview controls and invoke the selected catal
     assert.equal(choices.querySelectorAll("canvas[role='img']").length, 1);
     const squareButton = [...choices.querySelectorAll("button")]
         .find(button => button.textContent.includes("Square"));
+    assert.equal(squareButton.querySelector("canvas").getAttribute("aria-hidden"), "true",
+        "the button text supplies its accessible label; the thumbnail is decorative");
     assert.equal(squareButton.getAttribute("aria-pressed"), "true");
     assert.equal(choices.querySelectorAll("details[open]").length, 1);
     const pentagons = choices.querySelector("details");
