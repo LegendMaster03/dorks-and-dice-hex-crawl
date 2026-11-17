@@ -65,6 +65,10 @@ public sealed class ProcedureComposerModule : IHexCrawlModule
                     entry.CategoryPath ?? ["Other tilings"], entry.PresetId,
                     entry.RepresentativeTopology);
             }).ToList();
+        // Preserve every catalog entry even when multiple geometric examples
+        // have the same D-symbol (for example, Cairo Types 2 and 4).
+        // D-symbol deduplication applies only to *additional* preset fallbacks:
+        // those provide no independent metric or presentation identity.
         var known = result.Select(entry => entry.DsSymbol).ToHashSet(StringComparer.Ordinal);
         // A new preset need not be present in the friendly-name vocabulary to be usable.
         foreach (var preset in CrawlProcedureCatalog.Catalog)
@@ -81,6 +85,11 @@ public sealed class ProcedureComposerModule : IHexCrawlModule
         return result;
     }
 
+    /// <summary>
+    /// Query the actual realized geometry for vertex contacts. The harmonic
+    /// fallback exists only for legacy D-symbol-only entries; catalog examples
+    /// with explicit metrics do not need a separate geometry-specific detector.
+    /// </summary>
     private static bool HasVertexOnlyContacts(
         string symbol, PeriodicTopologyWitness? topology = null, PeriodicMetricRealization? realization = null)
     {
