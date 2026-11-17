@@ -17,18 +17,30 @@ export function tilingPreview(entry: TilingCatalogEntry | undefined, width = 74,
     if (!ctx || !geometry) return canvas;
     const polygons = Object.values(geometry.polygons).filter(p => p.length >= 3);
     if (!polygons.length) return canvas;
-    const points = polygons.flat();
-    const center = {
-        x: points.reduce((sum, p) => sum + p.x, 0) / points.length,
-        y: points.reduce((sum, p) => sum + p.y, 0) / points.length
-    };
+    // Center on a complete tile, not the mean of an arbitrarily distributed
+    // motif. A periodic cell may be translated far from its neighbors within
+    // the stored witness; averaging all cells can frame an empty seam.
+    const exemplar = polygons[0];
+    const minX = Math.min(...exemplar.map(p => p.x));
+    const maxX = Math.max(...exemplar.map(p => p.x));
+    const minY = Math.min(...exemplar.map(p => p.y));
+    const maxY = Math.max(...exemplar.map(p => p.y));
+    const center = { x: (minX + maxX) / 2, y: (minY + maxY) / 2 };
     const lengths = polygons.flatMap(p => p.map((v, i) => {
         const next = p[(i + 1) % p.length];
         return Math.hypot(next.x - v.x, next.y - v.y);
     })).filter(n => Number.isFinite(n) && n > 1e-8);
     if (!lengths.length) return canvas;
     const side = Math.min(...lengths);
-    const scale = Math.min(22 / side, 220);
+    const spanX = maxX - minX;
+    const spanY = maxY - minY;
+    if (!(spanX > 0 && spanY > 0)) return canvas;
+    // A short atomic interface (notably a T-junction) must not magnify a
+    // five-sided tile until only fragments remain. Reserve space for one
+    // entire exemplar and some neighboring context at every canvas size.
+    const fitScale = Math.min(width * 0.60 / spanX, height * 0.68 / spanY);
+    const scale = Math.min(22 / side, fitScale, 220);
+    if (!(scale > 0 && Number.isFinite(scale))) return canvas;
     // The canvas occupies only a small part of the repeated lattice. Cull
     // translated polygon bounding boxes in world coordinates before tracing
     // any path; this remains a general polygon optimization, not a tiling mode.
