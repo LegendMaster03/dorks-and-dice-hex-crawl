@@ -16,6 +16,7 @@ const { RasterImageCache } = await import("../.test-dist/raster-image-cache.js")
 const { CanvasMapRenderer } = await import("../.test-dist/canvas-renderer.js");
 const { MapSurface } = await import("../.test-dist/map-surface.js");
 const { Viewport } = await import("../.test-dist/viewport.js");
+const { HexCrawlApiError } = await import("../.test-dist/api.js");
 const { renderWorldEditor } = await import("../.test-dist/modules/worlds/world-editor-view.js");
 const deferred = () => {
     let resolve, reject;
@@ -92,6 +93,50 @@ function surfaceFixture() {
     surface.downloadPng = async (canvas, name) => surface.downloads.push({ canvas, name });
     return { surface, change: next => current = next };
 }
+
+test("dense periodic viewport recovers within the server candidate limit", async () => {
+    const { surface } = surfaceFixture();
+    surface.canvas.clientWidth = 1363;
+    surface.canvas.clientHeight = 700;
+    const initialZoom = surface.viewport.zoom;
+    let attempts = 0;
+    surface.api.listVisibleCells = async () => {
+        attempts++;
+        if (attempts === 1) throw new HexCrawlApiError(
+            400, "validation", "Visible cells failed: Region exceeds bounded cell enumeration. (Parameter 'limit')");
+        return [];
+    };
+    surface.requestRender = () => setTimeout(() => surface.loadVisibleCells(), 0);
+    surface.loadVisibleCells();
+    for (let i = 0; i < 12 && attempts < 2; i++) await tick();
+    assert.equal(attempts, 2);
+    assert.ok(surface.viewport.zoom > initialZoom);
+    assert.equal(surface.viewport.center.x, 0);
+    assert.equal(surface.viewport.center.y, 0);
+    assert.equal(surface.accessibilityStatus.textContent, "0 cells available in the visible map area.");
+});
+
+test("viewport budget recovery does not retry unrelated failures or exceed maximum zoom", async () => {
+    const { surface } = surfaceFixture();
+    let attempts = 0, rerenders = 0;
+    surface.requestRender = () => { rerenders++; };
+    surface.api.listVisibleCells = async () => {
+        attempts++;
+        throw new HexCrawlApiError(403, "auth", "Session unauthorized");
+    };
+    surface.loadVisibleCells();
+    await tick();
+    assert.equal(attempts, 1);
+    assert.equal(surface.viewport.zoom, 56);
+    assert.match(surface.accessibilityStatus.textContent, /unavailable at this zoom/);
+
+    const { nextBoundedEnumerationZoom } = await import("../.test-dist/viewport.js");
+    assert.equal(nextBoundedEnumerationZoom(56), 78.4);
+    assert.equal(nextBoundedEnumerationZoom(219), 220);
+    assert.equal(nextBoundedEnumerationZoom(220), null);
+    assert.equal(nextBoundedEnumerationZoom(Number.NaN), null);
+    assert.ok(rerenders <= 1);
+});
 
 for (const audience of ["gm", "player"]) {
     test(`${audience} viewport export captures pan/size before waiting and leaves live state untouched`, async t => {
